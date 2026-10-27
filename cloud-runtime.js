@@ -171,7 +171,7 @@
     #dcGate label{display:block;font-size:13px;margin:10px 0 4px} #dcGate input{width:100%;box-sizing:border-box;border:1px solid #c9c5b8;border-radius:6px;padding:8px 10px;font:inherit}
     #dcGate input.ltr{direction:ltr;text-align:left} #dcGate button{margin-top:16px;width:100%;background:#151547;color:#fff;border:0;border-radius:6px;padding:10px;font:inherit;font-weight:700;cursor:pointer}
     #dcGate button.link{background:none;color:#151547;font-weight:400;text-decoration:underline;margin-top:8px;padding:4px} #dcGate .msg{color:#a32020;font-size:13px;min-height:1.2em;margin-top:8px}
-    #dcGate img{display:block;margin:8px auto;width:180px;height:180px} #dcGate code{direction:ltr;display:block;text-align:center;font-size:12px;word-break:break-all;background:#f4f3ef;padding:6px;border-radius:6px}
+    #dcGate img{display:block;margin:8px auto;width:200px;height:200px;background:#fff;padding:8px;border-radius:6px} #dcGate code{direction:ltr;display:block;text-align:center;font-size:12px;word-break:break-all;background:#f4f3ef;padding:6px;border-radius:6px}
     @media (prefers-color-scheme: dark){#dcGate{background:#0e0e24;color:#eee}#dcGate .box{background:#17173a;border-color:#2b2b55}#dcGate p{color:#bbb}#dcGate input{background:#0e0e24;color:#eee;border-color:#3b3b6b}#dcGate button.link{color:#c9a263}#dcGate code{background:#0e0e24}}`;
   let gate = null;
   function screen(html){ if (!gate) { const st = document.createElement("style"); st.textContent = css; document.head.appendChild(st); gate = document.createElement("div"); gate.id = "dcGate"; gate.dir = "rtl"; document.body.appendChild(gate); }
@@ -194,9 +194,12 @@
     for (const x of all.filter(f => f.status !== "verified")) await sb.auth.mfa.unenroll({factorId: x.id}).catch(() => {});
     const {data: en, error} = await sb.auth.mfa.enroll({factorType: "totp", friendlyName: "ديوان القضايا " + new Date().toISOString().slice(0, 10)}); if (error) throw error;
     await form(`<p>أول دخول: امسح الرمز بتطبيق مصادقة (Microsoft Authenticator أو Google Authenticator) ثم أدخل الرقم الذي يظهر فيه.</p>
-      <img alt="" src="${en.totp.qr_code}"><code>${en.totp.secret}</code><label>الرمز</label><input class="ltr" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required><button type="submit">تفعيل والدخول</button>`,
+      <img alt="" src="${qrSrc(en.totp.qr_code)}"><code>${en.totp.secret}</code><p style="font-size:12px;margin:6px 0 0">الرمز والمفتاح سرّيان: لا تصوّرهما ولا ترسلهما لأحد.</p><label>الرمز</label><input class="ltr" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required><button type="submit">تفعيل والدخول</button>`,
       async (f) => { const {error} = await sb.auth.mfa.challengeAndVerify({factorId: en.id, code: f.code.value.trim()}); if (error) throw new Error(AR(error.message)); });
   }
+  // the server gives the QR code as an SVG, raw or as a data: link whose markup is not encoded (its quotes would end the attribute)
+  function qrSrc(q){ q = String(q || ""); let svg = /^data:/.test(q) ? q.slice(q.indexOf(",") + 1) : q; if (!svg.includes("<")) { try { svg = decodeURIComponent(svg); } catch {} }
+    return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg); }
   async function newPassword(){
     if (!SESSION.user.user_metadata?.must_change_password) return;
     await form(`<p>كلمة المرور الحالية مؤقتة. اختر كلمة مرور جديدة (12 حرفاً على الأقل).</p><label>كلمة المرور الجديدة</label><input class="ltr" name="a" type="password" autocomplete="new-password" minlength="12" required>
