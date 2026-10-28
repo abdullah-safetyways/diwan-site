@@ -272,7 +272,9 @@
     let i = 0;
     const worker = async () => { while (!st.stop && i < todo.length) { const x = todo[i++]; st.current = x.path; onChange?.();
         for (let tries = 0; ; tries++) {
-          try { const dir = x.path.split("/").slice(0, -1).join("/"); await F.uploadFile(dir, x.file, x.file.name, {conflict: "replace"}); x.done = true; st.ok++; st.bytes += x.file.size; break; }
+          // upload only: reading the text of thousands of documents (large judgment collections among them) is heavy work for the
+          // browser and slowed the upload to a crawl (28/10) — it is done afterwards by «ابدأ القراءة» (the queue takes unread files first)
+          try { const dir = x.path.split("/").slice(0, -1).join("/"); await F.uploadFile(dir, x.file, x.file.name, {conflict: "replace", extract: false}); x.done = true; st.ok++; st.bytes += x.file.size; break; }
           catch (e) { if (tries >= 2) { st.failed.push({path: x.path, error: e.message || e.code}); break; } await new Promise(r => setTimeout(r, 1500 * (tries + 1))); }
         }
         onChange?.(); } };
@@ -311,7 +313,7 @@
         <p>${ar(s?.files)} ملف · ${fmtB(s?.bytes || 0)} · ${ar(s?.with_case)} منها داخل مجلد قضية مربوطة</p>
         <p class="sub">نص مقروء: ${ar((by.pdf || 0) + (by.docx || 0) + (by.plain || 0))} مباشرة · ${ar(by.ocr || 0)} بالقراءة المجانية${by.ai ? ` · ${ar(by.ai)} بالمساعد` : ""} · بانتظار القراءة: ${ar(waitingText + waitingScan)}${by.error ? ` · تعذّرت قراءة ${ar(by.error)}` : ""}</p></section>
       <section><h3>استيراد الأرشيف من هذا الجهاز</h3>
-        <p class="sub">نزّل مجلد «Law Firm» من ون درايف إلى جهازك (وفك ضغطه)، ثم اختره هنا. يُرفع كل شيء بمساراته نفسها، ويُربط مجلد كل قضية بقضيته برقمها، والقضايا المفتوحة أولاً. يمكن الإيقاف والعودة لاحقاً: ما رُفع لا يُرفع مرة ثانية.</p>
+        <p class="sub">نزّل مجلد «Law Firm» من ون درايف إلى جهازك (وفك ضغطه)، ثم اختره هنا. يُرفع كل شيء بمساراته نفسها، ويُربط مجلد كل قضية بقضيته برقمها، والقضايا المفتوحة أولاً. يمكن الإيقاف والعودة لاحقاً: ما رُفع لا يُرفع مرة ثانية. نص المستندات يُقرأ بعد الرفع من «ابدأ القراءة» أدناه.</p>
         <label class="pick"><input type="file" id="dfPick" webkitdirectory directory multiple ${ps?.running ? "disabled" : ""}> اختيار مجلد «Law Firm»</label>
         ${plan ? `<div class="plan">
           <p><b>${ar(plan.total)}</b> ملف (${fmtB(plan.bytes)}) · مرفوع سابقاً: ${ar(plan.done + (ps?.ok || 0))} · مجلدات قضايا: ${ar(plan.folders.length)} — عُرف منها ${ar(plan.folders.filter(g => g.caseId).length)} برقم القضية</p>
