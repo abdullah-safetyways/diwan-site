@@ -1,4 +1,4 @@
-<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><title>ديوان القضايا</title><style>:root{color-scheme:light dark}body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style><script src="supabase.js"></script><script src="config.js"></script><script src="cloud-runtime.js"></script></head><body><title>ديوان القضايا</title>
+<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><title>ديوان القضايا</title><style>:root{color-scheme:light dark}body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style><script src="supabase.js"></script><script src="config.js"></script><script src="cloud-runtime.js"></script><script src="cloud-files.js"></script></head><body><title>ديوان القضايا</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
@@ -366,6 +366,8 @@ h2.sec{font-size:1.02rem;margin:0;display:flex;gap:8px;align-items:baseline}
 .team-item{display:flex;gap:10px;align-items:center;border-top:1px solid var(--line);padding-top:6px;margin-top:6px}
 .team-item:first-of-type{border-top:0}
 tr[aria-selected="true"] td{background:var(--accent-soft)}
+.cdrop{border:2px dashed var(--line);border-radius:10px;padding:14px;text-align:center;margin:8px 0 10px;color:var(--ink-2)}
+.cdrop.over{border-color:var(--accent);background:var(--surface-2,rgba(0,0,0,.03))}
 </style>
 
 <div class="app">
@@ -584,7 +586,7 @@ function vHome(){
       ${deadlines.length?`<section class="panel" data-rail="2"><header><h2>مواعيد نهائية</h2><span class="sub">خلال ٣٠ يوماً</span></header>${deadlines.map(dlRow).join("")}</section>`:""}
       <section class="panel" data-rail="1"><header><h2>إحاطة اليوم</h2>${brief?`<span class="sub num">${esc(fmtDate.format(D(brief.at)))} ${esc(fmtTime.format(D(brief.at)))}</span>`:""}</header>
         <div id="briefOut">${brief?briefHtml(brief.text):`<p class="muted small" style="margin:0">اضغط «إحاطة اليوم» ليقرأ المساعد جلسات الأسبوعين القادمين ومواعيدها النهائية والأحكام المنتظرة، ويرتّب لك ما يجب تجهيزه.</p>`}</div></section>
-      ${(()=>{ const recent = []; for (const c of allCases()) for (const f of docsOf(c)) if (f.modified && (Date.now()-new Date(f.modified))<14*864e5) recent.push({c,f}); recent.sort((x,y)=>y.f.modified.localeCompare(x.f.modified)); return recent.length?`<section class="panel"><header><h2>مستندات جديدة في ون درايف</h2><span class="sub">آخر ١٤ يوماً</span></header><div class="docs">${recent.slice(0,6).map(({c,f})=>`<div class="doc" data-case="${esc(c.id)}" data-tab="files"><span class="kind ${KIND_CLS[f.kind]||""}">${esc(f.kind)}</span><div style="min-width:0"><div class="nm">${esc(f.name)}</div></div><div class="acts"></div><div class="meta">${esc(fmtDate.format(new Date(f.modified)))} · ${esc(c.title)}</div></div>`).join("")}</div></section>`:""; })()}
+      ${(()=>{ const recent = []; for (const c of allCases()) for (const f of docsOf(c)) if (f.modified && (Date.now()-new Date(f.modified))<14*864e5) recent.push({c,f}); recent.sort((x,y)=>y.f.modified.localeCompare(x.f.modified)); return recent.length?`<section class="panel"><header><h2>مستندات جديدة في ملفات المكتب</h2><span class="sub">آخر ١٤ يوماً</span></header><div class="docs">${recent.slice(0,6).map(({c,f})=>`<div class="doc" data-case="${esc(c.id)}" data-tab="files"><span class="kind ${KIND_CLS[f.kind]||""}">${esc(f.kind)}</span><div style="min-width:0"><div class="nm">${esc(f.name)}</div></div><div class="acts"></div><div class="meta">${esc(fmtDate.format(new Date(f.modified)))} · ${esc(c.title)}</div></div>`).join("")}</div></section>`:""; })()}
       ${nzReqsPanel()}
       ${can("billing.view")?homeBillingPanel():""}
     </div>
@@ -624,7 +626,7 @@ function vReview(){
   const list = reviewList().sort((a,b)=>(a.nextSession&&isFuture(a.nextSession)?a.nextSession:"9").localeCompare(b.nextSession&&isFuture(b.nextSession)?b.nextSession:"9"));
   const courts = [...new Set(allCases().map(c=>c.court).filter(Boolean))].sort();
   return header("استكمال البيانات", "القضايا المفتوحة التي ينقصها حقل مهم أو فيها تعارض يحتاج قرارك" + (can("billing.edit") ? "، والقضايا الجديدة التي تنتظر عقد أتعابها بالمعاملة" : "")) + `
-  <div class="notice" style="margin-bottom:14px">الحقول المظللة <span class="src ai">مستنتج</span> قرأها المساعد من الجلسات والمحاضر وملفات ون درايف، ولم يؤكدها أحد. صحّح ما يلزم ثم اضغط «تأكيد وحفظ»، فتُعتمد القيم ولا تغيّرها المزامنة لاحقاً.</div>
+  <div class="notice" style="margin-bottom:14px">الحقول المظللة <span class="src ai">مستنتج</span> قرأها المساعد من الجلسات والمحاضر وملفات المكتب، ولم يؤكدها أحد. صحّح ما يلزم ثم اضغط «تأكيد وحفظ»، فتُعتمد القيم ولا تغيّرها المزامنة لاحقاً.</div>
   <datalist id="courtList">${courts.map(c=>`<option value="${esc(c)}">`).join("")}</datalist>
   ${stalePanel()}
   <section class="panel">${list.length? list.map(c => revRow(c)).join("") : `<div class="empty">كل القضايا المفتوحة مكتملة البيانات.</div>`}</section>`;
@@ -880,7 +882,7 @@ function najizPanel(c){
 function tabChat(c){
   const msgs = S.chats[c.id] || [];
   return `<section class="panel"><header><h2>اسأل عن القضية</h2>${msgs.length?`<button class="btn ghost" id="chatClear">محادثة جديدة</button>`:""}</header>
-    <div class="chat" id="chatLog">${msgs.length?msgs.map(m=>`<div class="msg ${m.role==="user"?"u":"a"}">${esc(m.content)}</div>`).join(""):`<div class="muted small">أمثلة: «ما الدفوع الشكلية المتاحة لنا؟» · «صغ فقرة رد على طلب المهلة» · «متى ينتهي موعد الاعتراض؟» · «ابحث في ون درايف عن عقد هذه القضية ولخّصه».</div>`}</div>
+    <div class="chat" id="chatLog">${msgs.length?msgs.map(m=>`<div class="msg ${m.role==="user"?"u":"a"}">${esc(m.content)}</div>`).join(""):`<div class="muted small">أمثلة: «ما الدفوع الشكلية المتاحة لنا؟» · «صغ فقرة رد على طلب المهلة» · «متى ينتهي موعد الاعتراض؟» · «ابحث في ملفات المكتب عن عقد هذه القضية ولخّصه».</div>`}</div>
     <form class="chat-in" id="chatForm"><textarea class="inp" id="chatIn" placeholder="اكتب سؤالك…" rows="2" aria-label="سؤالك"></textarea><button class="btn primary" type="submit" id="chatSend">إرسال</button></form>
     <p class="sub" style="margin:8px 0 0">${S.uid?"تُحفظ محادثتك لهذه القضية في حسابك ولا يراها غيرك.":"لا تُحفظ المحادثة في هذا العرض."}</p></section>`;
 }
@@ -903,7 +905,7 @@ function docRow(c, f, i, withPick){
 }
 function folderLine(c){
   const d = c.documents||{}; const fo = d.folder;
-  if (!fo) return `<div class="notice warn">لم يُعثر على مجلد لهذه القضية في ون درايف. اضغط «تغيير المجلد» وابحث باسم الموكل أو الخصم لربطه.</div>`;
+  if (!fo) return `<div class="notice warn">لم يُعثر على مجلد لهذه القضية في ملفات المكتب. اضغط «تغيير المجلد» وابحث باسم الموكل أو الخصم لربطه.</div>`;
   const cf = CONF[d.confidence]||null;
   return `<div class="folder-line">${icon("folder").replace("<svg",'<svg style="width:18px;height:18px;flex:none"')}<span class="path">${esc((fo.path||fo.name||"").replace(/^Law Firm\//,""))}</span>${cf?`<span class="pill ${cf[1]}">${cf[0]}</span>`:""}${d.src==="user"?'<span class="src user">اخترته أنت</span>':""}${fo.webUrl?`<a class="btn sm ghost" href="${esc(href(fo.webUrl))}" target="_blank" rel="noopener">فتح المجلد</a>`:""}</div>${d.note?`<div class="sub" style="margin-bottom:8px">${esc(d.note)}</div>`:""}`;
 }
@@ -922,23 +924,24 @@ function tabFiles(c){
   const list = files.map((f,i)=>[f,i]).filter(([f])=>(fk==="all"||f.kind===fk) && (!fq || (f.name+" "+(f.path||"")).toLowerCase().includes(fq)));
   const busy = S.busy["docs:"+c.id]; const ro = S.canWrite?"":"disabled";
   return `<div class="grid">
-  <section class="panel"><header><h2>مستندات القضية</h2><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" type="button" data-docrefresh ${ro}>${icon("refresh")}تحديث من ون درايف</button><button class="btn sm" type="button" id="pickFolderBtn" ${ro}>${icon("folder")}تغيير المجلد</button></div></header>
+  <section class="panel"><header><h2>مستندات القضية</h2><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" type="button" data-docrefresh ${ro}>${icon("refresh")}تحديث من ملفات المكتب</button><button class="btn sm" type="button" id="pickFolderBtn" ${ro}>${icon("folder")}تغيير المجلد</button></div></header>
     ${busy?`<div class="thinking" style="margin-bottom:8px"><span class="dot"></span>${esc(busy)}</div>`:""}
     ${folderLine(c)}
     <div id="folderPick"></div>
+    ${cloudDropZone(c)}
     ${files.length?`<div class="toolbar" style="margin:6px 0 8px"><label class="search">${icon("search")}<input id="docQ" value="${esc(st.fq||"")}" placeholder="تصفية بالاسم" aria-label="تصفية المستندات"></label></div>
     <div class="chips" style="margin-bottom:10px"><button class="chip" data-dkind="all" aria-pressed="${fk==="all"}">الكل <span class="num muted">${files.length}</span></button>${kinds.map(k=>`<button class="chip" data-dkind="${esc(k)}" aria-pressed="${fk===k}">${esc(k)} <span class="num muted">${files.filter(f=>f.kind===k).length}</span></button>`).join("")}</div>
     <div class="docs">${list.map(([f,i])=>docRow(c,f,i,true)).join("") || `<div class="empty">لا مستندات بهذا التصنيف.</div>`}</div>
     <p class="sub" style="margin:10px 0 0">علّم المستندات التي تريد أن يقرأها المساعد في «التحليل والخطوة القادمة». إن لم تعلّم شيئاً يختار تلقائياً أحدث صك ولائحة ومذكرة.</p>`:`<div class="empty">لا توجد مستندات مرتبطة بهذه القضية.</div>`}
   </section>
-  <section class="panel"><header><h2>بحث في كل ون درايف</h2></header>
-    <form class="toolbar" id="fileForm"><label class="search">${icon("search")}<input id="fileQ" value="${esc(st.q ?? (c.caseNo || c.client || ""))}" placeholder="رقم القضية أو اسم الموكل أو نص داخل المستند" aria-label="بحث في ون درايف"></label><button class="btn primary" type="submit">بحث</button></form>
+  <section class="panel"><header><h2>بحث في كل ملفات المكتب</h2></header>
+    <form class="toolbar" id="fileForm"><label class="search">${icon("search")}<input id="fileQ" value="${esc(st.q ?? (c.caseNo || c.client || ""))}" placeholder="رقم القضية أو اسم الموكل أو نص داخل المستند" aria-label="بحث في ملفات المكتب"></label><button class="btn primary" type="submit">بحث</button></form>
     <div id="fileOut">${fileList(c, st)}</div></section></div>`;
 }
 function fileList(c, st){
-  if (st.loading) return `<div class="thinking"><span class="dot"></span>جارٍ البحث في ون درايف…</div>`;
+  if (st.loading) return `<div class="thinking"><span class="dot"></span>جارٍ البحث في ملفات المكتب…</div>`;
   if (st.error) return `<div class="notice err">${esc(st.error)}</div>`;
-  if (!st.items) return `<div class="muted small">يبحث في أسماء المستندات ونصوصها في ون درايف المكتب كله.</div>`;
+  if (!st.items) return `<div class="muted small">يبحث في أسماء المستندات ونصوصها في ملفات المكتب كله.</div>`;
   if (!st.items.length) return `<div class="empty">لا توجد ملفات مطابقة.</div>`;
   const have = new Set(docsOf(c).map(f=>f.uri));
   return `<div class="docs">${st.items.map((f,i)=>`<div class="doc"><span class="kind ${KIND_CLS[docKind(f.name)]||""}">${esc(docKind(f.name))}</span><div style="min-width:0"><div class="nm">${esc(f.name)}</div></div><div class="acts">${readable(f)?`<button class="btn sm" type="button" data-sread="${i}">قراءة</button>`:""}${have.has(f.uri)?'<span class="src user" style="align-self:center">مرتبط</span>':`<button class="btn sm" type="button" data-attach="${i}" ${S.canWrite?"":"disabled"}>ربط بالقضية</button>`}</div><div class="meta">${esc(f.path)}${f.modified?" · "+esc(fmtDate.format(new Date(f.modified))):""}</div></div>`).join("")}</div>`;
@@ -955,7 +958,7 @@ async function saveDocs(c, documents, action){
   catch(e){ toast(e?.code==="invalid_argument"?"لا تملك صلاحية التعديل":"تعذّر حفظ المستندات"); }
 }
 async function refreshDocs(c){
-  if (!S.mcp) { toast("الوصول إلى ون درايف غير متاح في هذا العرض"); return; }
+  if (!S.mcp) { toast("الوصول إلى ملفات المكتب غير متاح في هذا العرض"); return; }
   const key = "docs:"+c.id; const d = {...(c.documents||{})}; const old = d.files||[];
   const byUri = new Map(old.map(f=>[f.uri,f])); let added = 0;
   const add = (f) => { if (/^~\$/.test(f.name) || /قضايا المكتب\.xlsx$|بيان القضايا\.xlsx$/.test(f.name)) return; if (!byUri.has(f.uri)) { byUri.set(f.uri, {...f, kind:docKind(f.name)}); added++; } else { const o = byUri.get(f.uri); byUri.set(f.uri, {...o, modified: f.modified||o.modified, webUrl: o.webUrl||f.webUrl}); } };
@@ -963,7 +966,7 @@ async function refreshDocs(c){
     if (!d.folder?.uri && c.caseNo) { S.busy[key] = "يبحث عن مجلد يبدأ برقم القضية…"; render(); const fo = await odFolderByNo(c.caseNo).catch(()=>null);
       if (fo?.folder) { d.folder = fo.folder; d.confidence = "high"; d.method = "رقم القضية في اسم المجلد"; d.note = fo.ambiguous ? `وُجد ${fo.hits} مجلدات تبدأ بهذا الرقم؛ رُبط الأقرب` : null; d.src = "auto"; } }
     if (d.folder?.uri) {
-      S.busy[key] = "يقرأ مجلد القضية في ون درايف…"; render();
+      S.busy[key] = "يقرأ مجلد القضية في ملفات المكتب…"; render();
       const top = parseListing(await S.mcp.callTool("Microsoft 365","read_resource",{uri:d.folder.uri}));
       const base = d.folder.webUrl||""; const bpath = d.folder.path||"";
       for (const it of top.filter(x=>x.type==="file")) add({name:it.name, uri:it.uri, size:it.size, webUrl: base? base+"/"+it.name : null, path: bpath? bpath+"/"+it.name : it.name, modified:null});
@@ -972,12 +975,12 @@ async function refreshDocs(c){
         for (const it of inner.filter(x=>x.type==="file")) add({name:it.name, uri:it.uri, size:it.size, webUrl: base? `${base}/${sub.name}/${it.name}` : null, path: bpath? `${bpath}/${sub.name}/${it.name}` : it.name, modified:null});
       }
     }
-    if (c.caseNo) { S.busy[key] = "يبحث برقم القضية في ون درايف…"; render(); for (const f of await odSearch(c.caseNo)) add({name:f.name, uri:f.uri, webUrl:f.webUrl, path: f.webUrl ? (()=>{ try { return decodeURIComponent(f.webUrl.split("/Documents/")[1]||""); } catch { return ""; } })() : f.path, modified:f.modified, size:null}); }
+    if (c.caseNo) { S.busy[key] = "يبحث برقم القضية في ملفات المكتب…"; render(); for (const f of await odSearch(c.caseNo)) add({name:f.name, uri:f.uri, webUrl:f.webUrl, path: f.webUrl ? (()=>{ try { return decodeURIComponent(f.webUrl.split("/Documents/")[1]||""); } catch { return ""; } })() : f.path, modified:f.modified, size:null}); }
     const files = [...byUri.values()].sort((a,b)=>(b.modified||"0").localeCompare(a.modified||"0")).slice(0,120);
     delete S.busy[key];
-    await saveDocs(c, {...d, files, scannedAt:new Date().toISOString()}, `حدّث مستندات ون درايف (${added} جديد)`);
+    await saveDocs(c, {...d, files, scannedAt:new Date().toISOString()}, `حدّث مستندات المكتب (${added} جديد)`);
     toast(added ? `أُضيف ${added} مستند جديد` : "المستندات محدّثة، لا جديد");
-  } catch(e){ delete S.busy[key]; render(); toast(e?.code==="server_not_connected"?"أضف موصّل Microsoft 365 من إعدادات Claude":e?.code==="needs_reauth"?"أعد ربط Microsoft 365 من إعدادات Claude":"تعذّر الوصول إلى ون درايف الآن"); }
+  } catch(e){ delete S.busy[key]; render(); toast(e?.code==="server_not_connected"?"أضف موصّل Microsoft 365 من إعدادات Claude":e?.code==="needs_reauth"?"أعد ربط Microsoft 365 من إعدادات Claude":"تعذّر الوصول إلى ملفات المكتب الآن"); }
 }
 async function pickFolder(c, q){
   const box = $("folderPick"); if (!box) return;
@@ -990,7 +993,7 @@ async function pickFolder(c, q){
     box.innerHTML = law.length ? `<div class="docs">${law.map((x,i)=>{ let p=""; try { p=decodeURIComponent(x.webUrl.split("/Documents/")[1]); } catch {} return `<div class="doc">${icon("folder").replace("<svg",'<svg style="width:18px;height:18px"')}<div style="min-width:0"><div class="nm">${esc(x.name)}</div></div><div class="acts"><button class="btn sm primary" type="button" data-fold="${i}">ربط هذا المجلد</button></div><div class="meta">${esc(p.replace(/^Law Firm\//,""))}</div></div>`; }).join("")}</div>` : `<div class="notice">لا توجد مجلدات بهذا الاسم داخل Law Firm.</div>`;
     box.querySelectorAll("[data-fold]").forEach(b=>b.onclick=async()=>{ const x = law[+b.dataset.fold]; let p=""; try { p=decodeURIComponent(x.webUrl.split("/Documents/")[1]); } catch {}
       const documents = {folder:{name:x.name, path:p, uri:x.uri, webUrl:x.webUrl}, files:[], confidence:"high", method:"اختيار يدوي", note:null, src:"user", scannedAt:new Date().toISOString()};
-      await saveDocs(c, documents, `ربط مجلد ون درايف: ${x.name}`); const fresh = {...c, documents}; S.cases.set(c.id, fresh); refreshDocs(fresh); });
+      await saveDocs(c, documents, `ربط مجلد ملفات المكتب: ${x.name}`); const fresh = {...c, documents}; S.cases.set(c.id, fresh); refreshDocs(fresh); });
   } catch(e){ box.innerHTML = `<div class="notice err">تعذّر البحث عن المجلد.</div>`; }
 }
 async function attachFile(c, f){
@@ -1013,17 +1016,17 @@ function openDrawer(html){ closeDrawer(); const bg=document.createElement("div")
 function closeDrawer(){ $("drawer")?.remove(); $("drawerBg")?.remove(); document.removeEventListener("keydown", escClose); S.drawerCtl?.abort(); }
 function escClose(e){ if (e.key==="Escape") closeDrawer(); }
 async function openReader(c, f){
-  if (!S.mcp) { if (f.webUrl) window.open(href(f.webUrl),"_blank","noopener"); else toast("الوصول إلى ون درايف غير متاح في هذا العرض"); return; }
+  if (!S.mcp) { if (f.webUrl) window.open(href(f.webUrl),"_blank","noopener"); else toast("الوصول إلى ملفات المكتب غير متاح في هذا العرض"); return; }
   let page = 1;
   const dr = openDrawer(`<header><div style="min-width:0"><span class="kind ${KIND_CLS[f.kind]||""}">${esc(f.kind||docKind(f.name))}</span><h2 style="margin-top:4px">${esc(f.name)}</h2><div class="sub">${esc((f.path||"").replace(/^Law Firm\//,""))}</div></div><button class="btn sm" data-close aria-label="إغلاق">إغلاق</button></header>
-    <div class="body"><div id="rdSum"></div><div class="notice" style="font-size:.8rem">النص مستخرج آلياً من الملف وقد تنقلب بعض الحروف المركبة (مثل «لا»). للعرض الأصلي افتحه في ون درايف.</div><div id="rdText" class="doc-text"><div class="thinking"><span class="dot"></span>يقرأ المستند…</div></div><button class="btn" id="rdMore" hidden>الصفحات التالية</button></div>
-    <div class="foot"><button class="btn primary" id="rdSumBtn">${icon("spark")}لخّص المستند</button><button class="btn" id="rdPick">${(S.files[c.id]?.picked||{})[f.uri]?"مضمّن في التحليل ✓":"ضمّنه في التحليل"}</button>${f.webUrl?`<a class="btn ghost" href="${esc(href(f.webUrl))}" target="_blank" rel="noopener">فتح في ون درايف</a>`:""}</div>`);
+    <div class="body"><div id="rdSum"></div><div class="notice" style="font-size:.8rem">النص مستخرج آلياً من الملف وقد تنقلب بعض الحروف المركبة (مثل «لا»). للعرض الأصلي افتحه في ملفات المكتب.</div><div id="rdText" class="doc-text"><div class="thinking"><span class="dot"></span>يقرأ المستند…</div></div><button class="btn" id="rdMore" hidden>الصفحات التالية</button></div>
+    <div class="foot"><button class="btn primary" id="rdSumBtn">${icon("spark")}لخّص المستند</button><button class="btn" id="rdPick">${(S.files[c.id]?.picked||{})[f.uri]?"مضمّن في التحليل ✓":"ضمّنه في التحليل"}</button>${f.webUrl?`<a class="btn ghost" href="${esc(href(f.webUrl))}" target="_blank" rel="noopener">فتح في ملفات المكتب</a>`:""}</div>`);
   const load = async () => {
     const t = $("rdText"); if (!t) return;
     try { const txt = await docText(f.uri, `${page}-${page+4}`); const more = /truncated: pages \d+-(\d+) of (\d+)/.exec(txt); const clean = txt.replace(/\[truncated:[^\]]*\]/g,"").trim();
       if (page===1) t.textContent = clean || "(لا يوجد نص قابل للقراءة في هذا الملف — قد يكون صورة ممسوحة)"; else t.textContent += "\n\n" + clean;
       const btn = $("rdMore"); if (more && +more[1] < +more[2]) { btn.hidden=false; btn.textContent=`الصفحات التالية (${+more[1]+1}–${Math.min(+more[1]+5,+more[2])} من ${more[2]})`; btn.onclick=()=>{ page=+more[1]+1; btn.hidden=true; load(); }; } else btn.hidden = true;
-    } catch(e){ t.innerHTML = `<div class="notice err">تعذّرت قراءة الملف (${esc(e?.code||"خطأ")}). افتحه في ون درايف.</div>`; }
+    } catch(e){ t.innerHTML = `<div class="notice err">تعذّرت قراءة الملف (${esc(e?.code||"خطأ")}). افتحه في ملفات المكتب.</div>`; }
   };
   load();
   dr.querySelector("#rdPick").onclick = (e) => { const st = S.files[c.id] = S.files[c.id]||{}; st.picked = st.picked||{}; if (st.picked[f.uri]) { delete st.picked[f.uri]; e.target.textContent="ضمّنه في التحليل"; } else { st.picked[f.uri]=f; e.target.textContent="مضمّن في التحليل ✓"; } };
@@ -1270,13 +1273,13 @@ async function draftWord(save){
     const bytes = await draftDocx(c, kind, ks);
     if (!save) { await downloadBytes(bytes, name); if (stEl) stEl.innerHTML = `<div class="sub">جُهّز الملف «${esc(name)}».</div>`; return; }
     const f = await saveDocxToCase(c, bytes, name);
-    ks.note = `حُفظ «${f.name}» في مجلد القضية على ون درايف.`; ks.noteLink = f.webUrl || null;
+    ks.note = `حُفظ «${f.name}» في مجلد القضية في ملفات المكتب.`; ks.noteLink = f.webUrl || null;
     const doc = isDocKind(kind, ks);
     const rec = {kind, route:kind==="objection"?ks.route:null, text: doc ? null : ks.out, applied: doc ? (S.learn?.letterhead?["نموذج المكتب"]:[]) : (ks.applied||appliedNames(kind)), at:new Date().toISOString(), by:S.uid||null, file:{name:f.name, webUrl:f.webUrl, uri:f.uri}};
     await saveDraftDoc(S.cases.get(c.id), rec, `حفظ ${DRAFT_KINDS[kind].t} (Word) في مجلد القضية`);
     if (!doc && ks.gen) { recordEdit(c, kind, ks.gen, ks.out); ks.gen = ks.out; }
     const el2 = $("drState"); if (el2) el2.innerHTML = `<div class="notice">${esc(ks.note)} ${f.webUrl?`<a href="${esc(href(f.webUrl))}" target="_blank" rel="noopener">فتح الملف</a>`:""}</div>`; toast("حُفظ في مجلد القضية");
-  } catch(e){ const m = e?.msg || (e?.code==="not_in_manifest" ? "لم يُسمح للديوان بالكتابة في ون درايف بعد. وافق على الإذن عند ظهوره." : e?.code==="tool_error" ? "رفض ون درايف الحفظ: "+(e.message||"") : e?.code==="declined" ? "أُلغي التنزيل." : "تعذّر تجهيز الملف: "+(e?.message||e?.code||""));
+  } catch(e){ const m = e?.msg || (e?.code==="not_in_manifest" ? "لم يُسمح للديوان بالكتابة في ملفات المكتب بعد. وافق على الإذن عند ظهوره." : e?.code==="tool_error" ? "رفض ملفات المكتب الحفظ: "+(e.message||"") : e?.code==="declined" ? "أُلغي التنزيل." : "تعذّر تجهيز الملف: "+(e?.message||e?.code||""));
     if (stEl) stEl.innerHTML = `<div class="notice err">${esc(m)}</div>`; }
 }
 async function saveDraft(){
@@ -1465,8 +1468,8 @@ async function resolveCaseFolder(c){
   return null;
 }
 async function saveDocxToCase(c, bytes, filename){
-  if (!S.mcp) throw {msg:"الوصول إلى ون درايف غير متاح في هذا العرض"};
-  const loc = await resolveCaseFolder(c); if (!loc) throw {msg:"لم يُربط مجلد لهذه القضية في ون درايف. اربطه من تبويب «المستندات» ثم أعد المحاولة."};
+  if (!S.mcp) throw {msg:"الوصول إلى ملفات المكتب غير متاح في هذا العرض"};
+  const loc = await resolveCaseFolder(c); if (!loc) throw {msg:"لم يُربط مجلد لهذه القضية في ملفات المكتب. اربطه من تبويب «المستندات» ثم أعد المحاولة."};
   const r = await S.mcp.callTool("Microsoft 365", "sharepoint_upload_file", {driveId:loc.driveId, parentItemId:loc.itemId, filename, contentBase64:bytesToB64(bytes), conflictBehavior:"rename", expectedBytes:bytes.length});
   let o = r.payload; if (typeof o==="string") { try { o = JSON.parse(o); } catch { o = {}; } } o = o || {};
   if (!o.webUrl) for (const b of (r.content||[])) { if (b.type==="text") { try { const j = JSON.parse(b.text); if (j.webUrl || j.uri) { o = j; break; } } catch {} } }
@@ -1591,7 +1594,7 @@ function vSync(){
     <div class="grid" style="gap:10px">
       <div class="notice"><b>ناجز — المصدر الأساسي</b><br>القضايا والأطراف والجلسات بضبوطها الكاملة والأحكام ومواعيد الاعتراض، من حسابات ناجز أفراد وناجز محامين وناجز أعمال (${esc(String(Object.keys(m.najiz?.accounts||{}).length||"—"))} حسابات). آخر تحديث: ${m.najiz?.syncedAt?esc(fmtDate.format(D(m.najiz.syncedAt))+" "+fmtTime.format(D(m.najiz.syncedAt))):"—"} · ${m.najiz?.caseCount||"—"} قضية.</div>
       <div class="notice"><b>الديوان مستقل عن أودو</b><br>القضايا من ناجز، والعقود السنوية والأتعاب والفوترة تُدار هنا. ما نُقل سابقاً من أودو (فواتير ومهام قديمة) محفوظ أرشيفاً داخل الديوان، ولا يُرجع إلى أودو بعد الآن.</div>
-      <div class="notice"><b>ون درايف</b><br>مجلد كل قضية يبدأ برقمها؛ يُربط تلقائياً من صفحة القضية أو دفعة واحدة من لوحة «مجلدات ون درايف».</div>
+      <div class="notice"><b>ملفات المكتب</b><br>مجلد كل قضية يبدأ برقمها؛ يُربط تلقائياً من صفحة القضية أو دفعة واحدة من لوحة «مجلدات المكتب».</div>
       <div class="notice"><b>اكتمال البيانات في القضايا المفتوحة (${op.length})</b><br>بلا محكمة: ${miss("court")} · بلا صفة موكل: ${miss("ourSide")} · بلا موكل: ${miss("client")}${staleCases().length?` · قديمة بلا حركة منذ أكثر من سنة: <b>${staleCases().length}</b>`:""}. <button class="btn ghost sm" data-nav="review">استكمال البيانات</button></div>
       <p class="small" style="margin:0">يحدّث كل عضو قضاياه من حسابه في ناجز من لوحة «ربط ناجز»، ولمالك المكتب أيضاً أن يطلب من Claude: «حدّث ديوان القضايا من ناجز». يدخل ناجز من متصفحك بحساباته الثلاثة، ويضيف القضايا الجديدة ويحدّث الجلسات والضبوط والأحكام، ويحافظ على ما أكدته أنت وعلى تعديلاتك على الجلسات والملاحظات والتحليلات والمسودات والمستندات.</p>
     </div></section>` : ""}</div>
@@ -1958,7 +1961,7 @@ function openContractEdit(e){
     <label class="f">يتابع الديوان الدفعات المستحقة ابتداءً من<input class="inp" type="date" name="trackFrom" value="${esc(v.trackFrom || (e && (e.invoices||[]).length ? todayKey() : ""))}"><span class="sub">اتركه فارغاً لمتابعة كل الدفعات من بداية العقد. ما قبله لا يُحسب مستحقاً (مفيد للعقود القديمة المفوترة سابقاً).</span></label>
     <label class="f">نطاق العقد<textarea class="inp" name="scope" style="min-height:80px" placeholder="مثل: الاستشارات القانونية والترافع في القضايا العمالية للشركة">${esc(v.scope||"")}</textarea></label>
     <label class="f">ملاحظات<input class="inp" name="notes" value="${esc(v.notes||"")}"></label>
-    <label class="f">أسماء أخرى للشركة (كما تكتبها ناجز أو ملفات ون درايف، مفصولة بفاصلة)<input class="inp" name="aliases" value="${esc((e?.aliases||[]).join("، "))}" placeholder="مثل: شركة النور للتجارة، النور"><span class="sub">بها تُنسب قضايا ناجز الجديدة إلى هذا العقد وتظهر الشركة مرة واحدة في البوابة.</span></label>
+    <label class="f">أسماء أخرى للشركة (كما تكتبها ناجز أو ملفات المكتب، مفصولة بفاصلة)<input class="inp" name="aliases" value="${esc((e?.aliases||[]).join("، "))}" placeholder="مثل: شركة النور للتجارة، النور"><span class="sub">بها تُنسب قضايا ناجز الجديدة إلى هذا العقد وتظهر الشركة مرة واحدة في البوابة.</span></label>
     <div class="notice" id="ctPreview"></div>
     <div style="display:flex;gap:8px"><button class="btn primary" type="submit">حفظ العقد</button></div>
   </form>`);
@@ -2584,7 +2587,7 @@ const PERMS = [
   ["sessions.edit","تعديل الجلسات والمحاضر وتسجيل الأحكام"],
   ["drafts.use","الصياغة وكتابة المسودات"],
   ["ai.use","التحليل الذكي والمحادثة والإحاطة والتقارير"],
-  ["docs.use","المستندات وحفظ الملفات في ون درايف"],
+  ["docs.use","المستندات وحفظ الملفات في ملفات المكتب"],
   ["billing.view","عرض الأتعاب والعقود والفوترة"],
   ["billing.edit","تعديل الأتعاب والعقود وتسجيل التحصيل"],
   ["learn.manage","إدارة التعلم: المذكرات والورق والنماذج والمهارات"],
@@ -2720,7 +2723,7 @@ function vStaff(){
         <li>شارك الديوان معه من زر «مشاركة» أعلى الصفحة: بصلاحية «مساهم» إن كان في مؤسستك على Claude، أو «محرر» إن كان من خارجها.</li>
         <li>يفتح الرابط من حسابه فيرسل «طلب انضمام» يظهر لك هنا.</li>
         <li>اعتمد دوره ونطاق القضايا التي يراها؛ ويمكنك تعديل الصلاحيات أو إيقافه في أي وقت.</li></ol>
-        <p class="sub" style="margin:8px 0 0">الصلاحيات تحدد ما يظهر له في الديوان. التحليل والصياغة تُحتسب من حسابه في Claude، ومستندات ون درايف تُقرأ بحسابه في Microsoft 365.</p>
+        <p class="sub" style="margin:8px 0 0">الصلاحيات تحدد ما يظهر له في الديوان. التحليل والصياغة تُحتسب من حسابه في Claude، ومستندات المكتب تُقرأ بحسابه في Microsoft 365.</p>
         <div class="notice warn" style="margin-top:8px">للأمانة: الصلاحيات هنا تنظّم ما يراه الموظف ويفعله داخل الديوان، وليست حاجزاً تقنياً: من تشاركه الديوان يستطيع — بأدوات المطورين — قراءة بياناته كلها. شارك الديوان مع من تثق به فقط، وأوقف من يغادر المكتب وأزل مشاركته من زر «مشاركة».</div></section>
     </div>
   </div>`;
@@ -2932,7 +2935,7 @@ async function learnStyle(onStep, mode){
   const seen = learnedSet(prev); const memos = upd ? all.filter(m => !seen.has(m.id, m.name)) : all;
   if (!memos.length) throw {msg:"لا مذكرات جديدة لم يتعلم منها الديوان بعد."};
   const o = OFC(); const who = o.lawyer ? `${o.title} ${o.lawyer}` : "المحامي";
-  const noise = `قد يظهر في نص بعض المذكرات المقروءة من ون درايف تشوه آلي في ترتيب الحروف (مثل «السالم» بدل «السلام» و«األعمال» بدل «الأعمال»)؛ تجاهله وانقل المقاطع النموذجية مصححة.`;
+  const noise = `قد يظهر في نص بعض المذكرات المقروءة من ملفات المكتب تشوه آلي في ترتيب الحروف (مثل «السالم» بدل «السلام» و«األعمال» بدل «الأعمال»)؛ تجاهله وانقل المقاطع النموذجية مصححة.`;
   const intro = upd ? null : `أنت خبير في تحليل أساليب الكتابة القانونية العربية. أمامك مذكرات ولوائح كتبها ${who} في مكتبه. المطلوب استخلاص أسلوبه في الكتابة ليكتب الديوان مستقبلاً بالأسلوب نفسه؛ لا تلخص وقائع القضايا ولا تنقل بيانات الموكلين.
 ${noise}
 حلّل: البنية وترتيب الأقسام؛ الافتتاحية والمخاطبة والتحية؛ تسمية الأطراف والإحالة إليهم؛ عرض الوقائع؛ طريقة الاستدلال والتكييف وصيغة الاستشهاد بالمواد (الصيغة لا المواد)؛ الرد على الخصم؛ صياغة الطلبات؛ الخاتمة والتوقيع؛ طول الجمل والفقرات؛ الترقيم والعناوين؛ العبارات المتكررة؛ ما يتجنبه.
@@ -3117,15 +3120,15 @@ function learnMemos(){
     </section>
     <div class="grid" style="align-content:start">
       <section class="panel"><header><h2>المذكرات التي يتعلم منها</h2><span class="sub">${memos?(st?.guide?`${memos.length-fresh.length} مُتعلَّمة${fresh.length?` · ${fresh.length} جديدة`:""}`:memos.length):"…"}</span></header>
-        ${!memos?.length && st?.sources?.length ? `<p class="sub" style="margin:0 0 6px">تعلّم الديوان من هذه المذكرات من ون درايف؛ لإعادة التعلم أضفها أو أضف غيرها.</p><div class="files">${st.sources.map(m=>`<div class="file"><span class="kind k-memo">${esc(m.kind||"مذكرة")}</span><div style="min-width:0"><div class="nm">${esc(memoName(m.name))}</div><div class="pth">من ون درايف</div></div><span></span></div>`).join("")}</div>` : ""}
-        ${memos?.length?`<div class="files">${memos.map(m=>`<div class="file"><span class="kind k-memo">${esc(m.kind||"مذكرة")}</span><div style="min-width:0"><div class="nm">${esc(memoName(m.name))}${st?.guide&&!seen.has(m.id, m.name)?` <span class="pill warn">جديدة</span>`:""}</div><div class="pth">${fmtMoney.format(m.chars||0)} حرف · ${esc({upload:"مرفوعة",onedrive:"من ون درايف",draft:"من مسودات الديوان"}[m.src]||"")}${m.at?" · "+fmtDate.format(D(m.at)):""}</div></div><button class="btn sm ghost" data-mdel="${esc(m.id)}" style="color:var(--crit)" aria-label="حذف">حذف</button></div>`).join("")}</div>`:memos?(st?.sources?.length ? "" : `<div class="empty">لم تُضف مذكرات بعد.</div>`):`<div class="thinking"><span class="dot"></span>يحمّل…</div>`}
+        ${!memos?.length && st?.sources?.length ? `<p class="sub" style="margin:0 0 6px">تعلّم الديوان من هذه المذكرات من ملفات المكتب؛ لإعادة التعلم أضفها أو أضف غيرها.</p><div class="files">${st.sources.map(m=>`<div class="file"><span class="kind k-memo">${esc(m.kind||"مذكرة")}</span><div style="min-width:0"><div class="nm">${esc(memoName(m.name))}</div><div class="pth">من ملفات المكتب</div></div><span></span></div>`).join("")}</div>` : ""}
+        ${memos?.length?`<div class="files">${memos.map(m=>`<div class="file"><span class="kind k-memo">${esc(m.kind||"مذكرة")}</span><div style="min-width:0"><div class="nm">${esc(memoName(m.name))}${st?.guide&&!seen.has(m.id, m.name)?` <span class="pill warn">جديدة</span>`:""}</div><div class="pth">${fmtMoney.format(m.chars||0)} حرف · ${esc({upload:"مرفوعة",onedrive:"من ملفات المكتب",draft:"من مسودات الديوان"}[m.src]||"")}${m.at?" · "+fmtDate.format(D(m.at)):""}</div></div><button class="btn sm ghost" data-mdel="${esc(m.id)}" style="color:var(--crit)" aria-label="حذف">حذف</button></div>`).join("")}</div>`:memos?(st?.sources?.length ? "" : `<div class="empty">لم تُضف مذكرات بعد.</div>`):`<div class="thinking"><span class="dot"></span>يحمّل…</div>`}
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><label class="btn" style="cursor:pointer">${icon("doc")}رفع مذكرات<input type="file" id="memoFiles" accept=".docx,.pdf,.txt" multiple hidden></label>
           ${st?.guide
             ? `<button class="btn primary" id="styleUpdate" ${fresh.length&&S.sample&&!UI.busy?"":"disabled"}>${icon("spark")}${fresh.length?`حدّث الأسلوب من ${arN(fresh.length,"المذكرة الجديدة","المذكرتين الجديدتين","مذكرات جديدة","مذكرة جديدة")}`:"لا مذكرات جديدة"}</button>
                <button class="btn ghost" id="styleLearn" ${memos?.length&&S.sample&&!UI.busy?"":"disabled"} title="يكتب الدليل من جديد من كل المذكرات">إعادة البناء من الصفر</button>`
             : `<button class="btn primary" id="styleLearn" ${memos?.length&&S.sample&&!UI.busy?"":"disabled"}>${icon("spark")}تعلّم أسلوبي</button>`}</div>
         ${st?.guide?`<p class="sub" style="margin:6px 0 0">«التحديث» يضيف ما في المذكرات الجديدة إلى الدليل الحالي ويحافظ على تعديلاتك عليه؛ «إعادة البناء» تكتبه من جديد من كل المذكرات${st.editedAt?" وتُسقط تعديلاتك اليدوية":""}.</p>`:""}
-        ${S.mcp?`<details style="margin-top:10px"${UI.odOpen?" open":""}><summary>إضافة من ون درايف</summary><form id="memoOdForm" class="toolbar" style="margin:8px 0 0"><label class="search">${icon("search")}<input id="memoOdQ" value="${esc(UI.odQ||"مذكرة")}" placeholder="مذكرة، لائحة، اعتراض…"></label><button class="btn" type="submit">بحث</button></form><div id="memoOdOut">${memoOdList()}</div></details>`:""}
+        ${S.mcp?`<details style="margin-top:10px"${UI.odOpen?" open":""}><summary>إضافة من ملفات المكتب</summary><form id="memoOdForm" class="toolbar" style="margin:8px 0 0"><label class="search">${icon("search")}<input id="memoOdQ" value="${esc(UI.odQ||"مذكرة")}" placeholder="مذكرة، لائحة، اعتراض…"></label><button class="btn" type="submit">بحث</button></form><div id="memoOdOut">${memoOdList()}</div></details>`:""}
         ${drafts.length?`<details style="margin-top:8px"><summary>من مسودات الديوان المحفوظة (${drafts.length})</summary><div class="files" style="margin-top:6px">${drafts.slice(-12).reverse().map(({c,d},i)=>`<label class="file"><input type="checkbox" data-mdraft="${esc(c.id)}|${esc(d.id||d.at)}"><div style="min-width:0"><div class="nm">${esc(DRAFT_KINDS[d.kind]?.t||d.kind)} — ${esc(c.title).slice(0,60)}</div><div class="pth">${fmtDate.format(D(d.at))}</div></div><span></span></label>`).join("")}</div><button class="btn sm" id="memoFromDrafts" style="margin-top:6px">إضافة المختار</button></details>`:""}
       </section>
       <section class="panel"><header><h2>التعلم من تعديلاتك</h2></header>
@@ -3298,8 +3301,8 @@ function bindLearn(){
     UI.busy = null; learnRerender(); };
   const ss = $("styleSave"); if (ss) ss.onclick = async () => { try { await S.db.doc("learn/style").update({guide:$("styleGuide").value, editedAt:new Date().toISOString()}); toast("حُفظ دليل الأسلوب"); } catch { toast("تعذّر الحفظ"); } };
   const so = $("styleOn"); if (so) so.onchange = async () => { try { await S.db.doc("learn/style").update({enabled:so.checked}); } catch { toast("تعذّر الحفظ"); } };
-  const of = $("memoOdForm"); if (of) of.onsubmit = async (e) => { e.preventDefault(); UI.odOpen = true; UI.odQ = $("memoOdQ").value.trim(); UI.odBusy = "يبحث في ون درايف…"; learnRerender();
-    try { UI.odItems = await odSearch(UI.odQ); } catch { UI.odItems = []; toast("تعذّر البحث في ون درايف"); } UI.odBusy = null; learnRerender(); };
+  const of = $("memoOdForm"); if (of) of.onsubmit = async (e) => { e.preventDefault(); UI.odOpen = true; UI.odQ = $("memoOdQ").value.trim(); UI.odBusy = "يبحث في ملفات المكتب…"; learnRerender();
+    try { UI.odItems = await odSearch(UI.odQ); } catch { UI.odItems = []; toast("تعذّر البحث في ملفات المكتب"); } UI.odBusy = null; learnRerender(); };
   const og = $("memoOdGo"); if (og) og.onclick = async () => { const items = (UI.odItems||[]).filter(f=>/\.(pdf|docx)$/i.test(f.name)); const picks = [...document.querySelectorAll("[data-mod]:checked")].map(cb=>items[+cb.dataset.mod]); if (!picks.length) { toast("اختر مذكرة أو أكثر"); return; }
     let ok = 0; for (let i=0;i<picks.length;i++) { UI.odBusy = `يقرأ «${picks[i].name}» (${i+1} من ${picks.length})…`; learnRerender(); try { await addMemo(picks[i].name, await odReadAll(picks[i].uri, 40, null, /\.pdf$/i.test(picks[i].name)), "onedrive"); ok++; } catch(e){ toast(e?.msg || `تعذّرت قراءة «${picks[i].name}»`); } }
     UI.odBusy = null; UI.odItems = null; learnRerender(); if (ok) toast(`أُضيفت ${ok} مذكرة`); };
@@ -3582,7 +3585,7 @@ function vLibrary(){
         <p class="sub" style="margin:0 0 8px">ارفع الأنظمة واللوائح والكتب بصيغة PDF أو Word أو نص. يقرأ الديوان النص ويقسمه إلى مواد بأرقامها — ويفصل مواد النظام عن مواد لائحته في الإصدارات المدمجة — ثم يبحث فيها ويستشهد بها.</p>
         <label class="btn primary" style="cursor:pointer">${icon("doc")}اختيار ملفات<input type="file" id="libFiles" accept=".pdf,.docx,.txt,.md" multiple hidden></label>
         <input type="file" id="libReplaceFile" accept=".pdf,.docx,.txt,.md" hidden>
-        ${S.mcp?`<details style="margin-top:10px"${L.odOpen?" open":""}><summary>استيراد من ون درايف</summary><p class="sub" style="margin:6px 0 0">ملفات PDF الرسمية تُقرأ بدقة أعلى عند رفعها من جهازك عبر «اختيار ملفات»؛ الاستيراد من ون درايف أنسب لملفات Word والنصوص.</p><form id="libOdForm" class="toolbar" style="margin:8px 0 0"><label class="search">${icon("search")}<input id="libOdQ" value="${esc(L.odQ||"")}" placeholder="اسم النظام أو المجلد"></label><button class="btn" type="submit">بحث</button></form><div id="libOdOut">${libOdList()}</div></details>`:""}
+        ${S.mcp?`<details style="margin-top:10px"${L.odOpen?" open":""}><summary>استيراد من ملفات المكتب</summary><p class="sub" style="margin:6px 0 0">ملفات PDF الرسمية تُقرأ بدقة أعلى عند رفعها من جهازك عبر «اختيار ملفات»؛ الاستيراد من ملفات المكتب أنسب لملفات Word والنصوص.</p><form id="libOdForm" class="toolbar" style="margin:8px 0 0"><label class="search">${icon("search")}<input id="libOdQ" value="${esc(L.odQ||"")}" placeholder="اسم النظام أو المجلد"></label><button class="btn" type="submit">بحث</button></form><div id="libOdOut">${libOdList()}</div></details>`:""}
         <details style="margin-top:8px"><summary>لصق نص</summary><div class="grid" style="gap:8px;margin-top:8px"><input class="inp" id="libPasteName" placeholder="اسم النظام أو الكتاب"><textarea class="inp" id="libPasteText" style="min-height:120px" placeholder="الصق النص كاملاً هنا"></textarea><button class="btn" type="button" id="libPasteGo">قراءة النص</button></div></details>
         ${jobs.length?`<div class="grid" style="gap:8px;margin-top:12px">${jobs.map(libJobRow).join("")}</div>`:""}
       </section>`:""}
@@ -3762,13 +3765,13 @@ function bindLibrary(){
   document.querySelectorAll("[data-libdel]").forEach(b=>b.onclick=()=>{ if (b.dataset.armed) { libDelete(b.dataset.libdel); return; } b.dataset.armed = "1"; b.textContent = "تأكيد الحذف"; setTimeout(()=>{ if (b.isConnected) { delete b.dataset.armed; b.textContent = "حذف"; } }, 4000); });
   document.querySelectorAll("[data-libart]").forEach(b=>b.onclick=()=>{ const k = b.dataset.libart; const it = k[0]==="a" ? L.ansRefs?.[+k.slice(1)] : L.hits?.[+k.slice(1)]; if (it) openArticle(it); });
   const pg = $("libPasteGo"); if (pg) pg.onclick = () => { const t = cleanText($("libPasteText").value); if (!t) { toast("الصق النص أولاً"); return; } S.libJobs = S.libJobs||[]; const j = {id:newId("j"), file:"نص ملصق", size:t.length, status:"reading", mime:"text/plain"}; libPrepare(j, t, $("libPasteName").value.trim()||"نص ملصق", false); if ($("libPasteName").value.trim()) { j.name = $("libPasteName").value.trim(); j.kind = libGuessKind(j.name); } S.libJobs.push(j); libRerender(); };
-  const of = $("libOdForm"); if (of) of.onsubmit = async (e) => { e.preventDefault(); L.odOpen = true; L.odQ = $("libOdQ").value.trim(); if (!L.odQ) return; L.odBusy = "يبحث في ون درايف…"; L.odErr = null; libRerender();
-    try { L.odItems = await odSearch(L.odQ); } catch(err){ L.odErr = "تعذّر البحث في ون درايف."; } L.odBusy = null; libRerender(); };
+  const of = $("libOdForm"); if (of) of.onsubmit = async (e) => { e.preventDefault(); L.odOpen = true; L.odQ = $("libOdQ").value.trim(); if (!L.odQ) return; L.odBusy = "يبحث في ملفات المكتب…"; L.odErr = null; libRerender();
+    try { L.odItems = await odSearch(L.odQ); } catch(err){ L.odErr = "تعذّر البحث في ملفات المكتب."; } L.odBusy = null; libRerender(); };
   document.querySelectorAll("[data-libod]").forEach(cb=>cb.onchange=()=>{ const f = (L.odItems||[]).filter(x=>/\.(pdf|docx|txt)$/i.test(x.name))[+cb.dataset.libod]; L.odPick = L.odPick||{}; if (cb.checked) L.odPick[f.uri] = f; else delete L.odPick[f.uri]; });
   const og = $("libOdGo"); if (og) og.onclick = async () => { const picks = Object.values(L.odPick||{}); if (!picks.length) { toast("اختر ملفاً أو أكثر"); return; } L.odPick = {}; S.libJobs = S.libJobs||[];
     for (const f of picks) { const j = {id:newId("j"), file:f.name, size:null, status:"reading", prog:""}; S.libJobs.push(j); libRerender();
       try { const t = await odReadAll(f.uri, 400, (i,n)=>{ j.prog = n?`صفحة ${i} من ${n}`:""; }, /\.pdf$/i.test(f.name)); libPrepare(j, t, f.name, /\.pdf$/i.test(f.name)); j.mime = /\.pdf$/i.test(f.name) ? "application/pdf" : "text/plain"; }
-      catch(err){ j.status = "error"; j.err = "تعذّرت قراءة الملف من ون درايف."; }
+      catch(err){ j.status = "error"; j.err = "تعذّرت قراءة الملف من ملفات المكتب."; }
       libRerender(); } };
 }
 
@@ -4965,6 +4968,8 @@ body{background:var(--bg);padding:20px;max-width:1100px;margin:0 auto}#main{disp
 .fstep.done .ck{background:var(--accent);border-color:var(--accent)}
 .fstep:disabled{cursor:default}
 h2.sec{font-size:1.02rem;margin:0;display:flex;gap:8px;align-items:baseline}
+.cdrop{border:2px dashed var(--line);border-radius:10px;padding:14px;text-align:center;margin:8px 0 10px;color:var(--ink-2)}
+.cdrop.over{border-color:var(--accent);background:var(--surface-2,rgba(0,0,0,.03))}
 </style></head><body><main id="main"><div class="topline"><div>${brandSvg("logo","join-logo")}<div class="date">متابعة قضايا ${esc(name)} — ${esc(fmtDay.format(new Date()))}</div></div></div>${body}</main></body></html>`;
 }
 function bindPortal(){
@@ -5101,7 +5106,7 @@ const CLOSING_ITEMS = [
   ["csat", "استبيان رضا الموكل", c => c.csat ? "ok" : null, c => `<button class="btn sm" type="button" data-csat="${esc(c.id)}">${c.csat?"تعديل":"تسجيل التقييم"}</button>`],
   ["docs", "إعادة المستندات الأصلية إلى الموكل", null, null],
   ["retain", "تحديد مدة حفظ الملف", c => c.retainUntil ? "ok" : null, c => `<button class="btn sm" type="button" data-retain="${esc(c.id)}">${c.retainUntil?`حتى ${fmtD(c.retainUntil)} — تعديل`:"تحديد (١٠ سنوات افتراضاً)"}</button>`],
-  ["archive", "أرشفة الملف في ون درايف", null, null],
+  ["archive", "أرشفة الملف في ملفات المكتب", null, null],
 ];
 function checklistState(c, items, store){
   const man = (c[store]?.items) || {};
@@ -5418,7 +5423,7 @@ function openTaskForm(t, pre={}){
       <label class="f">تفاصيل<textarea class="inp" name="note" style="min-height:70px">${esc(v.note||"")}</textarea></label>
       <div class="f"><span>المرفقات</span><div id="tkFiles">${filesHtml()}</div>
         ${S.assets?`<input type="file" name="files" multiple style="margin-top:4px"><div class="sub">حتى 20 ميغابايت للملف؛ تُحفظ مع الديوان وتُفتح من المهمة.</div>`:`<div class="sub">رفع الملفات غير متاح لحسابك في هذا العرض؛ أضف رابط الملف بدلاً منه.</div>`}
-        <input class="inp" name="link" placeholder="أو رابط ملف (ون درايف أو غيره): https://…" style="direction:ltr;text-align:left;margin-top:6px"></div>
+        <input class="inp" name="link" placeholder="أو رابط ملف (ملفات المكتب أو غيره): https://…" style="direction:ltr;text-align:left;margin-top:6px"></div>
       <label style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" name="shared" ${v.shared?"checked":""}> <span>يظهر للموكل في صفحة متابعة الشركة وفي «نسخة للإرسال» (بلا مرفقات)</span></label>
       <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" type="submit">${isNew?"إضافة":"حفظ"}</button>${!isNew?`<button class="btn ghost" type="button" id="taskDel" style="color:var(--crit);margin-inline-start:auto">حذف</button>`:""}</div></form>`);
   const f = dr.querySelector("#taskForm");
@@ -6369,7 +6374,7 @@ async function openReport(c, s){
   dr.querySelector("#repCopy").onclick = () => { navigator.clipboard?.writeText(ta.value).then(()=>toast("نُسخ التقرير"),()=>{ ta.select(); toast("حدّد النص وانسخه"); }); };
   dr.querySelector("#repSave").onclick = async () => { if (await saveRep()) toast("حُفظ التقرير في ملف القضية"); };
   dr.querySelector("#repWord").onclick = async (e) => { e.target.disabled = true; try { st.innerHTML = `<span class="thinking"><span class="dot"></span>يجهّز ملف Word على ورق المكتب…</span>`; const bytes = await buildLetterheadDocx(ta.value); await downloadBytes(bytes, fileName()); st.textContent = `جُهّز الملف «${fileName()}».`; } catch(err){ st.innerHTML = `<span style="color:var(--crit)">${esc(err?.msg||"تعذّر تجهيز ملف Word.")}</span>`; } e.target.disabled = false; };
-  const ws = dr.querySelector("#repWordSave"); if (ws) ws.onclick = async (e) => { e.target.disabled = true; try { st.innerHTML = `<span class="thinking"><span class="dot"></span>يجهّز الملف ويحفظه في مجلد القضية…</span>`; const bytes = await buildLetterheadDocx(ta.value); const f = await saveDocxToCase(c, bytes, fileName()); await saveRep({file:{name:f.name, webUrl:f.webUrl, uri:f.uri}}); st.innerHTML = `حُفظ «${esc(f.name)}» في مجلد القضية على ون درايف.${f.webUrl?` <a href="${esc(href(f.webUrl))}" target="_blank" rel="noopener">فتح الملف</a>`:""}`; toast("حُفظ في مجلد القضية"); } catch(err){ st.innerHTML = `<span style="color:var(--crit)">${esc(err?.msg||"تعذّر الحفظ في مجلد القضية.")}</span>`; } e.target.disabled = false; };
+  const ws = dr.querySelector("#repWordSave"); if (ws) ws.onclick = async (e) => { e.target.disabled = true; try { st.innerHTML = `<span class="thinking"><span class="dot"></span>يجهّز الملف ويحفظه في مجلد القضية…</span>`; const bytes = await buildLetterheadDocx(ta.value); const f = await saveDocxToCase(c, bytes, fileName()); await saveRep({file:{name:f.name, webUrl:f.webUrl, uri:f.uri}}); st.innerHTML = `حُفظ «${esc(f.name)}» في مجلد القضية في ملفات المكتب.${f.webUrl?` <a href="${esc(href(f.webUrl))}" target="_blank" rel="noopener">فتح الملف</a>`:""}`; toast("حُفظ في مجلد القضية"); } catch(err){ st.innerHTML = `<span style="color:var(--crit)">${esc(err?.msg||"تعذّر الحفظ في مجلد القضية.")}</span>`; } e.target.disabled = false; };
   dr.querySelectorAll("[data-rstyle]").forEach(b=>b.onclick=()=>{ dr.querySelectorAll("[data-rstyle]").forEach(x=>x.setAttribute("aria-pressed", String(x===b))); S.repStyle = b.dataset.rstyle; if (!ta.value.trim() || /…$/.test(ta.value.trim())) { ta.value = S.repStyle==="formal" ? reportFrame(c, reportOpening(c, s)+" …") : ""; updWa(); } });
   dr.querySelector("#repGen").onclick = async (e) => {
     if (!S.sample) { toast("المساعد غير متاح في هذا العرض"); return; }
@@ -6551,15 +6556,15 @@ async function odLinkAll(){
   }
   st.busy = false; st.at = new Date().toISOString(); odLinkRerender();
   try { if (S.meta) await S.db.doc("meta/sync").update({odLinkAt: st.at, odLinked: st.linked.length, odMissing: st.none.map(c=>c.caseNo)}); } catch {}
-  await logAction(null, `ربط مجلدات ون درايف بأرقام القضايا: ${st.linked.length} رُبطت، ${st.none.length} بلا مجلد يبدأ برقمها`);
+  await logAction(null, `ربط مجلدات المكتب بأرقام القضايا: ${st.linked.length} رُبطت، ${st.none.length} بلا مجلد يبدأ برقمها`);
 }
 function odLinkPanel(){
   if (!can("sync.use")) return "";
   const all = [...S.cases.values()].filter(c => isCase(c) && !c.deleted && c.caseNo && /^\d{6,}$/.test(String(c.caseNo)));
   const numbered = all.filter(odFolderIsNumbered).length, old = all.filter(c=>c.documents?.folder && !odFolderIsNumbered(c)).length, none = all.length - numbered - old;
   const st = S.odLink; const ro = S.mcp && S.canWrite ? "" : "disabled";
-  return `<section class="panel" id="odLinkPanel"><header><h2>مجلدات ون درايف</h2><span class="sub">${numbered} قضية مربوطة بمجلد يبدأ برقمها · ${old} بمجلد قديم · ${none} بلا مجلد</span></header>
-    <p class="sub" style="margin:0 0 8px">القاعدة: مجلد كل قضية يبدأ برقمها في ناجز (<span class="mono">4870000000 - اسم الخصم</span>) تحت «03 - القضايا» في مجلد الشركة أو مجلد الموكل. هذا الزر يبحث لكل قضية عن مجلدها بالرقم ويربطه ويقرأ ملفاته؛ لا يُنشئ ولا ينقل ولا يحذف شيئاً في ون درايف.</p>
+  return `<section class="panel" id="odLinkPanel"><header><h2>مجلدات المكتب</h2><span class="sub">${numbered} قضية مربوطة بمجلد يبدأ برقمها · ${old} بمجلد قديم · ${none} بلا مجلد</span></header>
+    <p class="sub" style="margin:0 0 8px">القاعدة: مجلد كل قضية يبدأ برقمها في ناجز (<span class="mono">4870000000 - اسم الخصم</span>) تحت «03 - القضايا» في مجلد الشركة أو مجلد الموكل. هذا الزر يبحث لكل قضية عن مجلدها بالرقم ويربطه ويقرأ ملفاته؛ لا يُنشئ ولا ينقل ولا يحذف شيئاً في ملفات المكتب.</p>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="btn primary" id="odLinkGo" ${ro} ${st?.busy?"disabled":""}>${st?.busy?`يربط… ${st.done} من ${st.total}`:"ربط المجلدات بأرقام القضايا"}</button>${!S.mcp?`<span class="sub">يحتاج موصّل Microsoft 365 في هذا العرض</span>`:""}${S.meta?.odLinkAt?`<span class="sub">آخر ربط: ${esc(fmtDate.format(D(S.meta.odLinkAt)))}${S.meta.odMissing?.length?` · ${S.meta.odMissing.length} بلا مجلد`:""}</span>`:""}</div>
     ${st && !st.busy ? `<div class="notice" style="margin-top:10px"><b>رُبطت ${st.linked.length}</b>${st.ambiguous.length?` (منها ${st.ambiguous.length} بأكثر من مجلد مرشح)`:""}${st.failed.length?` · تعذّر ${st.failed.length}`:""}${st.error?` · ${esc(st.error)}`:""}.
       ${st.none.length?`<details style="margin-top:6px"><summary>${st.none.length} قضية بلا مجلد يبدأ برقمها — أنشئ مجلدها بهذا الاسم ثم أعد الربط</summary><div class="docs" style="margin-top:6px">${st.none.slice(0,120).map(c=>`<div class="doc"><div style="min-width:0"><div class="nm mono">${esc(c.caseNo)} - ${esc(c.ourSide==="المدعي"?(c.defendant||""):(c.plaintiff||""))}</div><div class="meta">${esc(c.client||"")} · <button class="link-chip" data-case="${esc(c.id)}">${esc((c.title||"").slice(0,60))}</button></div></div></div>`).join("")}</div></details>`:""}</div>` : ""}
@@ -6986,7 +6991,7 @@ async function xRunCase(c, {quiet=false}={}){
   try {
     const R = await xCollect(c, step); const F = xDecide(c, R.docs); const A = await xApply(c, F, R); const shared = A.ok ? await xShare(S.cases.get(c.id) || c, F) : 0;
     delete S.xBusy[c.id];
-    if (!quiet) { render(); toast(!R.looked ? (R.folder ? "لا عقد أتعاب ولا وكالة في مجلد القضية" : "القضية غير مربوطة بمجلد في ون درايف") : A.filled.length ? `أُكمل: ${A.filled.join("، ")}${shared?` (و${shared} قضية أخرى للموكل نفسه)`:""}` : A.diffs ? "وُجدت قيم تخالف المسجل؛ راجعها في بيانات القضية" : "لم يُعثر على بيانات جديدة"); }
+    if (!quiet) { render(); toast(!R.looked ? (R.folder ? "لا عقد أتعاب ولا وكالة في مجلد القضية" : "القضية غير مربوطة بمجلد في ملفات المكتب") : A.filled.length ? `أُكمل: ${A.filled.join("، ")}${shared?` (و${shared} قضية أخرى للموكل نفسه)`:""}` : A.diffs ? "وُجدت قيم تخالف المسجل؛ راجعها في بيانات القضية" : "لم يُعثر على بيانات جديدة"); }
     return {...A, R, shared};
   } catch (e) { delete S.xBusy[c.id]; if (!quiet) { render(); toast(e?.code === "server_not_connected" ? "أضف موصّل Microsoft 365 من إعدادات Claude" : e?.code === "needs_reauth" ? "أعد ربط Microsoft 365 من إعدادات Claude" : "تعذّر قراءة مستندات القضية الآن"); } if (quiet) throw e; return null; }
 }
@@ -7038,7 +7043,7 @@ function xCaseBlock(c){
       ${busy?`<span class="thinking" style="margin:0"><span class="dot"></span>${esc(busy)}</span>`:ex?.at?`<span class="sub">قُرئت المستندات ${esc(fmtD(ex.at))}${ex.files?.length?`: ${ex.files.map(f=>f.webUrl?`<a href="${esc(href(f.webUrl))}" target="_blank" rel="noopener">${esc(f.file)}</a>`:esc(f.file)).join("، ")}`:ex.looked?"":" — لا عقد أتعاب ولا وكالة في المجلد"}</span>`:!S.mcp?`<span class="sub">يحتاج موصّل Microsoft 365</span>`:`<span class="sub">يقرأ الجوال والهوية والمدينة والوكالة${can("billing.edit")?" والأتعاب":""} من مجلد القضية، ويملأ الفارغ فقط</span>`}</div>
     ${srcs.length?`<div class="sub" style="margin-top:6px">${srcs.map(([k,m])=>`${esc(X_LBL[k])}: من «${esc(m.file||"")}»${m.via?" (قضية أخرى للموكل)":""}${xHowTxt(m.how)?" — "+xHowTxt(m.how):""}`).join(" · ")}</div>`:""}
     ${diffs.length?`<div class="notice warn" style="margin-top:8px"><b>في المستندات ما يخالف المسجل</b>${diffs.map(([k,d])=>`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px"><span>${esc(X_LBL[k])}: <b class="num">${esc(d.show)}</b> في «${esc(d.file)}» — المسجل <span class="num">${esc(d.was||"—")}</span></span>${S.canWrite?`<button class="btn sm" type="button" data-xok="${esc(k)}">اعتمد ما في المستند</button><button class="btn sm ghost" type="button" data-xno="${esc(k)}">أبقِ المسجل</button>`:""}</div>`).join("")}</div>`:""}
-    ${(ex?.scanned||[]).length?`<div class="notice" style="margin-top:8px"><b>ملفات مصوّرة لا يقرأ الموصّل نصها</b> — نزّلها من ون درايف ثم اخترها هنا ليقرأ الديوان صورتها:${ex.scanned.map((f,i)=>`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px"><span>${f.webUrl?`<a href="${esc(href(f.webUrl))}" target="_blank" rel="noopener">${esc(f.file)}</a>`:esc(f.file)} (${f.kind==="poa"?"وكالة":"عقد أتعاب"})</span>${S.canWrite?`<label class="btn sm">اختر الملف<input type="file" accept=".pdf,.docx,image/*" hidden data-ximg="${i}"></label>`:""}</div>`).join("")}</div>`:""}
+    ${(ex?.scanned||[]).length?`<div class="notice" style="margin-top:8px"><b>ملفات مصوّرة لا يقرأ الموصّل نصها</b> — نزّلها من ملفات المكتب ثم اخترها هنا ليقرأ الديوان صورتها:${ex.scanned.map((f,i)=>`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px"><span>${f.webUrl?`<a href="${esc(href(f.webUrl))}" target="_blank" rel="noopener">${esc(f.file)}</a>`:esc(f.file)} (${f.kind==="poa"?"وكالة":"عقد أتعاب"})</span>${S.canWrite?`<label class="btn sm">اختر الملف<input type="file" accept=".pdf,.docx,image/*" hidden data-ximg="${i}"></label>`:""}</div>`).join("")}</div>`:""}
   </div>`;
 }
 function xCaseRerender(id){ const el = $("xBlock"); const c = S.cases.get(id); if (!el || !c || el.dataset.xcase !== id) return; const t = document.createElement("template"); t.innerHTML = xCaseBlock(c).trim(); el.replaceWith(t.content.firstChild); bindExtract(); }
@@ -7068,7 +7073,7 @@ function xPanel(){
   const n = (f) => all.filter(f).length; const st = S.xRun; const ro = S.mcp && S.canWrite ? "" : "disabled";
   const lnk = (ids) => ids.slice(0, 80).map(id => { const c = S.cases.get(id); return c ? `<button class="link-chip" data-case="${esc(c.id)}">${esc(c.caseNo||"")} ${esc((c.client||c.title||"").slice(0,40))}</button>` : ""; }).join(" ");
   return `<section class="panel" id="xPanel"><header><h2>بيانات الموكلين من المستندات</h2><span class="sub">بلا جوال ${n(c=>!c.clientPhone)} · بلا هوية ${n(c=>!c.clientIdNo)} · بلا وكالة ${n(c=>!c.poa?.no)}${can("billing.edit")?` · بلا أتعاب ${n(c=>xEmpty(c,"fees"))}`:""} من ${all.length}</span></header>
-    <p class="sub" style="margin:0 0 8px">يقرأ عقد الأتعاب والوكالة من مجلد كل قضية (ومن مجلد الموكل أو الشركة فوقه) ويستخرج: جوال الموكل، هويته أو سجله، مدينته، رقم الوكالة وتاريخ انتهائها${can("billing.edit")?"، وأتعاب العقد بالمعاملة":""}. يملأ الخانات الفارغة فقط؛ ما يخالف المسجل يُعرض في صفحة القضية لقرارك. أرقام المكتب نفسه (الطرف الأول والوكيل) لا تُؤخذ. لا يكتب في ون درايف شيئاً.</p>
+    <p class="sub" style="margin:0 0 8px">يقرأ عقد الأتعاب والوكالة من مجلد كل قضية (ومن مجلد الموكل أو الشركة فوقه) ويستخرج: جوال الموكل، هويته أو سجله، مدينته، رقم الوكالة وتاريخ انتهائها${can("billing.edit")?"، وأتعاب العقد بالمعاملة":""}. يملأ الخانات الفارغة فقط؛ ما يخالف المسجل يُعرض في صفحة القضية لقرارك. أرقام المكتب نفسه (الطرف الأول والوكيل) لا تُؤخذ. لا يكتب في ملفات المكتب شيئاً.</p>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="btn primary" id="xGo" ${ro} ${st?.busy?"disabled":""}>${st?.busy?`يقرأ… ${st.done} من ${st.total}`:"استخراج من عقود الأتعاب والوكالات"}</button>${st?.busy?`<button class="btn sm ghost" id="xStop">إيقاف</button>`:`<label class="sub" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="xAll"> أعد قراءة ما قُرئ في آخر 3 أيام</label>`}${!S.mcp?`<span class="sub">يحتاج موصّل Microsoft 365 في هذا العرض</span>`:""}${S.meta?.xAt?`<span class="sub">آخر قراءة: ${esc(fmtDate.format(D(S.meta.xAt)))}</span>`:""}</div>
     ${st && !st.busy ? `<div class="notice" style="margin-top:10px"><b>أُكملت ${st.cases.length} قضية</b>${Object.keys(st.filled).length?` (${Object.entries(st.filled).map(([k,v])=>`${X_LBL[k]} ${v}`).join("، ")})`:""}${st.shared?` · و${st.shared} قضية أخرى للموكلين أنفسهم`:""}${st.failed.length?` · تعذّر ${st.failed.length}`:""}${st.stop?" · أُوقفت":""}${st.error?` · ${esc(st.error)}`:""}.
       ${st.diffs.length?`<details style="margin-top:6px" open><summary>${st.diffs.length} قضية في مستنداتها ما يخالف المسجل — قرارك في صفحة القضية</summary><div style="margin-top:6px">${lnk(st.diffs)}</div></details>`:""}
@@ -8003,6 +8008,64 @@ function homeWorkPanel(){
     ${items.slice(0,8).map(i => i.k==="task" ? `<div class="tasks">${taskRow(i.x)}</div>` : memoRow(i.x)).join("")}${items.length>8?`<div class="sub" style="margin-top:6px">و${items.length-8} أخرى</div>`:""}</section>`;
 }
 
+// ---------- the cloud copy's files (Supabase, site/cloud/cloud-files.js — integrate_cloud.py adds this part to the cloud build only):
+// the page hands its own PDF and Word readers to the cloud store, so a file's text is extracted the way the Diwan already reads
+// Arabic documents; and the documents tab takes files dropped on it (or picked on a phone) into the case's folder.
+if (window.diwanCloudFiles) window.diwanCloudFiles.extractor = {pdfText, docxText, needPdf, docKind};
+const cloudFiles = () => (S.mcp && S.mcp.cloud && window.diwanCloudFiles) || null;
+S.cloudUp = S.cloudUp || {};
+function cloudDropZone(c){
+  if (!cloudFiles() || !can("docs.use") || !S.canWrite) return "";
+  const up = S.cloudUp[c.id];
+  return `<div class="cdrop" id="cloudDrop" data-case="${esc(c.id)}">${icon("folder").replace("<svg",'<svg style="width:20px;height:20px;vertical-align:-4px"')}
+    اسحب الملفات إلى هنا أو <label class="btn sm" style="display:inline-flex">اختر ملفات<input type="file" id="cloudPick" multiple hidden></label>
+    <div class="sub" style="margin-top:4px">${up ? esc(up) : "تُحفظ في مجلد القضية، ويُقرأ نصها تلقائياً فيجدها البحث ويقرؤها المساعد."}</div></div>`;
+}
+// the case's folder in the store: the one it is linked to, else a new one where the office keeps them
+// («شركات/<الشركة>/03 - القضايا» for a company with an annual contract, «قضايا العملاء/<الموكل>» otherwise)
+async function cloudCaseFolder(c){
+  const F = cloudFiles(); const fo = c.documents?.folder;
+  if (fo?.path && F.idOf(fo.uri)) return fo.path;
+  const clean = (t) => String(t || "").replace(/[\/\\]/g, "-").replace(/\s+/g, " ").trim().slice(0, 80);
+  const e = c.engagementId ? S.cases.get(c.engagementId) : null;
+  const opp = clean(String(c.title || "").split(/\s+ضد\s+/)[1] || "");
+  const name = clean(`${c.caseNo || c.id}${opp ? " - " + opp : ""}`);
+  const path = e && e.kind === "engagement" && !e.deleted ? `Law Firm/شركات/${clean(e.client || e.title)}/03 - القضايا/${name}` : `Law Firm/قضايا العملاء/${clean(c.client || "بلا موكل")}/${name}`;
+  const row = await F.ensureFolder(path); const uri = F.uriOf(row.id);
+  const documents = {...(c.documents || {}), folder: {name: row.name, path: row.path, uri, webUrl: F.webUrlOf(row.path), itemId: row.id, itemIdFor: uri}, confidence: "high", method: "أنشأه الديوان", src: "auto", note: null};
+  await saveDocs(c, documents, `أنشأ مجلد القضية في ملفات المكتب: ${row.path.replace(/^Law Firm\//, "")}`);
+  return row.path;
+}
+async function cloudUpload(c, files){
+  const F = cloudFiles(); if (!F || !c || !files.length) return;
+  if (S.cloudUp[c.id]) { toast("الرفع السابق لم ينته بعد"); return; }
+  const big = files.filter(f => f.size > 500 * 1048576); files = files.filter(f => f.size <= 500 * 1048576);
+  if (big.length) toast(`«${big[0].name}» أكبر من 500 ميغابايت`);
+  const added = []; let failed = 0;
+  const show = (t) => { S.cloudUp[c.id] = t; const z = $("cloudDrop"); if (z) z.querySelector(".sub").textContent = t; };
+  try {
+    show("يجهّز مجلد القضية…"); const folder = await cloudCaseFolder(c);
+    for (let i = 0; i < files.length; i++) {
+      show(`يرفع ${i + 1} من ${files.length}: ${files[i].name}`);
+      try { const r = await F.uploadFile(folder, files[i], files[i].name, {conflict: "rename"});
+        added.push({name: r.name, uri: r.uri, size: r.size, webUrl: r.webUrl, path: r.path, modified: new Date().toISOString(), kind: docKind(r.name), src: "user", text: r.text_how || null}); }
+      catch { failed++; }
+    }
+  } catch (e) { toast("تعذّر تجهيز مجلد القضية: " + (e?.message || e?.code || "")); }
+  delete S.cloudUp[c.id];
+  if (added.length) { const cur = S.cases.get(c.id) || c; const have = new Set(added.map(f => f.uri));
+    await saveDocs(cur, {...(cur.documents || {}), files: [...added, ...(cur.documents?.files || []).filter(f => !have.has(f.uri))].slice(0, 300)}, `رفع ${added.length} مستند إلى مجلد القضية`); }
+  const scans = added.filter(f => f.text === "none").length;
+  toast(added.length ? `حُفظ ${added.length} مستند${failed ? `، وتعذّر ${failed}` : ""}${scans ? ` — ${scans} ممسوح يُقرأ من «ملفات المكتب» أعلى الصفحة` : ""}` : "تعذّر رفع الملفات");
+  render();
+}
+document.addEventListener("dragover", (e) => { const z = e.target.closest?.("#cloudDrop"); if (z) { e.preventDefault(); z.classList.add("over"); } });
+document.addEventListener("dragleave", (e) => { const z = e.target.closest?.("#cloudDrop"); if (z && !z.contains(e.relatedTarget)) z.classList.remove("over"); });
+document.addEventListener("drop", (e) => { const z = e.target.closest?.("#cloudDrop"); if (!z) return; e.preventDefault(); z.classList.remove("over");
+  cloudUpload(S.cases.get(z.dataset.case), [...(e.dataTransfer?.files || [])]); });
+document.addEventListener("change", (e) => { if (e.target.id !== "cloudPick") return; const z = e.target.closest("#cloudDrop");
+  const list = [...e.target.files]; e.target.value = ""; cloudUpload(S.cases.get(z?.dataset.case), list); });
+
 // ---------- events
 // the home page's third column exists on wide screens only: its panels move there, and back when the window narrows
 const WIDE = window.matchMedia ? window.matchMedia("(min-width:1500px)") : null;
@@ -8193,7 +8256,7 @@ function caseContext(c, docs, maxBytes=150000){
   const older = ss.slice(0, fullFrom).map(s=>`• ${s.no?"الجلسة "+s.no+" ":""}${fmtDate.format(D(s.start))} [${s.role||""}] ${[s.required&&("المطلوب: "+s.required), s.minutes].filter(Boolean).join(" | ").replace(/\s+/g," ").slice(0,450)}`);
   if (ss.length) blocks.push(fitBytes("الجلسات والمواعيد الأخيرة (الأقدم أولاً):\n"+recent.join("\n"), 70000));
   let out = blocks.join("\n\n");
-  for (const d of docs||[]) { const room = maxBytes - utf8(out) - 2000; if (room < 3000) break; out += "\n\n" + fitBytes(`مستند من ون درايف — ${d.name}:\n${d.text}`, Math.min(room, 40000)); }
+  for (const d of docs||[]) { const room = maxBytes - utf8(out) - 2000; if (room < 3000) break; out += "\n\n" + fitBytes(`مستند من ملفات المكتب — ${d.name}:\n${d.text}`, Math.min(room, 40000)); }
   if (older.length) { const room = maxBytes - utf8(out) - 1000; if (room > 2000) out += "\n\n" + fitBytes("جلسات أقدم (مختصرة):\n"+older.join("\n"), room); }
   const rel = (c.related||[]).map(id=>S.cases.get(id)).filter(r=>r&&!r.deleted&&visibleCase(r));
   if (rel.length) { const room = maxBytes - utf8(out) - 500; if (room > 1500) out += "\n\n" + fitBytes("قضايا مرتبطة بين الأطراف أنفسهم:\n"+rel.map(r=>`• ${r.caseNo||""} ${r.court||""} — ${STATUS[r.status]||""} — ${r.subject||""}${r.najiz?.judgments?.length?" — آخر حكم: "+(r.najiz.judgments.at(-1).desc||"")+" "+(r.najiz.judgments.at(-1).date||""):""}`).join("\n"), room); }
@@ -8222,7 +8285,7 @@ async function runAnalysis(){
   try {
     let docs = [];
     if (S.mcp) { const picked = Object.values(S.files[c.id]?.picked||{}); const list = picked.length ? picked : autoDocs(c);
-      if (list.length) { S.busy[key]=`يقرأ ${list.length} مستند من ون درايف: ${list.map(f=>f.kind||"مستند").join("، ")}…`; render(); docs = await readDocs(list, 12000); } }
+      if (list.length) { S.busy[key]=`يقرأ ${list.length} مستند من ملفات المكتب: ${list.map(f=>f.kind||"مستند").join("، ")}…`; render(); docs = await readDocs(list, 12000); } }
     let lib = [];
     if (libCount()) { S.busy[key] = "يبحث في المكتبة القانونية عن المواد التي تحكم القضية…"; render(); lib = await libForCase(c, "", {k:10, maxBytes:24000}).catch(()=>[]); }
     S.busy[key] = "يحلل القضية ويحدد الخطوة القادمة… (قد يستغرق دقيقة)"; render(); await ensureMinutes(c);
@@ -8267,8 +8330,8 @@ async function sendChat(e){
     if (lim?.tools && libCount()) tools.push({ name:"search_library", description:"يبحث في المكتبة القانونية للمكتب (أنظمة ولوائح وكتب رفعها المكتب) ويعيد نصوص المواد ذات الصلة بأرقامها. استعمله قبل الاستشهاد بأي مادة، وانقل النص كما هو.", inputSchema:{type:"object",properties:{query:{type:"string"}},required:["query"]},
       execute: async (inp) => (await libRetrieve(String(inp.query), {k:8, maxBytes:18000})).map(x=>({law:x.lawName, article:x.l, text:x.t})) });
     if (lim?.tools && S.mcp) { tools.push(
-{ name:"search_onedrive", description:"يبحث في ون درايف المكتب عن مستندات بالنص أو اسم الملف أو رقم القضية، ويعيد قائمة {name,path,uri}.", inputSchema:{type:"object",properties:{query:{type:"string"}},required:["query"]},
-        execute: async (inp) => (await odSearch(String(inp.query))).slice(0,10).map(f=>({name:f.name,path:f.path,uri:f.uri})) }, { name:"read_onedrive_file", description:"يقرأ نص مستند من ون درايف بواسطة uri المعاد من search_onedrive. يعيد أول ~12 ألف حرف.", inputSchema:{type:"object",properties:{uri:{type:"string"}},required:["uri"]},
+{ name:"search_onedrive", description:"يبحث في ملفات المكتب عن مستندات بالنص أو اسم الملف أو رقم القضية، ويعيد قائمة {name,path,uri}.", inputSchema:{type:"object",properties:{query:{type:"string"}},required:["query"]},
+        execute: async (inp) => (await odSearch(String(inp.query))).slice(0,10).map(f=>({name:f.name,path:f.path,uri:f.uri})) }, { name:"read_onedrive_file", description:"يقرأ نص مستند من ملفات المكتب بواسطة uri المعاد من search_onedrive. يعيد أول ~12 ألف حرف.", inputSchema:{type:"object",properties:{uri:{type:"string"}},required:["uri"]},
         execute: async (inp) => { const r = await S.mcp.callTool("Microsoft 365","read_resource",{uri:String(inp.uri),startPage:1,endPage:5}); return odText(r).slice(0,12000); } }); }
     if (tools.length) { delete opts.cache; opts.tools = tools; }
     const send = libTxt ? [...turns.slice(0,-1), {role:"user", content: turns.at(-1).content + libTxt}] : turns;
@@ -8305,9 +8368,9 @@ function parseOd(result){
 async function odSearch(q){ const r = await S.mcp.callTool("Microsoft 365","sharepoint_search",{query:q,limit:25},{cache:{staleTime:120000,gcTime:3600000}}); return parseOd(r); }
 async function searchFiles(id, q){
   const st = S.files[id] = {...(S.files[id]||{}), q, loading:true, error:null}; rerenderFiles(id);
-  if (!S.mcp) { st.loading=false; st.error="الوصول إلى ون درايف غير متاح في هذا العرض."; rerenderFiles(id); return; }
+  if (!S.mcp) { st.loading=false; st.error="الوصول إلى ملفات المكتب غير متاح في هذا العرض."; rerenderFiles(id); return; }
   try { st.items = await odSearch(q); }
-  catch(e){ st.error = e?.code==="server_not_connected"?"أضف موصّل Microsoft 365 من إعدادات Claude ← الموصّلات.": e?.code==="needs_reauth"?"أعد ربط Microsoft 365 من إعدادات Claude ← الموصّلات.": e?.code==="not_in_manifest"?"لم يُسمح للديوان بالوصول إلى ون درايف في هذا العرض.": "تعذّر البحث في ون درايف الآن. أعد المحاولة."; }
+  catch(e){ st.error = e?.code==="server_not_connected"?"أضف موصّل Microsoft 365 من إعدادات Claude ← الموصّلات.": e?.code==="needs_reauth"?"أعد ربط Microsoft 365 من إعدادات Claude ← الموصّلات.": e?.code==="not_in_manifest"?"لم يُسمح للديوان بالوصول إلى ملفات المكتب في هذا العرض.": "تعذّر البحث في ملفات المكتب الآن. أعد المحاولة."; }
   st.loading = false; rerenderFiles(id);
 }
 function rerenderFiles(id){ if (S.view==="case" && S.caseId===id && S.caseTab==="files") { const el=$("fileOut"); if (el){ el.innerHTML = fileList(S.cases.get(id), S.files[id]); afterRender(); } } }

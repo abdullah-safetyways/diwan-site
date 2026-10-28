@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
+<title>فتح مستند — ديوان القضايا</title>
+<style>
+  :root{color-scheme:light dark;--bg:#f4f3ef;--ink:#151547;--sub:#555}
+  @media (prefers-color-scheme: dark){:root{--bg:#0e0e24;--ink:#eee;--sub:#aaa}}
+  body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--ink);font:15px/1.7 'IBM Plex Sans Arabic','Segoe UI',Tahoma,sans-serif;padding:16px;box-sizing:border-box}
+  p{max-width:420px;text-align:center;margin:0} a{color:inherit}
+</style>
+<script src="supabase.js"></script><script src="config.js"></script>
+</head>
+<body>
+<p id="msg">يفتح المستند…</p>
+<script>
+/* «فتح» on a document in the Diwan: the link carries the file's path after «/Documents/» (as OneDrive links did); this page finds the
+   file with the signed-in session of this browser (the same one the Diwan uses) and hands over a link valid for five minutes. */
+(async () => {
+  const msg = (t, html) => { const p = document.getElementById("msg"); if (html) p.innerHTML = t; else p.textContent = t; };
+  const C = window.__DIWAN_CLOUD || {};
+  const sb = window.supabase.createClient(C.url, C.key, {auth: {persistSession: true, autoRefreshToken: true, storageKey: "diwan.cloud.auth"}});
+  const raw = (location.hash.split("/Documents/")[1] || "");
+  let path = ""; try { path = raw.split("/").map(decodeURIComponent).join("/"); } catch { path = ""; }
+  if (!path) { msg("رابط المستند غير صحيح."); return; }
+  const {data: {session}} = await sb.auth.getSession();
+  if (!session) { msg('سجّل الدخول في <a href="./">الديوان</a> أولاً، ثم افتح المستند مرة أخرى.', true); return; }
+  const {data: row, error} = await sb.from("files").select("id,name,is_folder").eq("path", path).maybeSingle();
+  if (error || !row) { msg("المستند غير موجود، أو لا تملك صلاحية فتحه."); return; }
+  if (row.is_folder) { msg("هذا مجلد؛ ملفاته في تبويب «المستندات» في صفحة القضية داخل الديوان."); return; }
+  const doc = /\.(pdf|txt|jpe?g|png|gif|webp)$/i.test(row.name);
+  const {data: s, error: e2} = await sb.storage.from("files").createSignedUrl(row.id, 300, doc ? undefined : {download: row.name});
+  if (e2 || !s?.signedUrl) { msg("تعذّر فتح المستند الآن. أعد المحاولة."); return; }
+  location.replace(s.signedUrl);
+})();
+</script>
+</body>
+</html>

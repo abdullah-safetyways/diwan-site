@@ -221,7 +221,7 @@
     if (WHO?.staff) await loadTemplates();
     if (gate) { gate.remove(); gate = null; }
     sb.auth.onAuthStateChange((ev, s) => { if (s) SESSION = s; if (ev === "SIGNED_OUT") location.reload(); });
-    listen(); strip(); sb.rpc("log_event", {p_action: "open", p_detail: {ua: navigator.userAgent.slice(0, 120)}}).then(() => {}, () => {});
+    listen(); strip(); window.dispatchEvent(new CustomEvent("diwan-cloud-ready")); sb.rpc("log_event", {p_action: "open", p_detail: {ua: navigator.userAgent.slice(0, 120)}}).then(() => {}, () => {});
   }
   // the fee-contract and letterhead templates are not published with the page (it is hosted publicly): they are read from the
   // private bucket for office members and set where the page looks first (window.__TPL_*), so its own <script src="tpl/…"> never runs.
@@ -238,7 +238,7 @@
   // ---------------------------------------------------------------- the strip at the top: who is signed in, sign out, accounts (owner)
   function strip(){
     const bar = document.createElement("div"); bar.id = "diwanCloudBar"; bar.dir = "rtl";
-    bar.style.cssText = "position:relative;z-index:40;display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;padding:5px 14px;background:#151547;color:#fff;font:13px/1.5 'IBM Plex Sans Arabic','Segoe UI',Tahoma,sans-serif";
+    bar.style.cssText = "position:relative;z-index:10;display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;padding:5px 14px;background:#151547;color:#fff;font:13px/1.5 'IBM Plex Sans Arabic','Segoe UI',Tahoma,sans-serif";
     const b = (id, t) => `<button id="${id}" style="background:none;border:1px solid rgba(255,255,255,.5);color:#fff;border-radius:6px;padding:2px 8px;cursor:pointer;font:inherit">${t}</button>`;
     bar.innerHTML = `<b style="color:#c9a263">${CFG.label || "النسخة السحابية"}</b><span>${(WHO?.name || SESSION.user.email || "").replace(/[<>&"]/g, "")}</span><span style="margin-inline-start:auto;display:flex;gap:6px;flex-wrap:wrap">${WHO?.owner ? b("dcAcc", "الحسابات") : ""}${b("dcOut", "خروج")}</span>`;
     document.body.prepend(bar);
@@ -267,7 +267,9 @@
 
   window.claude = { use: async (name) => { await whenReady();
     if (name === "db") return db; if (name === "user") return user; if (name === "assets") return WHO?.staff ? assets : null;
-    if (name === "sample") return (WHO?.staff && await sampleReady()) ? sample : null; return null; } };
+    if (name === "sample") return (WHO?.staff && await sampleReady()) ? sample : null;
+    if (name === "mcp") return WHO?.staff ? (window.diwanCloudFiles?.mcp || null) : null;   // the office's files (cloud-files.js)
+    return null; } };
   window.diwanCloud = {sb, db, cache, whoami: () => WHO};
   whenReady().catch((e) => { console.error(e); });
 })();
