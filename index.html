@@ -366,6 +366,8 @@ h2.sec{font-size:1.02rem;margin:0;display:flex;gap:8px;align-items:baseline}
 .team-item{display:flex;gap:10px;align-items:center;border-top:1px solid var(--line);padding-top:6px;margin-top:6px}
 .team-item:first-of-type{border-top:0}
 tr[aria-selected="true"] td{background:var(--accent-soft)}
+.cdest{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin-top:8px;font-size:.88rem}
+.cdest label{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
 .cdrop{border:2px dashed var(--line);border-radius:10px;padding:14px;text-align:center;margin:8px 0 10px;color:var(--ink-2)}
 .cdrop.over{border-color:var(--accent);background:var(--surface-2,rgba(0,0,0,.03))}
 </style>
@@ -934,6 +936,7 @@ function tabFiles(c){
     <div class="docs">${list.map(([f,i])=>docRow(c,f,i,true)).join("") || `<div class="empty">لا مستندات بهذا التصنيف.</div>`}</div>
     <p class="sub" style="margin:10px 0 0">علّم المستندات التي تريد أن يقرأها المساعد في «التحليل والخطوة القادمة». إن لم تعلّم شيئاً يختار تلقائياً أحدث صك ولائحة ومذكرة.</p>`:`<div class="empty">لا توجد مستندات مرتبطة بهذه القضية.</div>`}
   </section>
+  ${cloudClientDocs(c)}
   <section class="panel"><header><h2>بحث في كل ملفات المكتب</h2></header>
     <form class="toolbar" id="fileForm"><label class="search">${icon("search")}<input id="fileQ" value="${esc(st.q ?? (c.caseNo || c.client || ""))}" placeholder="رقم القضية أو اسم الموكل أو نص داخل المستند" aria-label="بحث في ملفات المكتب"></label><button class="btn primary" type="submit">بحث</button></form>
     <div id="fileOut">${fileList(c, st)}</div></section></div>`;
@@ -4968,6 +4971,8 @@ body{background:var(--bg);padding:20px;max-width:1100px;margin:0 auto}#main{disp
 .fstep.done .ck{background:var(--accent);border-color:var(--accent)}
 .fstep:disabled{cursor:default}
 h2.sec{font-size:1.02rem;margin:0;display:flex;gap:8px;align-items:baseline}
+.cdest{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin-top:8px;font-size:.88rem}
+.cdest label{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
 .cdrop{border:2px dashed var(--line);border-radius:10px;padding:14px;text-align:center;margin:8px 0 10px;color:var(--ink-2)}
 .cdrop.over{border-color:var(--accent);background:var(--surface-2,rgba(0,0,0,.03))}
 </style></head><body><main id="main"><div class="topline"><div>${brandSvg("logo","join-logo")}<div class="date">متابعة قضايا ${esc(name)} — ${esc(fmtDay.format(new Date()))}</div></div></div>${body}</main></body></html>`;
@@ -8013,13 +8018,15 @@ function homeWorkPanel(){
 // Arabic documents; and the documents tab takes files dropped on it (or picked on a phone) into the case's folder.
 if (window.diwanCloudFiles) window.diwanCloudFiles.extractor = {pdfText, docxText, needPdf, docKind};
 const cloudFiles = () => (S.mcp && S.mcp.cloud && window.diwanCloudFiles) || null;
-S.cloudUp = S.cloudUp || {};
+S.cloudUp = S.cloudUp || {}; S.cloudDest = S.cloudDest || {}; S.cloudClient = S.cloudClient || {};
 function cloudDropZone(c){
   if (!cloudFiles() || !can("docs.use") || !S.canWrite) return "";
   const up = S.cloudUp[c.id];
   return `<div class="cdrop" id="cloudDrop" data-case="${esc(c.id)}">${icon("folder").replace("<svg",'<svg style="width:20px;height:20px;vertical-align:-4px"')}
     اسحب الملفات إلى هنا أو <label class="btn sm" style="display:inline-flex">اختر ملفات<input type="file" id="cloudPick" multiple hidden></label>
-    <div class="sub" style="margin-top:4px">${up ? esc(up) : "تُحفظ في مجلد القضية، ويُقرأ نصها تلقائياً فيجدها البحث ويقرؤها المساعد."}</div></div>`;
+    <div class="cdest"><label><input type="radio" name="cdest" value="case" ${S.cloudDest[c.id] !== "client" ? "checked" : ""}> لهذه القضية</label>
+      <label><input type="radio" name="cdest" value="client" ${S.cloudDest[c.id] === "client" ? "checked" : ""}> لكل قضايا الموكل <span class="sub">(الوكالة، العقد السنوي، السجل التجاري…)</span></label></div>
+    <div class="sub" style="margin-top:4px">${up ? esc(up) : S.cloudDest[c.id] === "client" ? "تُحفظ مرة واحدة في مجلد الموكل «الأوراق الرسمية» وتظهر في كل قضاياه، ويُقرأ نصها تلقائياً." : "تُحفظ في مجلد القضية، ويُقرأ نصها تلقائياً فيجدها البحث ويقرؤها المساعد."}</div></div>`;
 }
 // the case's folder in the store: the one it is linked to, else a new one where the office keeps them
 // («شركات/<الشركة>/03 - القضايا» for a company with an annual contract, «قضايا العملاء/<الموكل>» otherwise)
@@ -8043,8 +8050,11 @@ async function cloudUpload(c, files){
   if (big.length) toast(`«${big[0].name}» أكبر من 500 ميغابايت`);
   const added = []; let failed = 0;
   const show = (t) => { S.cloudUp[c.id] = t; const z = $("cloudDrop"); if (z) z.querySelector(".sub").textContent = t; };
+  const toClient = S.cloudDest[c.id] === "client";
   try {
-    show("يجهّز مجلد القضية…"); const folder = await cloudCaseFolder(c);
+    show("يجهّز مجلد القضية…"); let folder = await cloudCaseFolder(c);
+    // the client's papers: once, in «01 - الأوراق الرسمية» of the client's folder, for all their cases
+    if (toClient) { const cf = F.clientFolderOf(folder); if (!cf) throw {message: "لا مجلد موكل فوق مجلد هذه القضية"}; folder = cf + "/01 - الأوراق الرسمية"; }
     for (let i = 0; i < files.length; i++) {
       show(`يرفع ${i + 1} من ${files.length}: ${files[i].name}`);
       try { const r = await F.uploadFile(folder, files[i], files[i].name, {conflict: "rename"});
@@ -8053,6 +8063,7 @@ async function cloudUpload(c, files){
     }
   } catch (e) { toast("تعذّر تجهيز مجلد القضية: " + (e?.message || e?.code || "")); }
   delete S.cloudUp[c.id];
+  if (toClient) { delete S.cloudClient[c.id]; toast(added.length ? `حُفظ ${added.length} مستند في أوراق الموكل، ويظهر في كل قضاياه${failed ? `، وتعذّر ${failed}` : ""}` : "تعذّر رفع الملفات"); render(); return; }
   if (added.length) { const cur = S.cases.get(c.id) || c; const have = new Set(added.map(f => f.uri));
     await saveDocs(cur, {...(cur.documents || {}), files: [...added, ...(cur.documents?.files || []).filter(f => !have.has(f.uri))].slice(0, 300)}, `رفع ${added.length} مستند إلى مجلد القضية`); }
   const scans = added.filter(f => f.text === "none").length;
@@ -8065,6 +8076,54 @@ document.addEventListener("drop", (e) => { const z = e.target.closest?.("#cloudD
   cloudUpload(S.cases.get(z.dataset.case), [...(e.dataTransfer?.files || [])]); });
 document.addEventListener("change", (e) => { if (e.target.id !== "cloudPick") return; const z = e.target.closest("#cloudDrop");
   const list = [...e.target.files]; e.target.value = ""; cloudUpload(S.cases.get(z?.dataset.case), list); });
+
+// ---- the client's papers, shared by all their cases (their folder one level up), and the files linked to this case from elsewhere
+async function cloudClientLoad(c){
+  const st = S.cloudClient[c.id] = {loading: true}; try { const rows = await cloudFiles().clientDocs(c.id); st.rows = rows.filter(r => !r.linked); const own = new Set(st.rows.map(r => r.id)); st.linked = rows.filter(r => r.linked && !own.has(r.id)); st.folder = rows[0]?.folder || cloudFiles().clientFolderOf(c.documents?.folder?.path); }
+  catch (e) { st.error = e?.message || e?.code || "خطأ"; }
+  st.loading = false; st.at = Date.now(); if (S.view === "case" && S.caseId === c.id && S.caseTab === "files") render();
+}
+function cloudClientDocs(c){
+  const F = cloudFiles(); if (!F) return "";
+  let st = S.cloudClient[c.id]; if (!st || (!st.loading && Date.now() - (st.at || 0) > 60000)) { cloudClientLoad(c); st = S.cloudClient[c.id]; }
+  const inCase = new Set(docsOf(c).map(f => f.uri)); const rw = S.canWrite && can("docs.use");
+  const row = (r, i, linked) => `<div class="doc"><span class="kind ${KIND_CLS[docKind(r.name)]||""}">${esc(docKind(r.name))}</span>
+    <div style="min-width:0"><div class="nm">${esc(r.name)}${r.internal ? ' <span class="src">داخلي</span>' : ""}</div></div>
+    <div class="acts">${readable(r) || r.text_how === "ocr" ? `<button class="btn sm" type="button" data-cread="${i}" data-cl="${linked ? 1 : 0}">قراءة</button>` : ""}<a class="btn sm ghost" href="${esc(href(r.webUrl))}" target="_blank" rel="noopener">فتح</a>
+      ${rw ? (inCase.has(r.uri) ? '<span class="src user" style="align-self:center">في ملف القضية</span>' : `<button class="btn sm ghost" type="button" data-cadd="${i}" data-cl="${linked ? 1 : 0}" title="يظهر في قائمة مستندات القضية ويمكن تضمينه في التحليل">أضف إلى ملف القضية</button>`) : ""}
+      ${rw && linked ? `<button class="btn sm ghost" type="button" data-cunlink="${esc(r.id)}">فك الربط</button>` : ""}</div>
+    <div class="meta">${[r.modified_at ? fmtDate.format(new Date(r.modified_at)) : null, fmtSize(r.size), linked ? r.path.split("/").slice(-2, -1)[0] : r.path.slice((st.folder || "").length + 1).split("/").slice(0, -1).join(" › ")].filter(Boolean).map(esc).join(" · ")}</div></div>`;
+  const all = [...(st.rows || []), ...(st.linked || [])];
+  const pickList = [...docsOf(c).filter(f => F.idOf(f.uri)).map(f => ({id: F.idOf(f.uri), name: f.name})), ...all.filter(r => !inCase.has(r.uri)).map(r => ({id: r.id, name: r.name}))];
+  return `<section class="panel"><header><h2>مستندات الموكل</h2><span class="sub">${st.folder ? esc(st.folder.replace(/^Law Firm\//, "")) : "مشتركة بين قضاياه"}</span></header>
+    ${st.loading && !st.rows ? `<div class="thinking"><span class="dot"></span>يقرأ أوراق الموكل…</div>` : st.error ? `<div class="notice err">${esc(st.error)}</div>`
+      : !st.folder ? `<div class="muted small">لا مجلد موكل فوق مجلد هذه القضية بعد. الوكالة والعقد السنوي والسجل التجاري: اختر «لكل قضايا الموكل» عند الرفع.</div>`
+      : (st.rows || []).length ? `<div class="docs">${st.rows.map((r, i) => row(r, i, false)).join("")}</div>` : `<div class="muted small">لا أوراق في مجلد الموكل بعد. اختر «لكل قضايا الموكل» عند الرفع لتُحفظ هنا وتظهر في كل قضاياه.</div>`}
+    ${(st.linked || []).length ? `<h3 class="sub" style="margin:12px 0 4px">مربوطة بهذه القضية من مكان آخر</h3><div class="docs">${st.linked.map((r, i) => row(r, i, true)).join("")}</div>` : ""}
+    ${rw && pickList.length ? `<details style="margin-top:10px"><summary class="sub">ربط مستند بقضية أخرى (دون نسخه)</summary>
+      <form id="cLinkForm" class="toolbar" style="margin-top:6px;gap:6px;flex-wrap:wrap"><select class="inp" name="f" style="max-width:320px">${pickList.map(x => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join("")}</select>
+        <input class="inp" name="no" placeholder="رقم القضية الأخرى" style="width:180px;direction:ltr" required><button class="btn sm" type="submit">ربط</button></form></details>` : ""}</section>`;
+}
+const cloudCaseByNo = (v) => { v = String(v || "").trim(); if (!v) return null; if (S.cases.get(v)) return S.cases.get(v);
+  for (const c of S.cases.values()) if (!c.deleted && isCase(c) && (String(c.caseNo || "") === v || (c.otherCaseNos || []).map(String).includes(v))) return c; return null; };
+document.addEventListener("change", (e) => { if (e.target.name !== "cdest") return; const z = e.target.closest("#cloudDrop"); if (!z) return; S.cloudDest[z.dataset.case] = e.target.value; render(); });
+document.addEventListener("click", async (e) => {
+  const c = S.view === "case" ? S.cases.get(S.caseId) : null; const st = c && S.cloudClient[c.id]; if (!st) return;
+  const pick = (b) => (b.dataset.cl === "1" ? st.linked : st.rows)?.[+(b.dataset.cread ?? b.dataset.cadd)];
+  const rd = e.target.closest("[data-cread]"); if (rd) { const r = pick(rd); if (r) openReader(c, {name: r.name, uri: r.uri, webUrl: r.webUrl, path: r.path, kind: docKind(r.name)}); return; }
+  const ad = e.target.closest("[data-cadd]"); if (ad) { const r = pick(ad); if (!r) return; ad.disabled = true;
+    try { await cloudFiles().linkFile(r, c.id, docKind); await logAction(c.id, `أضاف «${r.name}» من أوراق الموكل إلى ملف القضية`); toast("أُضيف إلى ملف القضية"); } catch (x) { toast("تعذّرت الإضافة"); } render(); return; }
+  const un = e.target.closest("[data-cunlink]"); if (un) { un.disabled = true; try { await cloudFiles().unlinkFile(un.dataset.cunlink, c.id); delete S.cloudClient[c.id]; toast("فُك الربط"); } catch { toast("تعذّر"); } render(); }
+});
+document.addEventListener("submit", async (e) => {
+  if (e.target.id !== "cLinkForm") return; e.preventDefault();
+  const c = S.cases.get(S.caseId); const fid = e.target.elements.f.value; const other = cloudCaseByNo(e.target.elements.no.value);
+  if (!other) { toast("لا قضية بهذا الرقم في الديوان"); return; } if (other.id === c.id) { toast("هذه القضية نفسها"); return; }
+  const r = [...(S.cloudClient[c.id]?.rows || []), ...(S.cloudClient[c.id]?.linked || [])].find(x => x.id === fid) || (() => { const f = docsOf(c).find(x => cloudFiles().idOf(x.uri) === fid); return f && {id: fid, name: f.name, path: f.path, size: f.size, modified_at: f.modified}; })();
+  if (!r) return;
+  try { const n = await cloudFiles().linkFile(r, other.id, docKind); await logAction(other.id, `رُبط «${r.name}» من القضية ${c.caseNo || c.id}`);
+    toast(n ? `رُبط «${r.name}» بالقضية ${other.caseNo || other.id}` : "مربوط بها من قبل"); e.target.reset(); } catch { toast("تعذّر الربط"); }
+});
 
 // ---------- events
 // the home page's third column exists on wide screens only: its panels move there, and back when the window narrows

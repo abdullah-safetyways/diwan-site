@@ -27,7 +27,7 @@
   const cleanName = (n) => String(n || "").replace(/[\/\\\u0000-\u001f]/g, "-").replace(/\s+/g, " ").trim().slice(0, 200) || "ملف";
   const JUNK = (n) => /^(~\$|\.~lock)|^\.DS_Store$|^Thumbs\.db$|^desktop\.ini$|^\._/i.test(n);
   const tErr = (e) => ({code: e?.code && /^[a-z_]+$/.test(e.code) ? e.code : "tool_error", message: String(e?.message || e?.msg || e || "")});
-  const COLS = "id,path,parent,name,is_folder,size,mime,case_id,internal,text_how,pages,modified_at";
+  const COLS = "id,path,parent,name,is_folder,size,mime,case_id,internal,text_how,pages,modified_at,sha256,deleted_at";
 
   // the page hands over its own text readers (the same PDF/Word extraction the Diwan already tunes for Arabic)
   const F = window.diwanCloudFiles = {extractor: null};
@@ -64,10 +64,10 @@
   const asItem = (r) => ({name: r.name, uri: uriOf(r.id), webUrl: webUrlOf(r.path), id: r.id, driveId: DRIVE, size: r.size, lastModifiedDateTime: r.modified_at});
   async function readResource({uri, startPage, endPage}){
     const id = idOf(uri); if (!id) throw {code: "tool_error", message: "unknown uri"};
-    let row = await rowById(id, true); if (!row) throw {code: "tool_error", message: "not found"};
+    let row = await rowById(id, true); if (!row || row.deleted_at) throw {code: "tool_error", message: "not found"};
     if (row.is_folder) {
       const out = [];
-      for (let off = 0; ; off += 1000) { const {data, error} = await sb.from(T).select("id,name,is_folder,size").eq("parent", row.path).order("is_folder", {ascending: false}).order("name").range(off, off + 999);
+      for (let off = 0; ; off += 1000) { const {data, error} = await sb.from(T).select("id,name,is_folder,size").eq("parent", row.path).is("deleted_at", null).order("is_folder", {ascending: false}).order("name").range(off, off + 999);
         if (error) throw tErr(error); out.push(...data); if (data.length < 1000) break; }
       return text(out.map(r => `${r.name.replace(/:/g, "&#x3a;")} (${r.is_folder ? "folder" : "file"}, ${r.size || 0} bytes) ${uriOf(r.id)}`).join("\n"));
     }
@@ -121,9 +121,11 @@
     if (existing && conflict === "skip") return existing;
     if (existing && conflict === "rename") { const m = /^(.*?)(\.[^.]+)?$/.exec(name); for (let k = 2; existing; k++) { path = `${folder.path}/${m[1]} (${k})${m[2] || ""}`; existing = await rowByPath(path); } }
     const mime = mimeOf(name, blob.type);
+    if (!bytes && blob.size <= 150e6) bytes = new Uint8Array(await blob.arrayBuffer());
+    const sha256 = bytes ? await F.sha256(bytes) : null;
     let row;
-    if (existing) { const {data, error} = await sb.from(T).update({size: blob.size, mime, text: null, text_how: null, pages: null}).eq("id", existing.id).select(COLS).single(); if (error) throw tErr(error); row = data; }
-    else { const {data, error} = await sb.from(T).insert({path, size: blob.size, mime, internal}).select(COLS).single(); if (error) throw tErr(error); row = data; }
+    if (existing) { const {data, error} = await sb.from(T).update({size: blob.size, mime, sha256, text: null, text_how: null, pages: null, deleted_at: null}).eq("id", existing.id).select(COLS).single(); if (error) throw tErr(error); row = data; }
+    else { const {data, error} = await sb.from(T).insert({path, size: blob.size, mime, sha256, internal}).select(COLS).single(); if (error) throw tErr(error); row = data; }
     const {error: ue} = await sb.storage.from(BUCKET).upload(row.id, blob, {contentType: mime, upsert: !!existing});
     if (ue) { if (!existing) await sb.from(T).delete().eq("id", row.id); throw tErr(ue); }
     if (doExtract && (DIRECT.has(extOf(name)) || isImg(name)) && blob.size < 60e6) {
@@ -132,9 +134,56 @@
     return {...row, uri: uriOf(row.id), webUrl: webUrlOf(row.path)};
   };
   F.uriOf = uriOf; F.webUrlOf = webUrlOf; F.idOf = idOf;
+  F.sha256 = async (bytes) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)), b => b.toString(16).padStart(2, "0")).join("");
+
+  // ---------------------------------------------------------------- a client's papers, shared by their cases (no copies)
+  // the client's folder of a case folder, as the page finds it (parts/extract.js: xUpPath) and as the database does (client_folder_of)
+  F.clientFolderOf = (p) => { const s = String(p || "").split("/"); if (s.length < 3) return null; const up = s.slice(0, -1); if (/^\s*\d{2}\s*-\s*القضايا\s*$/.test(up.at(-1))) up.pop(); return up.length >= 3 ? up.join("/") : null; };
+  F.clientDocs = async (caseId) => { const {data, error} = await sb.rpc("files_client_docs", {p_case: caseId}); if (error) throw tErr(error);
+    return (data || []).filter(r => !JUNK(r.name)).map(r => ({...r, uri: uriOf(r.id), webUrl: webUrlOf(r.path)})); };
+  // a documents.files entry, as the page keeps them in a case
+  const entryOf = (r, kindOf) => ({name: r.name, uri: uriOf(r.id), size: r.size, webUrl: webUrlOf(r.path), path: r.path, modified: r.modified_at || new Date().toISOString(), kind: kindOf ? kindOf(r.name) : undefined, src: "user"});
+  async function addToCase(caseId, entries){
+    const c = C.cache.get("cases/" + caseId); if (!c) throw {code: "not_found", message: "القضية غير موجودة"};
+    const have = new Set((c.documents?.files || []).map(f => f.uri)); const add = entries.filter(e => !have.has(e.uri)); if (!add.length) return 0;
+    await C.db.doc("cases/" + caseId).update({documents: {...(c.documents || {}), files: [...add, ...(c.documents?.files || [])].slice(0, 300)}}); return add.length;
+  }
+  // shown in another case as well, without a copy: a link the database knows (what a representative may read) and an entry in the case
+  F.linkFile = async (row, caseId, kindOf) => {
+    const {error} = await sb.from("file_links").upsert({file_id: row.id, case_id: caseId}, {onConflict: "file_id,case_id", ignoreDuplicates: true}); if (error) throw tErr(error);
+    return addToCase(caseId, [entryOf(row, kindOf)]);
+  };
+  F.unlinkFile = async (fileId, caseId) => {
+    await sb.from("file_links").delete().eq("file_id", fileId).eq("case_id", caseId);
+    const c = C.cache.get("cases/" + caseId); if (!c) return;
+    const files = (c.documents?.files || []).filter(f => f.uri !== uriOf(fileId)); if (files.length !== (c.documents?.files || []).length) await C.db.doc("cases/" + caseId).update({documents: {...c.documents, files}});
+  };
+
+  // ---------------------------------------------------------------- identical files: one is kept, the others hidden (restorable)
+  F.duplicates = async () => { const {data, error} = await sb.rpc("files_duplicates", {lim: 200}); if (error) throw tErr(error); return data || []; };
+  // the copy to keep by default: the one in a client's folder (shared by the cases), else the one with the shortest path
+  F.keepOf = (g) => { const items = g.items; const paper = items.find(it => { const parts = it.path.split("/"); return !parts.slice(0, -1).some(x => /^\s*\d{6,}/.test(x) || /^\s*\d{2}\s*-\s*القضايا\s*$/.test(x)); }); return (paper || items[0]).id; };
+  F.dedupe = async (g, keepId, kindOf) => {
+    const kept = g.items.find(it => it.id === keepId); if (!kept) throw {code: "invalid_argument", message: "keep"};
+    const {data: keptRow} = await sb.from(T).select(COLS).eq("id", keepId).single(); let moved = 0;
+    for (const it of g.items) { if (it.id === keepId) continue;
+      const uri = uriOf(it.id), cases = new Set();
+      // every case that showed the hidden copy shows the kept one instead
+      for (const [k, c] of C.cache) { if (!/^cases\/[^/]+$/.test(k)) continue; const fs = c.documents?.files || []; if (!fs.some(f => f.uri === uri)) continue;
+        const keepE = entryOf(keptRow, kindOf); const next = fs.some(f => f.uri === keepE.uri) ? fs.filter(f => f.uri !== uri) : fs.map(f => f.uri === uri ? {...f, ...keepE} : f);
+        await C.db.doc(k).update({documents: {...c.documents, files: next}}); cases.add(k.slice(6)); }
+      if (it.case_id && it.case_id !== keptRow.case_id) cases.add(it.case_id);
+      const {data: links} = await sb.from("file_links").select("case_id").eq("file_id", it.id); for (const l of links || []) cases.add(l.case_id);
+      for (const cid of cases) if (cid !== keptRow.case_id) await sb.from("file_links").upsert({file_id: keepId, case_id: cid}, {onConflict: "file_id,case_id", ignoreDuplicates: true});
+      const {error} = await sb.from(T).update({deleted_at: new Date().toISOString()}).eq("id", it.id); if (error) throw tErr(error); moved++;
+    }
+    return moved;
+  };
+  F.hidden = async () => { const {data} = await sb.from(T).select("id,path,name,size,deleted_at").not("deleted_at", "is", null).order("deleted_at", {ascending: false}).limit(200); return data || []; };
+  F.restore = async (id) => { const {error} = await sb.from(T).update({deleted_at: null}).eq("id", id); if (error) throw tErr(error); };
   // a folder's files the way the page lists a case folder (its own files, then up to six sub-folders), as documents.files entries
   F.listForCase = async (folderPath, kindOf) => {
-    const {data, error} = await sb.from(T).select("id,path,parent,name,is_folder,size,modified_at").or(`parent.eq."${folderPath.replace(/"/g, '\\"')}",parent.like."${(folderPath + "/%").replace(/"/g, '\\"')}"`).eq("is_folder", false).order("modified_at", {ascending: false}).limit(500);
+    const {data, error} = await sb.from(T).select("id,path,parent,name,is_folder,size,modified_at").is("deleted_at", null).or(`parent.eq."${folderPath.replace(/"/g, '\\"')}",parent.like."${(folderPath + "/%").replace(/"/g, '\\"')}"`).eq("is_folder", false).order("modified_at", {ascending: false}).limit(500);
     if (error) throw tErr(error);
     const depth = folderPath.split("/").length;
     return (data || []).filter(r => r.parent.split("/").length <= depth + 1 && !JUNK(r.name)).slice(0, 120)
@@ -169,7 +218,7 @@
   F.ocr = {running: false, stop: false, done: 0, pages: 0, failed: 0, current: null, left: null};
   async function queue(){
     const sel = "id,path,name,case_id,text_how,size";
-    const [a, b] = await Promise.all([sb.from(T).select(sel).is("text_how", null).eq("is_folder", false).limit(1000), sb.from(T).select(sel).eq("text_how", "none").limit(1000)]);
+    const [a, b] = await Promise.all([sb.from(T).select(sel).is("text_how", null).eq("is_folder", false).is("deleted_at", null).limit(1000), sb.from(T).select(sel).eq("text_how", "none").is("deleted_at", null).limit(1000)]);
     const rows = [...(a.data || []), ...(b.data || [])].filter(r => r.text_how === "none" || DIRECT.has(extOf(r.name)) || isImg(r.name));
     const open = (r) => { const c = r.case_id && C.cache.get("cases/" + r.case_id); return c && OPEN.has(c.status) ? 0 : r.case_id ? 1 : 2; };
     return rows.sort((x, y) => (x.text_how === "none") - (y.text_how === "none") || open(x) - open(y));
@@ -250,7 +299,7 @@
   // ---------------------------------------------------------------- the «ملفات المكتب» panel (office members)
   const fmtB = (n) => n > 1073741824 ? (n / 1073741824).toFixed(2) + " GB" : n > 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round((n || 0) / 1024)) + " KB";
   const ar = (n) => Number(n || 0).toLocaleString("ar-SA-u-nu-latn");
-  let panel = null, plan = null;
+  let panel = null, plan = null, dup = null, hid = null;
   async function draw(){
     if (!panel) return;
     const {data: s} = await sb.rpc("files_stats"); const by = s?.by_how || {};
@@ -277,7 +326,18 @@
       <section><h3>القراءة المجانية للمستندات الممسوحة والصور</h3>
         <p class="sub">تقرأ الصكوك والمستندات المصوّرة في هذا المتصفح بلا أي تكلفة (قارئ نصوص عربي)، فيجدها البحث ويقرؤها المساعد. دقتها أقل من المساعد، وتكفي للبحث في الغالب. تعمل ما دامت الصفحة مفتوحة، والقضايا المفتوحة أولاً.</p>
         <p>${o.running ? `يقرأ: ${esc(o.current || "")}${o.page ? ` (صفحة ${esc(o.page)})` : ""} — أُنجز ${ar(o.done)} ملف، ${ar(o.pages)} صفحة${speed ? `، نحو ${ar(speed)} صفحة في الدقيقة` : ""}، بقي ${ar(o.left)}` : `بانتظار القراءة: ${ar(waitingScan)} ممسوح، و${ar(waitingText)} لم يُقرأ بعد`}</p>
-        <div class="btns">${o.running ? `<button id="ocStop">إيقاف</button>` : `<button id="ocGo" class="pri" ${waitingText + waitingScan ? "" : "disabled"}>ابدأ القراءة</button>`}</div></section>`;
+        <div class="btns">${o.running ? `<button id="ocStop">إيقاف</button>` : `<button id="ocGo" class="pri" ${waitingText + waitingScan ? "" : "disabled"}>ابدأ القراءة</button>`}</div></section>
+      <section><h3>الملفات المكررة</h3>
+        <p class="sub">ملفات محتواها واحد حرفياً (مثل وكالة نُسخت في مجلد كل قضية). تُبقي نسخة واحدة — المقترحة هي التي في مجلد الموكل، فتظهر في كل قضاياه — وتُخفى الباقية: كل قضية كانت تعرض نسخة مخفية تعرض المحفوظة بدلها، ولا يُحذف شيء نهائياً (تُستعاد من «المخفية»).</p>
+        ${dup?.groups ? (dup.groups.length ? dup.groups.map((g, gi) => `<div class="grp"><p><b>${esc(g.items[0].name)}</b> <span class="sub">${ar(g.n)} نسخ · ${fmtB(g.bytes)} لكل نسخة</span></p>
+          ${g.items.map(it => `<label class="row"><input type="radio" name="dk${gi}" value="${esc(it.id)}" ${(dup.keep[g.sha256] || F.keepOf(g)) === it.id ? "checked" : ""}><span class="nm" title="${esc(it.path)}">${esc(it.path.replace(/^Law Firm\//, ""))}</span></label>`).join("")}
+          <div class="btns"><button data-dkeep="${gi}">أبقِ المختارة وأخفِ ${ar(g.n - 1)}</button></div></div>`).join("") : `<p>لا ملفات مكررة.</p>`) : ""}
+        ${dup?.msg ? `<p class="sub">${esc(dup.msg)}</p>` : ""}
+        <div class="btns"><button id="dupFind">${dup?.groups ? "أعد البحث" : "ابحث عن المكرر"}</button></div></section>
+      <section><h3>المخفية</h3>
+        <p class="sub">ما أُخفي من الملفات (المكرر وغيره) باقٍ في المخزن ويُستعاد بضغطة.</p>
+        ${hid ? (hid.length ? hid.map(h => `<div class="row"><span class="nm" title="${esc(h.path)}">${esc(h.path.replace(/^Law Firm\//, ""))}</span><button data-restore="${esc(h.id)}">استعادة</button></div>`).join("") : `<p>لا شيء مخفي.</p>`) : ""}
+        <div class="btns"><button id="hidShow">${hid ? "حدّث" : `اعرض المخفية (${ar(s?.hidden || 0)})`}</button></div></section>`;
     const pick = panel.querySelector("#dfPick"); if (pick) pick.onchange = () => F.importFiles(pick.files);
     panel.querySelectorAll("[data-unk]").forEach(inp => inp.onchange = () => { const g = plan.folders.find(x => x.path === inp.dataset.unk); const v = inp.value.trim(); g.manual = v;
       const byNo = caseIndex(); g.caseId = byNo.get(v) || (C.cache.get("cases/" + v) ? v : null); inp.style.borderColor = g.caseId ? "#2e7d32" : v ? "#c62828" : ""; });
@@ -290,6 +350,13 @@
       draw(); };
     const og = panel.querySelector("#ocGo"); if (og) og.onclick = () => { F.runReader(schedule); draw(); };
     const os = panel.querySelector("#ocStop"); if (os) os.onclick = () => { F.ocr.stop = true; };
+    const df = panel.querySelector("#dupFind"); if (df) df.onclick = async () => { dup = {keep: dup?.keep || {}, msg: "يبحث…"}; draw(); try { dup.groups = await F.duplicates(); dup.msg = null; } catch (e) { dup.msg = "تعذّر البحث: " + (e.message || e.code); } draw(); };
+    panel.querySelectorAll("[data-dkeep]").forEach(b => b.onclick = async () => { const g = dup.groups[+b.dataset.dkeep]; const keep = panel.querySelector(`input[name="dk${b.dataset.dkeep}"]:checked`)?.value || F.keepOf(g);
+      const k = g.items.find(it => it.id === keep);
+      if (!confirm(`تُبقى «${k.path.replace(/^Law Firm\//, "")}» وتُخفى ${g.n - 1} نسخة أخرى (تُستعاد من «المخفية»). متابعة؟`)) return;
+      b.disabled = true; try { const n = await F.dedupe(g, keep, F.extractor?.docKind); dup.groups = dup.groups.filter(x => x !== g); dup.msg = `أُخفيت ${ar(n)} نسخة.`; } catch (e) { dup.msg = "تعذّر: " + (e.message || e.code); } draw(); });
+    const hs = panel.querySelector("#hidShow"); if (hs) hs.onclick = async () => { hid = await F.hidden(); draw(); };
+    panel.querySelectorAll("[data-restore]").forEach(b => b.onclick = async () => { b.disabled = true; try { await F.restore(b.dataset.restore); hid = await F.hidden(); } catch (e) { alert("تعذّرت الاستعادة"); } draw(); });
   }
   // the files of a chosen folder (each with its webkitRelativePath): planned, then shown for review before anything is uploaded
   F.importFiles = async (files) => {
@@ -309,6 +376,7 @@
       #dcFilesPanel .pri{background:#151547;color:#fff;border-color:#151547} #dcFilesPanel .pick input{display:none} #dcFilesPanel .btns{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
       #dcFilesPanel .row{display:flex;gap:8px;align-items:center;margin:4px 0} #dcFilesPanel .row .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
       #dcFilesPanel .inp{font:inherit;border:1px solid #ccc;border-radius:6px;padding:3px 6px;width:150px;direction:ltr}
+      #dcFilesPanel .grp{border:1px solid #eee;border-radius:8px;padding:6px 10px;margin:6px 0} #dcFilesPanel label.row{cursor:pointer}
       @media (prefers-color-scheme: dark){#dcFilesPanel .box{background:#17173a;color:#eee}#dcFilesPanel .sub{color:#aaa}#dcFilesPanel button,#dcFilesPanel .pick{background:#0e0e24;color:#eee;border-color:#3b3b6b}#dcFilesPanel .pri{background:#c9a263;color:#151547}#dcFilesPanel section{border-color:#2b2b55}}</style>
       <div class="box"><div style="display:flex;justify-content:space-between;align-items:center"><h2>ملفات المكتب</h2><button data-x aria-label="إغلاق">×</button></div><div class="body"><p class="sub">يحمّل…</p></div></div>`;
     panel.querySelector("[data-x]").onclick = () => { panel.remove(); panel = null; };
