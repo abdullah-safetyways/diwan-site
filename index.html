@@ -490,7 +490,8 @@ function renderNav(){
   const items = navItems().map(([k,l,i]) => [k, k==="portal" && (S.me?.role==="client" || S.me?.scope==="client") ? "متابعة القضايا" : l, i]);
   const rq = S.loaded && !(S.me?.role==="client" || S.me?.scope==="client") && can("cases.edit") ? (S.reqs||[]).filter(r => r.status==="new" && !r.deleted).length : 0;
   const fc = S.loaded && viewAllowed("filing") ? filingCases().length : 0;
-  const badge = (k) => k==="filing" ? fc : k==="review" ? rc : k==="memos" ? mc : k==="staff" ? jr : k==="portal" ? rq : 0;
+  const cc = S.loaded && viewAllowed("crm") ? (crmOwner() ? crmPendingApproval().length : 0) + crmFollowDue().length + (can("billing.view") ? crmInvoiceDue().length : 0) : 0;
+  const badge = (k) => k==="crm" ? cc : k==="filing" ? fc : k==="review" ? rc : k==="memos" ? mc : k==="staff" ? jr : k==="portal" ? rq : 0;
   const btn = (k,l,i) => `<button class="nav" data-nav="${k}" aria-current="${S.view===k || (k==="cases"&&S.view==="case") || (k==="clients"&&S.view==="client")}">${icon(i)}<span>${l}</span>${badge(k)?`<span class="count num">${badge(k)}</span>`:""}</button>`;
   const html = items.map(x => btn(...x)).join("");
   $("nav").innerHTML = navRailHtml(items, btn, badge); bindNavGroups(); $("mobNav").innerHTML = `<button class="nav mark" data-nav="home" aria-label="الرئيسية">${brandSvg("mark")}</button>` + html + `<button class="nav" data-nav="search" aria-current="${S.view==="search"}">${icon("search")}<span>بحث</span></button>`;
@@ -500,7 +501,7 @@ document.addEventListener("click", (e) => {
   const cl = e.target.closest("[data-client]"); if (cl){ S.view="client"; S.clientKey=cl.dataset.client; render(); window.scrollTo({top:0}); return; }
   const c = e.target.closest("[data-case]"); if (c && !e.target.closest("a,input,select,textarea,label,button:not([data-case])")){ openCase(c.dataset.case, c.dataset.tab); return; }
 });
-function go(v){ S.view=v; S.caseId=null; render(); window.scrollTo({top:0}); }
+function go(v){ S.view=v; S.caseId=null; if (v==="crm") S.leadId=null; render(); window.scrollTo({top:0}); }
 function openCase(id, tab){ S.editSess=null; S.view="case"; S.caseId=id; S.caseTab=tab||"overview"; render(); window.scrollTo({top:0}); }
 
 function allEvents(){
@@ -522,7 +523,7 @@ function render(){
   const v = S.view;
   const cv = v==="case" ? S.cases.get(S.caseId) : null;
   const blocked = (!["case","client","search"].includes(v) && !viewAllowed(v)) || (["case","client","search"].includes(v) && !can("cases.view")) || (cv && (!visibleCase(cv) || (cv.kind==="engagement" && !can("billing.view"))));
-  const html = blocked ? vNoPerm() : v==="home"?vHome(): v==="cases"?vCases(): v==="case"?vCase(): v==="review"?vReview(): v==="filing"?vFiling(): v==="agenda"?vAgenda(): v==="retainers"?vRetainers(): v==="finance"?vFinance(): v==="clients"?vClients(): v==="client"?vClient(): v==="search"?vSearch(): v==="library"?vLibrary(): v==="learn"?vLearn(): v==="staff"?vStaff(): v==="memos"?vMemos(): v==="kpi"?vKpi(): v==="portal"?vPortal(): vSync();
+  const html = blocked ? vNoPerm() : v==="home"?vHome(): v==="cases"?vCases(): v==="case"?vCase(): v==="review"?vReview(): v==="filing"?vFiling(): v==="crm"?vCrm(): v==="agenda"?vAgenda(): v==="retainers"?vRetainers(): v==="finance"?vFinance(): v==="clients"?vClients(): v==="client"?vClient(): v==="search"?vSearch(): v==="library"?vLibrary(): v==="learn"?vLearn(): v==="staff"?vStaff(): v==="memos"?vMemos(): v==="kpi"?vKpi(): v==="portal"?vPortal(): vSync();
   $("main").innerHTML = html;
   afterRender();
 }
@@ -570,7 +571,7 @@ function vHome(){
   const rev = reviewList().length;
   const memosSoon = memosAll().filter(m => memoOpen(m) && (!m.due || daysUntil(m.due) <= 14) && (!myBriefOnly() || memoMine(m))); const memosLate = memosSoon.filter(memoLate).length;
   const brief = myBriefOnly() ? S.myBrief : S.meta?.brief;
-  return header("صباح العمل", todayLine(), `<button class="btn primary" id="briefBtn">${icon("spark")}إحاطة اليوم</button>`) + onboardPanel() + nzDuePanel() + reqHomePanel() + `
+  return header("صباح العمل", todayLine(), `<button class="btn primary" id="briefBtn">${icon("spark")}إحاطة اليوم</button>`) + onboardPanel() + nzDuePanel() + crmHomePanel() + reqHomePanel() + `
   <div class="kpis five">
     <button class="kpi" data-nav="cases"><span class="v num">${open.length}</span><span class="l">قضية مفتوحة</span></button>
     <button class="kpi ${memosLate?"alert":memosSoon.length?"warn":""}" data-nav="memos"><span class="v num">${memosSoon.length}</span><span class="l">مذكرة تُقدَّم خلال ١٤ يوماً${memosLate?` (${memosLate} متأخرة)`:""}</span></button>
@@ -1950,6 +1951,7 @@ function suggestTerms(e){
   return {billing, amount: amt, vat:false, start: inv[0].date, months:12, note:`مقترح من آخر ${last.length} فواتير مسجلة (${sar(amt)} ريال كل ${Math.round(avg)} يوماً تقريباً، وأول فاتورة ${fmtD(inv[0].date)}) — راجع البداية والمدة والمبلغ قبل الحفظ.`};
 }
 function openContractEdit(e){
+  S.crmPending = null;
   const ct = e?.contract || {}; const sg = !ct.start && e ? suggestTerms(e) : null; const v = {...(sg||{}), ...ct};
   const clients = [...new Set(allCases().map(c=>c.client).filter(Boolean))].sort();
   const dr = openDrawer(`<header><div><span class="lbl">${e?"تعديل عقد أتعاب سنوي":"عقد أتعاب سنوي جديد"}</span><h2 style="margin-top:4px">${esc(e?.client||"عميل جديد")}</h2><div class="sub">للشركات بصفة مستمرة: مدة ودورية فوترة ومبلغ ثابت لكل فترة، ويغطي قضايا الشركة المربوطة به. أما أتعاب قضية واحدة بعينها فتُسجَّل «عقد أتعاب بالمعاملة» من تبويب الأتعاب في القضية.</div></div><button class="btn sm" data-close>إغلاق</button></header>
@@ -1984,7 +1986,7 @@ function openContractEdit(e){
     const contract = {...(e?.contract||{}), ...t, periods:(e?.contract||{}).periods||{}, updatedAt:new Date().toISOString()};
     if (e) { if (await patchCase(e, {contract, client, clientPhone:phone||null, title:`عقد سنوي — ${client}`, aliases}, "عدّل شروط العقد السنوي")) { closeDrawer(); toast("حُفظ العقد"); } return; }
     const id = "C"+Date.now(); const doc = {id, kind:"engagement", title:`عقد سنوي — ${client}`, client, aliases, clientPhone:phone||null, contract, members:[], status:"active", sessions:[], invoices:[], tasks:[], source:"manual", createdAt:new Date().toISOString()};
-    try { await S.db.doc("cases/"+id).set(doc); await logAction(id, "أضاف عقداً سنوياً"); closeDrawer(); toast("أُضيف العقد"); openCase(id); } catch { toast("تعذّرت الإضافة"); } };
+    try { await S.db.doc("cases/"+id).set(doc); await logAction(id, "أضاف عقداً سنوياً"); crmAfterCreate(id, "engagement"); closeDrawer(); toast("أُضيف العقد"); openCase(id); } catch { toast("تعذّرت الإضافة"); } };
 }
 async function linkCaseToContract(e, cid, on){
   const c = S.cases.get(cid); if (!c) return;
@@ -2090,6 +2092,7 @@ function openCaseEdit(c){
   trackBindForm(dr);
 }
 function openCaseNew(pre){
+  S.crmPending = null;
   S.feeDraft = S.feeDraft || {}; delete S.feeDraft["new"];
   const fees = can("billing.edit");
   const dr = openDrawer(`<header><div><span class="lbl">قضية جديدة</span><h2 style="margin-top:4px">إضافة قضية إلى الديوان</h2><div class="sub">إن كانت مقيدة في ناجز فأدخل رقمها؛ يكمل التحديث من ناجز جلساتها وأحكامها. دعوى لم تُرفع بعد؟ <button type="button" class="btn ghost sm" style="padding:0" id="toFiling">افتحها من «رفع الدعوى»</button>.${fees?"":" ويحرّر مالك المكتب عقد أتعابها بالمعاملة من «استكمال البيانات»."}</div></div><button class="btn sm" data-close>إغلاق</button></header>
@@ -2118,7 +2121,7 @@ function openCaseNew(pre){
       assignees: [...new Set([...(v.assignees||[]), ...(S.me?.uid && !S.me.owner ? [S.me.uid] : [])])],
       fees: fz.items.length ? fz : null, source:"manual", fieldSources:src, editedFields:[...Object.keys(src), ...(v.title?["title"]:[])], needsReview:[], reviewNotes:[], related:S.trackFrom && S.cases.get(S.trackFrom) ? [S.trackFrom] : [], parentId:S.trackFrom && S.cases.get(S.trackFrom) ? S.trackFrom : null, sessionCount:0, nextSession:null, lastSession:null, importedAt:new Date().toISOString(),
       createdAt:new Date().toISOString(), createdBy:S.uid||null, conflict:cf.conflict };
-    try { await S.db.doc("cases/"+id).set(doc); await logAction(id, "أضاف القضية يدوياً"); trackAfterCreate(id, doc);
+    try { await S.db.doc("cases/"+id).set(doc); await logAction(id, "أضاف القضية يدوياً"); trackAfterCreate(id, doc); crmAfterCreate(id, "case");
       if (S.reqPending) { try { await S.db.doc("requests/"+S.reqPending).update({caseId:id}); } catch {} S.reqPending = null; }
       if (v.engagementId) { const n = S.cases.get(v.engagementId); if (n) await patchCase(n, {members:[...new Set([...(n.members||[]), id])]}, `رُبطت القضية ${v.caseNo||doc.title} بالعقد`); }
       delete S.feeDraft["new"]; closeDrawer(); toast("أُضيفت القضية"); openCase(id); if (S.asAfterNew) asAfterNewCase(id); } catch { toast("تعذّرت الإضافة"); } };
@@ -2181,7 +2184,7 @@ async function loadBlob(ref){
   let out;
   if (ref.file) {
     // only the templates shipped with the page: a record any member can write must never name a script to load
-    const ok = {"tpl/fee.js":"__TPL_FEE", "tpl/letterhead.js":"__TPL_LETTERHEAD"};
+    const ok = {"tpl/fee.js":"__TPL_FEE", "tpl/letterhead.js":"__TPL_LETTERHEAD", "tpl/quote_case.js":"__TPL_QUOTE_CASE", "tpl/quote_annual.js":"__TPL_QUOTE_ANNUAL"};
     if (ok[ref.file] !== ref.global) throw {msg:"مرجع نموذج غير معتمد"};
     if (!window[ref.global]) await loadScript(ref.file); out = b64ToBytes(window[ref.global]); }
   else if (ref.asset) { if (!/^[0-9a-f]{32}$/i.test(String(ref.asset))) throw {msg:"مرجع ملف غير صالح"}; const res = await fetch("/_blob/"+ref.asset); if (!res.ok) throw {msg:"تعذّر تحميل الملف المحفوظ ("+res.status+")"}; out = ref.enc==="b64" ? b64ToBytes(await res.text()) : new Uint8Array(await res.arrayBuffer()); }
@@ -2612,6 +2615,7 @@ const PERMS = [
   ["portal.billing","يرى مستحقات شركته وفواتيرها في صفحة المتابعة"],
   ["najiz.sync","ربط حسابه في ناجز وتحديث قضاياه منه"],
   ["sync.use","المزامنة والإضافة والمحذوفات"],
+  ["crm.view","إدارة العملاء: العملاء المحتملون وكتابة عروض الأسعار (الاعتماد والبدء لمالك المكتب)"],
 ];
 const ALL_PERMS = PERMS.map(p=>p[0]);
 const ROLES = {
@@ -2644,7 +2648,7 @@ function computeMe(){
 }
 const can = (p) => !S.me || !!S.me.owner || !!S.me.legacy || !!S.me.perms?.has(p);
 const visibleCase = (c) => !S.me || S.me.owner || S.me.legacy || (S.me.scope==="client" ? portalSet().has(c.id) : S.me.scope!=="assigned" || (c.assignees||[]).includes(S.me.uid));
-const VIEW_PERM = {filing:"cases.view", cases:"cases.view", agenda:"cases.view", clients:"cases.view", review:"cases.edit", memos:"cases.view", retainers:"billing.view", finance:"billing.view", kpi:"kpi.view", learn:"learn.manage", sync:"sync.use"};
+const VIEW_PERM = {crm:"crm.view", filing:"cases.view", cases:"cases.view", agenda:"cases.view", clients:"cases.view", review:"cases.edit", memos:"cases.view", retainers:"billing.view", finance:"billing.view", kpi:"kpi.view", learn:"learn.manage", sync:"sync.use"};
 function viewAllowed(v){
   if (!S.me) return v!=="staff";
   if (!S.me.allowed) return false;
@@ -2655,7 +2659,7 @@ function viewAllowed(v){
   if (v==="review") return can("cases.edit") || can("billing.edit");
   const p = VIEW_PERM[v]; return !p || can(p);
 }
-const NAV_ALL = [["home","الرئيسية","home"],["cases","القضايا","cases"],["filing","رفع الدعوى","doc"],["clients","الموكلون","people"],["portal","متابعة الشركات","portal"],["review","استكمال البيانات","review"],["memos","المذكرات والمهام","memo"],["agenda","الأجندة","agenda"],["retainers","عقود الأتعاب","retainer"],["finance","الفوترة","money"],["kpi","مؤشرات الأداء","kpi"],["library","المكتبة القانونية","book"],["learn","التعلم من المحامي","learn"],["staff","الموظفون والصلاحيات","shield"],["sync","المزامنة والإضافة","sync"]];
+const NAV_ALL = [["home","الرئيسية","home"],["cases","القضايا","cases"],["filing","رفع الدعوى","doc"],["crm","إدارة العملاء","people"],["clients","الموكلون","people"],["portal","متابعة الشركات","portal"],["review","استكمال البيانات","review"],["memos","المذكرات والمهام","memo"],["agenda","الأجندة","agenda"],["retainers","عقود الأتعاب","retainer"],["finance","الفوترة","money"],["kpi","مؤشرات الأداء","kpi"],["library","المكتبة القانونية","book"],["learn","التعلم من المحامي","learn"],["staff","الموظفون والصلاحيات","shield"],["sync","المزامنة والإضافة","sync"]];
 const navItems = () => NAV_ALL.filter(([k]) => viewAllowed(k));
 // controls hidden from members without the permission (the screens stay readable)
 const PERM_UI = [
@@ -6298,7 +6302,7 @@ function brand(){ const el = $("brandBox"); if (el) el.innerHTML = `${brandSvg("
 // ---------- the rail: the day's work flat at the top, the rest in groups that open on demand — and open by themselves on their own pages.
 // A group with one visible page shows that page directly; a collapsed group carries the sum of its pages' counts.
 const NAV_GROUPS = [
-  {key:"work", items:["home","cases","filing","agenda","memos","review"]},
+  {key:"work", items:["home","cases","filing","crm","agenda","memos","review"]},
   {key:"clients", label:"الموكلون والشركات", icon:"people", items:["clients","portal"]},
   {key:"money", label:"الأتعاب والمالية", icon:"money", items:["retainers","finance"]},
   {key:"office", label:"إدارة المكتب", icon:"shield", items:["kpi","staff","sync"]},
@@ -8155,6 +8159,292 @@ function bindTracks(){
     if (await patchCase(c, patch, `حدّد المسار: ${TRACK[k].l}`)) toast(`صار في «${TRACK[k].l}»`); });
 }
 
+// ---------- إدارة العملاء (v54): a prospective client is recorded, checked for conflicts, and given a quotation written on one of
+// the office's two approved forms (per matter, annual retainer). Whoever may see client management writes it; the office owner
+// approves it before it goes out, and only the owner starts the work when the client agrees: the file opens in its track with its
+// fee agreement taken from the quotation, and the first payment becomes due — the notice to issue the invoice.
+// Amounts are never proposed by the Diwan: the office writes them. All amounts include VAT (the office's rule).
+const LEAD_ST = {new:["جديد",""], quoted:["عُرض عليه",""], accepted:["وافق — صار موكلاً","ok"], lost:["لم يوافق","crit"]};
+const Q_ST = {draft:["مسودة",""], pending:["بانتظار اعتماد المالك","warn"], approved:["معتمد — جاهز للإرسال","ok"], sent:["أُرسل للعميل","ok"], accepted:["وافق العميل","ok"], declined:["لم يوافق","crit"], expired:["انتهت صلاحيته","crit"]};
+const Q_KIND = {case:"أتعاب بالمعاملة", annual:"اشتراك سنوي"};
+const Q_VALID_DAYS = 30;
+const CYCLE = {monthly:"شهري", quarterly:"ربع سنوي", semiannual:"نصف سنوي", annual:"سنوي"};
+const ORD = ["أولاً","ثانياً","ثالثاً","رابعاً","خامساً"];
+const crmOwner = () => !S.me || !!S.me.owner || !!S.me.legacy;
+const leadsAll = () => (S.leads||[]).filter(l => !l.deleted).sort((a,b)=>(b.createdAt||"").localeCompare(a.createdAt||""));
+const qState = (q) => q && ["draft","pending","approved","sent"].includes(q.state) && q.validUntil && q.validUntil < todayKey() ? "expired" : q?.state || "draft";
+const lastQuote = (l) => (l.quotes||[]).at(-1) || null;
+const crmPendingApproval = () => leadsAll().flatMap(l => (l.quotes||[]).filter(q => q.state==="pending").map(q => ({l, q})));
+const crmFollowDue = () => leadsAll().filter(l => ["new","quoted"].includes(l.status||"new") && l.followUp && l.followUp <= todayKey());
+// after the client agreed: the first payment that is due and has no invoice yet
+function crmInvoiceDue(){
+  const bi = billingItems(); const out = [];
+  for (const l of leadsAll()) { if (l.status!=="accepted") continue;
+    const items = bi.filter(b => (l.caseId && b.src==="case" && b.id===l.caseId) || (l.engagementId && b.src==="contract" && b.id===l.engagementId));
+    const due = items.filter(b => b.state==="due"); if (due.length) out.push({l, due}); }
+  return out;
+}
+function nextQuoteNo(){
+  const yr = todayKey().slice(0,4); let n = 0;
+  for (const l of (S.leads||[])) for (const q of (l.quotes||[])) { const m = /^Q-(\d{4})-(\d+)$/.exec(q.no||""); if (m && m[1]===yr) n = Math.max(n, +m[2]); }
+  return `Q-${yr}-${String(n+1).padStart(3,"0")}`;
+}
+const qTotal = (q) => (q.payments||[]).reduce((a,p)=>a+(+p.amount||0),0);
+const trigText = (p) => p.trigger==="date" ? (p.date ? fmtD(p.date) : "") : (TRIG[p.trigger] || "");
+async function leadPatch(l, patch, action){
+  if (!S.db) { toast("قاعدة البيانات غير متاحة"); return false; }
+  try { await S.db.doc("leads/"+l.id).update({...patch, updatedAt:new Date().toISOString(), updatedBy:S.uid||null}); if (action) await logAction(null, `${action} — ${l.name}`);
+    // the change may reach the page while its form is still open (no redraw then): redraw once the form has closed
+    setTimeout(() => { if (!document.getElementById("drawer") && ["crm","home"].includes(S.view)) { const y = window.scrollY; render(); window.scrollTo({top:y}); } }, 60);
+    return true; }
+  catch { toast("تعذّر الحفظ"); return false; }
+}
+async function quotePatch(l, no, patch, action){
+  const quotes = (l.quotes||[]).map(q => q.no===no ? {...q, ...patch} : q);
+  return leadPatch(l, {quotes}, action);
+}
+
+// ---- the page
+function vCrm(){
+  if (S.leadId) { const l = (S.leads||[]).find(x => x.id===S.leadId); if (l) return vLead(l);
+    // just added: its record reaches the page a moment later
+    if (S.leadWait && Date.now() - S.leadWait < 15000) return header("إدارة العملاء", "") + `<div class="panel"><div class="thinking"><span class="dot"></span>جارٍ فتح العميل…</div></div>`;
+    S.leadId = null; }
+  const UI = S.crmUI = S.crmUI || {f:"open"};
+  const all = leadsAll(); const q = (UI.q||"").trim();
+  const F = [["open","المفتوحة",l=>["new","quoted"].includes(l.status||"new")],["pending","بانتظار اعتمادك",l=>(l.quotes||[]).some(x=>x.state==="pending")],["accepted","صاروا موكلين",l=>l.status==="accepted"],["lost","لم يوافقوا",l=>l.status==="lost"],["all","الكل",()=>true]];
+  const fx = (F.find(x=>x[0]===UI.f)||F[0])[2];
+  const list = all.filter(fx).filter(l => !q || [l.name,l.request,l.phone,l.idNo,l.opponent].join(" ").includes(q));
+  const inv = crmInvoiceDue();
+  return header("إدارة العملاء", "العملاء المحتملون وعروض الأسعار — يكتب العرضَ الفريق، ويعتمده مالك المكتب", `<button class="btn primary" id="leadNew" ${S.canWrite?"":"disabled"}>+ عميل محتمل</button>`) + `
+  ${inv.length ? `<div class="notice warn" style="margin-bottom:12px"><b>فواتير مطلوب إصدارها:</b> ${inv.map(x=>`${esc(x.l.name)} — ${x.due.map(b=>`${esc(b.label)} ${sar(b.total)} ريال`).join("، ")}`).join(" · ")} <button class="btn sm" data-nav="finance">الفوترة</button></div>` : ""}
+  <div class="toolbar"><label class="search">${icon("search")}<input id="crmQ" type="search" placeholder="الاسم، الطلب، الجوال، الهوية أو السجل…" value="${esc(UI.q||"")}" aria-label="بحث في العملاء المحتملين"></label></div>
+  <div class="chips" style="margin-bottom:14px">${F.map(([k,l,f])=>`<button class="chip" data-crmf="${k}" aria-pressed="${UI.f===k}">${l} <span class="num muted">${all.filter(f).length}</span></button>`).join("")}</div>
+  <div class="table-wrap">${list.length ? `<table><thead><tr><th>العميل</th><th>الطلب</th><th class="hide-sm">العرض</th><th>المتابعة</th><th class="hide-sm">الحالة</th></tr></thead><tbody>${list.map(l => { const lq = lastQuote(l); const st = LEAD_ST[l.status||"new"]; const qs = lq ? Q_ST[qState(lq)] : null;
+    return `<tr class="clickable" data-lead="${esc(l.id)}"><td><div class="ttl">${esc(l.name)}</div><div class="sub">${esc([l.phone, l.source].filter(Boolean).join(" · "))}</div></td>
+      <td><div>${esc((l.request||"").slice(0,80))}</div><div class="sub">${esc(TRACK[l.track||"courts"]?.l||"")}</div></td>
+      <td class="hide-sm">${lq ? `<span class="mono small">${esc(lq.no)}</span> <span class="pill ${qs[1]}">${qs[0]}</span>` : `<span class="sub">لا عرض بعد</span>`}</td>
+      <td>${l.followUp && ["new","quoted"].includes(l.status||"new") ? `<div class="num">${fmtD(l.followUp)}</div>${daysPill(l.followUp)}` : `<span class="muted small">—</span>`}</td>
+      <td class="hide-sm"><span class="pill ${st[1]}">${st[0]}</span></td></tr>`; }).join("")}</tbody></table>` : `<div class="empty">لا عملاء هنا.</div>`}</div>`;
+}
+function vLead(l){
+  const st = LEAD_ST[l.status||"new"]; const cf = l.conflict; const ro = S.canWrite ? "" : "disabled";
+  const made = l.caseId ? S.cases.get(l.caseId) : l.engagementId ? S.cases.get(l.engagementId) : null;
+  return `<button class="btn back" data-leadback>${icon("back")}إدارة العملاء</button>
+  <section class="case-head">
+    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between"><span class="no">عميل محتمل${l.source?" · "+esc(l.source):""}</span>
+      <span style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span class="pill ${st[1]}">${st[0]}</span><button class="btn sm" data-leadedit ${ro}>تعديل البيانات</button>${l.status!=="accepted"&&l.status!=="lost"?`<button class="btn sm ghost" data-leadlost ${ro} style="color:var(--crit)">لم يوافق</button>`:""}</span></div>
+    <h1 style="font-size:1.35rem">${esc(l.name)}</h1>
+    <div class="facts">${[["الهوية / السجل",l.idNo],["الممثل النظامي",l.rep],["الجوال",l.phone],["البريد",l.email],["النشاط",l.activity],["المسار المتوقع",TRACK[l.track||"courts"]?.l],["الخصم",l.opponent],["المتابعة القادمة",l.followUp?fmtD(l.followUp):null]].filter(x=>x[1]).map(([k,v])=>`<div><span>${k}:</span><b>${esc(v)}</b></div>`).join("")}</div>
+    ${l.request?`<div class="minutes">${esc(l.request)}</div>`:""}
+    ${made?`<div class="links"><button class="link-chip" data-case="${esc(made.id)}">الملف: ${esc(made.caseNo||"")} ${esc((made.title||"").slice(0,60))}</button></div>`:""}
+    ${l.status==="lost"&&l.lostReason?`<div class="notice err">سبب عدم الموافقة: ${esc(l.lostReason)}</div>`:""}
+  </section>
+  <section class="panel" style="margin-bottom:14px"><header><h2>فحص تعارض المصالح</h2>${can("crm.view")?`<button class="btn sm" data-leadcf ${ro}>${icon("shield")}${cf?"أعد الفحص":"افحص الآن"}</button>`:""}</header>
+    ${cf ? `<div class="notice ${cf.warn?"warn":"ok"}">${cf.warn?`<b>${cf.warn} تطابق في الجهة المعاكسة</b> — راجعه قبل قبول العميل.`:"لا تعارض ظاهر."} فُحص ${esc(fmtD(cf.at.slice(0,10)))} على: ${esc(cf.names.join("، "))}${cf.hits?` · ${cf.hits} اسم مشابه في ملفات المكتب`:""}</div>
+      ${(cf.top||[]).length?`<div class="cf-hits" style="margin-top:6px">${cf.top.map(h=>`<div class="cf-hit ${h.level==="warn"?"warn":""}">${esc(h.name)} — ${esc(h.role)}${h.caseNo?` · <button class="link-chip" data-case="${esc(h.caseId)}">${esc(h.caseNo)}</button>`:""}</div>`).join("")}</div>`:""}` : `<div class="sub">لا يُكتب عرض قبل فحص التعارض على اسم العميل والخصم.</div>`}
+  </section>
+  <section class="panel"><header><h2>عروض الأسعار</h2>${l.status!=="accepted"?`<span style="display:flex;gap:6px;flex-wrap:wrap">${Object.entries(Q_KIND).map(([k,t])=>`<button class="btn sm ${k==="case"?"primary":""}" data-qnew="${k}" ${cf&&S.canWrite?"":"disabled"} title="${cf?"":"افحص التعارض أولاً"}">+ عرض ${t}</button>`).join("")}</span>`:""}</header>
+    ${(l.quotes||[]).length ? `<div class="tasks">${[...l.quotes].reverse().map(q => quoteRow(l, q)).join("")}</div>` : `<div class="empty">لا عروض بعد.</div>`}
+  </section>`;
+}
+function quoteRow(l, q){
+  const s = qState(q); const [lbl, cls] = Q_ST[s]; const id = esc(q.no); const own = crmOwner(); const ro = S.canWrite ? "" : "disabled";
+  const amt = q.kind==="annual" ? [["سنوي",q.annual?.yearly],["نصف سنوي",q.annual?.semi],["ربع سنوي",q.annual?.quarterly],["شهري",q.annual?.monthly]].filter(x=>x[1]).map(([k,v])=>`${k} ${sar(v)}`).join(" · ") + (q.annual?.pct?` · أتعاب التقاضي ${q.annual.pct}%`:"")
+    : `${sar(qTotal(q))} ريال${q.percent?` + ${q.percent}% من المحصّل`:""}`;
+  const acts = [];
+  if (["draft"].includes(s)) { acts.push(`<button class="btn sm" data-qedit="${id}" ${ro}>تعديل</button>`); acts.push(own ? `<button class="btn sm primary" data-qapprove="${id}" ${ro}>اعتمد العرض</button>` : `<button class="btn sm primary" data-qsubmit="${id}" ${ro}>أرسله للاعتماد</button>`); }
+  if (s==="pending") { if (own) { acts.push(`<button class="btn sm primary" data-qapprove="${id}" ${ro}>اعتمد العرض</button>`); acts.push(`<button class="btn sm" data-qback="${id}" ${ro}>أعده للتعديل</button>`); } else acts.push(`<span class="sub">ينتظر اعتماد مالك المكتب</span>`); }
+  if (["approved","sent"].includes(s)) { acts.push(`<button class="btn sm" data-qdoc="${id}">ملف العرض (Word)</button>`); if (s==="approved") acts.push(`<button class="btn sm" data-qsent="${id}" ${ro}>سُلّم للعميل</button>`);
+    if (own) acts.push(`<button class="btn sm primary" data-qaccept="${id}" ${ro}>وافق العميل — ابدأ العمل</button>`); else acts.push(`<span class="sub">البدء بعد موافقة العميل لمالك المكتب</span>`); }
+  if (s==="expired") acts.push(`<button class="btn sm" data-qrenew="${id}" ${ro}>جدّد الصلاحية ${Q_VALID_DAYS} يوماً</button>`);
+  if (["accepted"].includes(s)) acts.push(`<button class="btn sm" data-qdoc="${id}">ملف العرض (Word)</button>`);
+  return `<div class="task" style="display:grid;gap:6px;padding:10px 0;border-bottom:1px dashed var(--line)">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><span class="mono small">${esc(q.no)}</span><b>${esc(Q_KIND[q.kind])}</b><span class="pill ${cls}">${lbl}</span><span class="sub">${esc(q.subject||"")}</span></div>
+    <div class="sub">${amt} · صالح حتى ${fmtD(q.validUntil)} · كتبه ${esc(memberName(q.createdBy)||"—")}${q.approvedBy?` · اعتمده ${esc(memberName(q.approvedBy))} ${fmtD((q.approvedAt||"").slice(0,10))}`:""}${q.sentAt?` · سُلّم ${fmtD(q.sentAt)}`:""}</div>
+    ${q.backNote?`<div class="notice warn" style="margin:0">ملاحظة المالك: ${esc(q.backNote)}</div>`:""}
+    <div style="display:flex;gap:6px;flex-wrap:wrap">${acts.join("")}</div></div>`;
+}
+
+// ---- the prospective client
+function openLeadForm(l){
+  const v = (k) => esc(l?.[k] ?? "");
+  const dr = openDrawer(`<header><div><span class="lbl">${l?"تعديل عميل محتمل":"عميل محتمل جديد"}</span><h2 style="margin-top:4px">${l?esc(l.name):"بيانات العميل وطلبه"}</h2></div><button class="btn sm" data-close>إغلاق</button></header>
+    <form class="body" id="leadForm">
+      <div class="row"><label class="f">اسم العميل (شخص أو منشأة)<input class="inp" name="name" required value="${v("name")}"></label><label class="f">الهوية / السجل التجاري<input class="inp mono" name="idNo" value="${v("idNo")}"></label></div>
+      <div class="row"><label class="f">الممثل النظامي (للمنشأة)<input class="inp" name="rep" value="${v("rep")}"></label><label class="f">النشاط<input class="inp" name="activity" value="${v("activity")}"></label></div>
+      <div class="row"><label class="f">الجوال<input class="inp num" name="phone" inputmode="tel" placeholder="05xxxxxxxx" value="${v("phone")}"></label><label class="f">البريد الإلكتروني<input class="inp" name="email" type="email" value="${v("email")}"></label><label class="f">المصدر<input class="inp" name="source" list="leadSrc" placeholder="إحالة، الموقع، عميل سابق…" value="${v("source")}"><datalist id="leadSrc">${["إحالة","الموقع","عميل سابق","وسائل التواصل","اتصال مباشر"].map(x=>`<option value="${x}">`).join("")}</datalist></label></div>
+      <label class="f">الطلب<textarea class="inp" name="request" style="min-height:90px" placeholder="ما يريده العميل من المكتب">${v("request")}</textarea></label>
+      <div class="row"><label class="f">المسار المتوقع<select class="inp" name="track">${TRACKS.map(t=>`<option value="${t.k}" ${(l?.track||"courts")===t.k?"selected":""}>${esc(t.l)}</option>`).join("")}</select></label><label class="f">الخصم / الطرف الآخر (إن وُجد)<input class="inp" name="opponent" value="${v("opponent")}"></label><label class="f">المتابعة القادمة<input class="inp" type="date" name="followUp" value="${v("followUp")}"></label></div>
+      <div style="display:flex;gap:8px"><button class="btn primary" type="submit">${l?"حفظ":"إضافة العميل"}</button></div></form>`);
+  dr.querySelector("#leadForm").onsubmit = async (e) => { e.preventDefault(); if (!S.db) { toast("قاعدة البيانات غير متاحة"); return; }
+    const f = e.target; const g = (n) => (f.elements[n]?.value||"").trim();
+    const data = {name:g("name"), idNo:fromHindi(g("idNo"))||null, rep:g("rep")||null, activity:g("activity")||null, phone:fromHindi(g("phone"))||null, email:g("email")||null, source:g("source")||null, request:g("request")||null, track:g("track")||"courts", opponent:g("opponent")||null, followUp:g("followUp")||null};
+    if (l) { const changed = data.name!==l.name || (data.opponent||null)!==(l.opponent||null); if (await leadPatch(l, {...data, ...(changed ? {conflict:null} : {})}, "عدّل بيانات عميل محتمل")) { closeDrawer(); toast(changed && l.conflict ? "حُفظ — أعد فحص التعارض بعد تغيير الاسم" : "حُفظ"); } return; }
+    const id = newId("L"); const doc = {id, ...data, status:"new", quotes:[], conflict:null, createdAt:new Date().toISOString(), createdBy:S.uid||null};
+    try { await S.db.doc("leads/"+id).set(doc); await logAction(null, `أضاف عميلاً محتملاً — ${data.name}`); closeDrawer(); S.leadId = id; S.leadWait = Date.now(); S.view = "crm"; render(); toast("أُضيف — افحص التعارض ثم اكتب العرض"); } catch { toast("تعذّرت الإضافة"); } };
+}
+async function leadConflict(l){
+  const runs = conflictRun([{name:l.name, side:"ours"}, ...(l.opponent ? [{name:l.opponent, side:"opp"}] : [])].concat(l.idNo ? [{name:l.idNo, side:"ours"}] : []));
+  const all = runs.flatMap(r => r.hits.map(h => ({...h, q:r.name})));
+  const top = all.sort((a,b)=>(b.level==="warn")-(a.level==="warn") || b.score-a.score).slice(0, 8).map(h => ({name:h.name, role:h.role, level:h.level, caseId:h.caseId, caseNo:h.caseNo||null}));
+  const conflict = {at:new Date().toISOString(), by:S.uid||null, names:runs.map(r=>r.name), hits:all.length, warn:runs.reduce((a,r)=>a+r.warn,0), top};
+  if (await leadPatch(l, {conflict}, `فحص التعارض (${conflict.warn ? conflict.warn+" تعارض محتمل" : "لا تعارض"})`)) toast(conflict.warn ? "يوجد تطابق في الجهة المعاكسة — راجعه" : "لا تعارض ظاهر");
+}
+
+// ---- the quotation: the form follows the approved document, amounts are the office's
+function openQuoteForm(l, kind, q){
+  const isA = (q?.kind || kind)==="annual"; const no = q?.no || nextQuoteNo();
+  const val = q?.validUntil || addDays(todayKey(), Q_VALID_DAYS);
+  const pay = (i, lbl, fixedTrig) => { const p = q?.payments?.[i] || {}; return `<div class="fee-row"><span style="font-weight:600">${lbl}</span>
+      <input class="inp num" type="number" min="0" step="any" name="pa${i}" value="${esc(p.amount??"")}" placeholder="المبلغ (ريال، شامل الضريبة)" aria-label="مبلغ ${lbl}">
+      ${fixedTrig ? `<span class="sub">عند توقيع العرض</span>` : `<select class="inp" name="pt${i}" aria-label="استحقاق ${lbl}">${Object.entries(TRIG).filter(([k])=>!["signing","collection"].includes(k)).map(([k,t])=>`<option value="${k}" ${(p.trigger||"judgment")===k?"selected":""}>${t}</option>`).join("")}</select>`}
+      ${fixedTrig ? "" : `<input class="inp" type="date" name="pd${i}" value="${esc(p.date||"")}" aria-label="تاريخ استحقاق ${lbl} (إن كان بتاريخ)">`}</div>`; };
+  const dr = openDrawer(`<header><div><span class="lbl">${q?"تعديل عرض":"عرض سعر جديد"} · ${esc(no)}</span><h2 style="margin-top:4px">${esc(Q_KIND[isA?"annual":"case"])} — ${esc(l.name)}</h2><div class="sub">النموذج المعتمد للمكتب. المبالغ يكتبها المكتب، وكلها شاملة ضريبة القيمة المضافة. يُعتمد العرض من مالك المكتب قبل تسليمه.</div></div><button class="btn sm" data-close>إغلاق</button></header>
+    <form class="body" id="quoteForm">
+      <div class="row"><label class="f">موضوع العرض<input class="inp" name="subject" required value="${esc(q?.subject || (isA ? "خدمات الاستشارات القانونية والتقاضي" : (l.request||"").split("\n")[0].slice(0,120)))}"></label>
+        <label class="f">صالح حتى<input class="inp" type="date" name="validUntil" required value="${esc(val)}"></label></div>
+      ${isA ? `
+      <div class="row"><label class="f">النشاط<input class="inp" name="activity" value="${esc(q?.annual?.activity || l.activity || "")}"></label><label class="f">خيار السداد المقترح<select class="inp" name="cycle">${Object.entries(CYCLE).map(([k,t])=>`<option value="${k}" ${(q?.annual?.cycle||"monthly")===k?"selected":""}>${t}</option>`).join("")}</select></label></div>
+      <fieldset class="perm-grid"><legend class="sub">قيمة الاشتراك لكل خيار سداد (ريال، شامل الضريبة) — اترك ما لا يُعرض فارغاً</legend>
+        ${[["yearly","سنوي"],["semi","نصف سنوي"],["quarterly","ربع سنوي"],["monthly","شهري"]].map(([k,t])=>`<label class="f">${t}<input class="inp num" type="number" min="0" step="any" name="a_${k}" value="${esc(q?.annual?.[k]??"")}"></label>`).join("")}</fieldset>
+      <fieldset class="perm-grid"><legend class="sub">الحدود الشهرية (كما في العقد)</legend>
+        ${[["consult","الاستشارات"],["sessions","الجلسات"],["visits","المراجعات الميدانية"],["meetings","الاجتماعات"],["writings","الكتابات"]].map(([k,t])=>`<label class="f">${t}<input class="inp num" type="number" min="0" step="1" name="l_${k}" value="${esc(q?.annual?.limits?.[k]??"")}"></label>`).join("")}</fieldset>
+      <label class="f">نسبة أتعاب التقاضي في الدعاوى ضد الغير (من المبلغ المحكوم به) %<input class="inp num" type="number" min="0" max="100" step="any" name="pct" value="${esc(q?.annual?.pct??"")}"></label>` : `
+      <label class="f">وصف الخدمة<textarea class="inp" name="service" style="min-height:70px" required>${esc(q?.service||"")}</textarea></label>
+      <fieldset class="perm-grid" style="grid-template-columns:1fr"><legend class="sub">مراحل الخدمة (حتى خمس؛ يُحذف الفارغ من العرض)</legend>
+        ${ORD.map((o,i)=>`<label class="f">${o}<input class="inp" name="st${i}" value="${esc(q?.stages?.[i]||"")}"></label>`).join("")}</fieldset>
+      <section class="panel" style="padding:12px"><header style="margin-bottom:6px"><h2 style="font-size:.95rem">الأتعاب (شاملة ضريبة القيمة المضافة)</h2></header>
+        ${pay(0,"الدفعة الأولى",true)}${pay(1,"الدفعة الثانية")}${pay(2,"الدفعة الأخيرة")}
+        <label class="f" style="margin-top:8px">نسبة من المحصّل % (اختياري — تُستحق عند استلام المبالغ فعلياً)<input class="inp num" type="number" min="0" max="100" step="any" name="percent" value="${esc(q?.percent??"")}"></label>
+        <div class="notice" id="qTot" style="margin-top:8px"></div></section>
+      <label class="f">حدود المسؤولية (اختياري — بند إضافي في ملاحظات العرض)<input class="inp" name="liability" value="${esc(q?.liability||"")}"></label>`}
+      <div style="display:flex;gap:8px"><button class="btn primary" type="submit">${q?"حفظ":"حفظ مسودة العرض"}</button></div></form>`);
+  const f = dr.querySelector("#quoteForm"); const num = (n) => { const x = (f.elements[n]?.value||"").trim(); return x==="" ? null : +fromHindi(x); };
+  const tot = () => { const el = dr.querySelector("#qTot"); if (!el) return; const t = [0,1,2].reduce((a,i)=>a+(num("pa"+i)||0),0); el.innerHTML = t ? `الإجمالي <b>${sar(t)}</b> ريال — ${esc(tafqeet(t))} ريال سعودي، شامل الضريبة${num("percent")?` + ${num("percent")}% من المحصّل`:""}` : "اكتب مبالغ الدفعات."; };
+  f.oninput = tot; tot();
+  f.onsubmit = async (e) => { e.preventDefault(); const g = (n) => (f.elements[n]?.value||"").trim();
+    let body;
+    if (isA) { const a = {yearly:num("a_yearly"), semi:num("a_semi"), quarterly:num("a_quarterly"), monthly:num("a_monthly")};
+      if (!Object.values(a).some(x=>x)) { toast("اكتب قيمة الاشتراك لخيار سداد واحد على الأقل"); return; }
+      const cyc = g("cycle"); const cyKey = {annual:"yearly", semiannual:"semi", quarterly:"quarterly", monthly:"monthly"}[cyc]; if (!a[cyKey]) { toast(`خيار السداد المقترح «${CYCLE[cyc]}» بلا قيمة`); return; }
+      body = {annual:{...a, cycle:cyc, activity:g("activity")||null, pct:num("pct"), limits:Object.fromEntries(["consult","sessions","visits","meetings","writings"].map(k=>[k, num("l_"+k)]))}}; }
+    else { const payments = [0,1,2].map(i => ({label:["الدفعة الأولى","الدفعة الثانية","الدفعة الأخيرة"][i], amount:num("pa"+i), trigger: i===0 ? "signing" : g("pt"+i), date: i===0 ? null : (g("pd"+i)||null)})).filter(p => p.amount);
+      if (!payments.length || !payments.some(p=>p.trigger==="signing")) { toast("اكتب مبلغ الدفعة الأولى على الأقل"); return; }
+      if (payments.some(p => p.trigger==="date" && !p.date)) { toast("حدّد تاريخ الدفعة التي تُستحق بتاريخ"); return; }
+      body = {service:g("service"), stages:ORD.map((_,i)=>g("st"+i)).filter(Boolean), payments, percent:num("percent"), liability:g("liability")||null}; }
+    const base = {no, kind:isA?"annual":"case", subject:g("subject"), validUntil:g("validUntil"), date:q?.date||todayKey(), ...body};
+    if (q) { if (await quotePatch(l, q.no, {...base, state:"draft", approvedBy:null, approvedAt:null, backNote:q.backNote||null}, `عدّل العرض ${q.no}`)) { closeDrawer(); toast("حُفظ — يحتاج اعتماداً من جديد"); } return; }
+    const nq = {...base, state:"draft", createdAt:new Date().toISOString(), createdBy:S.uid||null};
+    if (await leadPatch(l, {quotes:[...(l.quotes||[]), nq], status: l.status==="lost" ? "quoted" : (l.status||"new")==="new" ? "quoted" : l.status}, `كتب العرض ${no}`)) { closeDrawer(); toast(crmOwner() ? "حُفظت المسودة — اعتمدها ثم سلّمها" : "حُفظت المسودة — أرسلها للاعتماد"); } };
+}
+
+// ---- the quotation document: the office's form, its {{places}} filled, unused stages, payments and notes taken out
+async function buildQuoteDocx(l, q){
+  const isA = q.kind==="annual"; const g = isA ? "__TPL_QUOTE_ANNUAL" : "__TPL_QUOTE_CASE";
+  const bytes = await loadBlob({file: isA ? "tpl/quote_annual.js" : "tpl/quote_case.js", global: g});
+  const JSZip = await needZip(); const zip = await JSZip.loadAsync(bytes);
+  const xml = await zip.file("word/document.xml").async("string");
+  const doc = new DOMParser().parseFromString(xml, "application/xml");
+  const ts = () => [...doc.getElementsByTagNameNS(W_NS, "t")];
+  const up = (n, tag) => { while (n && !(n.namespaceURI===W_NS && n.localName===tag)) n = n.parentNode; return n; };
+  const has = (key) => ts().find(t => t.textContent.includes(`{{${key}}}`));
+  const drop = (key, tag) => { for (;;) { const t = has(key); if (!t) return; const n = up(t, tag); if (!n) return; n.parentNode.removeChild(n); } };
+  const money = (x) => x!=null && x!=="" ? sar(+x) : "—";
+  const V = {"اسم_العميل":l.name, "التاريخ":fmtD(q.date), "السجل_التجاري":l.idNo||"—", "رقم_العرض":q.no, "الممثل_النظامي":l.rep||l.name, "صالح_حتى":fmtD(q.validUntil), "رقم_التواصل":l.phone||"—", "موضوع_العرض":q.subject||""};
+  if (isA) { const a = q.annual||{}; const L = a.limits||{};
+    Object.assign(V, {"النشاط":a.activity||l.activity||"—", "الاشتراك_سنوي":money(a.yearly), "الاشتراك_نصف_سنوي":money(a.semi), "الاشتراك_ربع_سنوي":money(a.quarterly), "الاشتراك_شهري":money(a.monthly),
+      "نسبة_التقاضي":a.pct!=null?String(a.pct):"—", "خيار_السداد":CYCLE[a.cycle]||"", "حد_الاستشارات":L.consult??"—", "حد_الكتابات":L.writings??"—", "حد_المراجعات":L.visits??"—", "حد_الجلسات":L.sessions??"—", "حد_الاجتماعات":L.meetings??"—"}); }
+  else { const P = q.payments||[]; const p2 = P.find(p=>p.label==="الدفعة الثانية"), p3 = P.find(p=>p.label==="الدفعة الأخيرة"); const p1 = P.find(p=>p.trigger==="signing");
+    if (!p2) drop("الدفعة_الثانية", "tr"); if (!p3) drop("الدفعة_الأخيرة", "tr"); if (q.percent==null) drop("نسبة_المحصل", "tr"); if (!q.liability) drop("حدود_المسؤولية", "p");
+    for (let i = (q.stages||[]).length; i < 5; i++) drop(`المرحلة_${i+1}`, "p");
+    const t = qTotal(q);
+    Object.assign(V, {"نوع_المعاملة":TRACK[l.track||"courts"]?.l||"", "وصف_الخدمة":q.service||"", "الدفعة_الأولى":money(p1?.amount), "الدفعة_الثانية":money(p2?.amount), "استحقاق_الدفعة_الثانية":p2?trigText(p2):"", "الدفعة_الأخيرة":money(p3?.amount), "استحقاق_الدفعة_الأخيرة":p3?trigText(p3):"",
+      "نسبة_المحصل":q.percent!=null?String(q.percent):"", "حدود_المسؤولية":q.liability||"", "إجمالي_الأتعاب":money(t), "إجمالي_الأتعاب_كتابة":tafqeet(t)});
+    (q.stages||[]).forEach((s,i) => { V[`المرحلة_${i+1}`] = s; }); }
+  // an amount left empty reads «—», without «ريال» after it
+  for (const t of ts()) if (t.textContent.includes("{{")) t.textContent = t.textContent.replace(/\{\{([^{}]+)\}\}( ريال)?/g, (m, k, r) => V[k]==="—" ? "—" : (V[k] != null ? String(V[k]) : "") + (r || ""));
+  zip.file("word/document.xml", new XMLSerializer().serializeToString(doc));
+  return zip.generateAsync({type:"uint8array", compression:"DEFLATE"});
+}
+async function quoteDoc(l, q, btn){
+  if (btn) btn.disabled = true;
+  try { const bytes = await buildQuoteDocx(l, q); const name = safeName(`عرض سعر ${q.no} — ${l.name}`) + ".docx";
+    const F = window.diwanCloudFiles;
+    if (F?.uploadFile) { const dir = `Law Firm/العملاء المحتملون/${safeName(l.name)}`;
+      try { await F.uploadFile(dir, new Blob([bytes]), name, {conflict:"replace", bytes}); toast(`حُفظ في ملفات المكتب: ${dir}`); } catch { toast("تعذّر الحفظ في ملفات المكتب — يُنزَّل بدلاً من ذلك"); } }
+    await downloadBytes(bytes, name); }
+  catch (e) { toast(e?.msg || "تعذّر إنشاء ملف العرض"); }
+  finally { if (btn) btn.disabled = false; }
+}
+
+// ---- the client agreed (owner): the file opens in its track with its fee agreement from the quotation
+const netOf = (x) => x==null ? null : Math.round(+x / (1 + VAT_RATE) * 100) / 100;
+function quoteAccept(l, q){
+  if (!crmOwner()) { toast("البدء بالعمل لمالك المكتب"); return; }
+  if (q.kind==="annual") {
+    openContractEdit(null); S.crmPending = {lead:l.id, no:q.no};
+    const f = document.querySelector("#ctForm"); if (!f) return; const a = q.annual||{};
+    const cy = {annual:["annual","yearly"], semiannual:["semiannual","semi"], quarterly:["quarterly","quarterly"], monthly:["monthly","monthly"]}[a.cycle||"monthly"];
+    const set = (n, v) => { const el = f.elements[n]; if (!el) return; if (el.type==="checkbox") el.checked = !!v; else el.value = v ?? ""; };
+    set("client", l.name); set("phone", l.phone); set("start", todayKey()); set("months", "12"); set("billing", cy[0]); set("billAt", "start"); set("amount", netOf(a[cy[1]])); set("vat", true); set("autoRenew", true);
+    set("scope", `حسب العرض ${q.no}: ${q.subject||""}`); set("notes", `من العرض ${q.no}`); f.dispatchEvent(new Event("input"));
+    return; }
+  openCaseNew({track:l.track||"courts", client:l.name, clientPhone:l.phone, clientIdNo:l.idNo, defendant:l.opponent||null, subject:q.subject, notes:`من العرض ${q.no}${l.request?"\n"+l.request:""}`});
+  S.crmPending = {lead:l.id, no:q.no};
+  if (!can("billing.edit")) return;
+  const items = (q.payments||[]).map((p,i) => ({id:"q"+i, label:p.label, kind:"fixed", amount:netOf(p.amount), trigger:p.trigger, ...(p.trigger==="date"?{date:p.date}:{})}));
+  if (q.percent!=null) items.push({id:"qp", label:"نسبة من المحصّل", kind:"percent", percent:q.percent, trigger:"collection"});
+  S.feeDraft = S.feeDraft || {}; S.feeDraft["new"] = {contractDate:todayKey(), vat:true, notes:`من العرض ${q.no}`, items, contractNo:q.no, signed:true};
+  const ed = document.querySelector('[data-fed="new"]'); if (ed) { ed.outerHTML = feeEditor("new", S.feeDraft["new"]); bindFeeEditors(); }
+}
+async function crmAfterCreate(id, kind){
+  const P = S.crmPending; S.crmPending = null; if (!P) return;
+  const l = (S.leads||[]).find(x => x.id===P.lead); if (!l) return;
+  const quotes = (l.quotes||[]).map(q => q.no===P.no ? {...q, state:"accepted", acceptedAt:new Date().toISOString()} : q);
+  await leadPatch(l, {quotes, status:"accepted", ...(kind==="engagement" ? {engagementId:id} : {caseId:id}), acceptedAt:new Date().toISOString()}, `وافق العميل على العرض ${P.no} وفُتح ملفه`);
+  setTimeout(() => toast("الدفعة الأولى مستحقة الآن — أصدر الفاتورة وسجّل رقمها من «الفوترة»"), 3200);
+}
+function crmHomePanel(){
+  if (!can("crm.view")) return "";
+  const pend = crmOwner() ? crmPendingApproval() : []; const fol = crmFollowDue(); const inv = can("billing.view") ? crmInvoiceDue() : [];
+  if (!pend.length && !fol.length && !inv.length) return "";
+  const row = (l, txt) => `<div class="task" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:8px 0;border-bottom:1px dashed var(--line)"><button class="btn ghost sm" data-lead="${esc(l.id)}" style="padding-inline:0">${esc(l.name)}</button><span class="sub">${txt}</span></div>`;
+  return `<section class="panel"><header><h2>إدارة العملاء</h2><button class="btn sm" data-nav="crm">الكل</button></header><div class="tasks">
+    ${inv.map(x => row(x.l, `<b style="color:var(--crit)">أصدر فاتورة:</b> ${x.due.map(b=>`${esc(b.label)} ${sar(b.total)} ريال`).join("، ")}`)).join("")}
+    ${pend.map(({l,q}) => row(l, `عرض ${esc(q.no)} بانتظار اعتمادك`)).join("")}
+    ${fol.map(l => row(l, `موعد المتابعة ${fmtD(l.followUp)}`)).join("")}</div></section>`;
+}
+function bindCrm(){
+  const L = () => (S.leads||[]).find(x => x.id===S.leadId);
+  const nb = $("leadNew"); if (nb) nb.onclick = () => openLeadForm(null);
+  const q = $("crmQ"); if (q) q.oninput = () => { S.crmUI.q = q.value; clearTimeout(bindCrm.t); bindCrm.t = setTimeout(() => { const p = q.selectionStart; render(); const n = $("crmQ"); if (n) { n.focus(); n.setSelectionRange(p, p); } }, 250); };
+  document.querySelectorAll("[data-crmf]").forEach(b => b.onclick = () => { S.crmUI.f = b.dataset.crmf; render(); });
+  document.querySelectorAll("[data-lead]").forEach(b => b.onclick = (e) => { if (e.target.closest("button:not([data-lead]),a")) return; S.leadId = b.dataset.lead; S.view = "crm"; render(); window.scrollTo({top:0}); });
+  const bk = document.querySelector("[data-leadback]"); if (bk) bk.onclick = () => { S.leadId = null; render(); };
+  const l = L(); if (!l) return;
+  const qOf = (no) => (l.quotes||[]).find(x => x.no===no);
+  const on = (sel, fn) => document.querySelectorAll(sel).forEach(b => b.onclick = () => fn(b));
+  on("[data-leadedit]", () => openLeadForm(l));
+  on("[data-leadcf]", () => leadConflict(l));
+  on("[data-leadlost]", () => { const dr = openDrawer(`<header><div><span class="lbl">لم يوافق العميل</span><h2 style="margin-top:4px">${esc(l.name)}</h2></div><button class="btn sm" data-close>إغلاق</button></header>
+      <form class="body" id="lostForm"><label class="f">السبب<select class="inp" name="why">${["السعر","التوقيت","اختار مكتباً آخر","لم يرد","غير ذلك"].map(x=>`<option>${x}</option>`).join("")}</select></label><label class="f">ملاحظة<input class="inp" name="note"></label><button class="btn primary" type="submit">حفظ</button></form>`);
+    dr.querySelector("#lostForm").onsubmit = async (e) => { e.preventDefault(); const why = [e.target.elements.why.value, e.target.elements.note.value.trim()].filter(Boolean).join(" — ");
+      const quotes = (l.quotes||[]).map(x => ["draft","pending","approved","sent"].includes(x.state) ? {...x, state:"declined"} : x);
+      if (await leadPatch(l, {status:"lost", lostReason:why, quotes}, "لم يوافق العميل")) { closeDrawer(); toast("حُفظ"); } }; });
+  on("[data-qnew]", (b) => openQuoteForm(l, b.dataset.qnew, null));
+  on("[data-qedit]", (b) => { const x = qOf(b.dataset.qedit); if (x) openQuoteForm(l, x.kind, x); });
+  on("[data-qsubmit]", async (b) => { if (await quotePatch(l, b.dataset.qsubmit, {state:"pending", submittedAt:new Date().toISOString(), submittedBy:S.uid||null}, `أرسل العرض ${b.dataset.qsubmit} للاعتماد`)) toast("أُرسل لمالك المكتب للاعتماد"); });
+  on("[data-qapprove]", async (b) => { if (!crmOwner()) return; if (await quotePatch(l, b.dataset.qapprove, {state:"approved", approvedBy:S.uid||null, approvedAt:new Date().toISOString(), backNote:null}, `اعتمد العرض ${b.dataset.qapprove}`)) toast("اعتُمد — نزّل ملف العرض وسلّمه للعميل"); });
+  on("[data-qback]", (b) => { const dr = openDrawer(`<header><div><span class="lbl">إعادة العرض للتعديل</span><h2 style="margin-top:4px">${esc(b.dataset.qback)}</h2></div><button class="btn sm" data-close>إغلاق</button></header>
+      <form class="body" id="qbForm"><label class="f">ما المطلوب تعديله<textarea class="inp" name="note" required style="min-height:80px"></textarea></label><button class="btn primary" type="submit">أعده</button></form>`);
+    dr.querySelector("#qbForm").onsubmit = async (e) => { e.preventDefault(); if (await quotePatch(l, b.dataset.qback, {state:"draft", backNote:e.target.elements.note.value.trim()}, `أعاد العرض ${b.dataset.qback} للتعديل`)) { closeDrawer(); toast("أُعيد للتعديل"); } }; });
+  on("[data-qdoc]", (b) => { const x = qOf(b.dataset.qdoc); if (x) quoteDoc(l, x, b); });
+  on("[data-qsent]", async (b) => { if (await quotePatch(l, b.dataset.qsent, {state:"sent", sentAt:todayKey()}, `سلّم العرض ${b.dataset.qsent} للعميل`)) { if (!l.followUp || l.followUp < todayKey()) await leadPatch(l, {followUp:addDays(todayKey(), 3)}); toast("سُجّل التسليم — المتابعة بعد 3 أيام"); } });
+  on("[data-qrenew]", async (b) => { if (await quotePatch(l, b.dataset.qrenew, {validUntil:addDays(todayKey(), Q_VALID_DAYS)}, `جدّد صلاحية العرض ${b.dataset.qrenew}`)) toast("جُدّدت الصلاحية"); });
+  on("[data-qaccept]", (b) => { const x = qOf(b.dataset.qaccept); if (x) quoteAccept(l, x); });
+}
+
 // ---------- the cloud copy's files (Supabase, site/cloud/cloud-files.js — integrate_cloud.py adds this part to the cloud build only):
 // the page hands its own PDF and Word readers to the cloud store, so a file's text is extracted the way the Diwan already reads
 // Arabic documents; and the documents tab takes files dropped on it (or picked on a phone) into the case's folder.
@@ -8274,7 +8564,7 @@ if (WIDE) { try { WIDE.addEventListener("change", () => { if (S.view==="home") r
 function homeRail(){ const r = $("homeRail"); if (!r || !WIDE?.matches) return; [...document.querySelectorAll("[data-rail]")].sort((a,b)=>a.dataset.rail-b.dataset.rail).forEach(p => r.append(p)); }
 function afterRender(){
   homeRail();
-  bindLibrary(); bindLearn(); bindStaff(); bindBackup(); if (S.view==="sync") { bindNajizSync(); bindMoenSync(); } bindMemos(); bindKpi(); bindContracts2(); bindPortal(); bindConflict(); bindChecklists(); bindTrust(); bindTime(); bindComms(); bindTasks(); bindWork(); bindAssist(); bindNzPolicy(); bindOdLink(); bindStale(); bindRequests(); bindExtract(); bindLedger(); bindNzReqs(); bindFiling(); bindTracks(); nzEnforce();
+  bindLibrary(); bindLearn(); bindStaff(); bindBackup(); if (S.view==="sync") { bindNajizSync(); bindMoenSync(); } bindMemos(); bindKpi(); bindContracts2(); bindPortal(); bindConflict(); bindChecklists(); bindTrust(); bindTime(); bindComms(); bindTasks(); bindWork(); bindAssist(); bindNzPolicy(); bindOdLink(); bindStale(); bindRequests(); bindExtract(); bindLedger(); bindNzReqs(); bindFiling(); bindTracks(); bindCrm(); nzEnforce();
   document.querySelectorAll("[data-ftab]").forEach(b=>b.onclick=()=>{ S.finTab=b.dataset.ftab; render(); });
   document.querySelectorAll("[data-onb]").forEach(b=>b.onclick=()=>{ const [v,t] = b.dataset.onb.split(":"); if (t) S.learnTab = t; go(v); });
   const ox = $("onbHide"); if (ox) ox.onclick = () => { try { localStorage.setItem("dq.onb", "1"); } catch {} S.onbHidden = true; render(); };
@@ -8616,6 +8906,7 @@ const H = (location.hash||"").slice(1); if (NAV_ALL.some(n=>n[0]===H)) S.view = 
   db.doc("memos/_hints").onSnapshot(d => { S.memoDismiss = d.exists ? (d.data().dismissed||{}) : {}; mr(); }, () => {});
   const xr = () => { if (!S.loaded) return; renderNav(); soft(["memos","home","case","kpi","finance","client","portal","retainers"])(); };
   db.collection("tasks").onSnapshot(q => { S.tasks = q.docs.map(d=>({...d.data(), id:d.id})); xr(); }, () => {});
+  db.collection("leads").onSnapshot(q => { S.leads = q.docs.map(d=>({...d.data(), id:d.id})); if (S.loaded) { renderNav(); soft(["home","crm"])(); } }, () => {});
   db.collection("requests").onSnapshot(q => { S.reqs = q.docs.map(d=>({...d.data(), id:d.id})); refreshNames(S.reqs.map(r=>r.by).filter(Boolean)); if (S.loaded) { renderNav(); soft(["home","portal"])(); } }, () => {});
   db.collection("time").onSnapshot(q => { S.time = q.docs.map(d=>({...d.data(), id:d.id})); xr(); }, () => {});
   db.collection("comms").onSnapshot(q => { S.comms = q.docs.map(d=>({...d.data(), id:d.id})); xr(); }, () => {});
