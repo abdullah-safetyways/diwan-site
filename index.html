@@ -574,7 +574,7 @@ function vHome(){
   const evs = allEvents().filter(e => isFuture(e.start));
   const hear = evs.filter(e => daysUntil(e.start) <= 7 && !roleClass(e.role));
   const deadlines = evs.filter(e => roleClass(e.role)==="deadline" && daysUntil(e.start) <= 30);
-  const open = allCases().filter(c=>OPEN.has(c.status));
+  const open = allCases().filter(c=>OPEN.has(c.status) && trackOf(c)!=="exec" && !caseFinished(c)); const execOpen = allCases().filter(c=>trackOf(c)==="exec" && c.status!=="closed").length;
   const awaitingDeed = allCases().filter(c => c.status==="judged" && !(c.judgment||{}).receivedDate && !(c.judgment||{}).deadline && !(c.sessions||[]).some(s=>roleClass(s.role)==="deadline" && isFuture(s.start)));
   const next14 = evs.filter(e => daysUntil(e.start) <= 14);
   const rev = reviewList().length;
@@ -582,7 +582,7 @@ function vHome(){
   const brief = myBriefOnly() ? S.myBrief : S.meta?.brief;
   return header("صباح العمل", todayLine(), `<button class="btn primary" id="briefBtn">${icon("spark")}إحاطة اليوم</button>`) + onboardPanel() + nzDuePanel() + crmHomePanel() + reqHomePanel() + `
   <div class="kpis five">
-    <button class="kpi" data-nav="cases"><span class="v num">${open.length}</span><span class="l">قضية مفتوحة</span></button>
+    <button class="kpi" data-nav="cases"><span class="v num">${open.length}</span><span class="l">قضية مفتوحة</span>${execOpen?`<span class="sub">و${execOpen} طلب تنفيذ قائم</span>`:""}</button>
     <button class="kpi ${memosLate?"alert":memosSoon.length?"warn":""}" data-nav="memos"><span class="v num">${memosSoon.length}</span><span class="l">مذكرة تُقدَّم خلال ١٤ يوماً${memosLate?` (${memosLate} متأخرة)`:""}</span></button>
     <button class="kpi" data-nav="agenda"><span class="v num">${hear.length}</span><span class="l">جلسة خلال ٧ أيام</span></button>
     <button class="kpi ${deadlines.length?"alert":""}" data-nav="agenda"><span class="v num">${deadlines.length}</span><span class="l">موعد نهائي خلال ٣٠ يوماً</span></button>
@@ -611,15 +611,17 @@ function filteredCases(){
   const q = S.q.trim().toLowerCase();
   let list = allCases();
   if (S.trackF) list = list.filter(c => trackOf(c)===S.trackF);
-  if (S.filter==="open") list = list.filter(c=>OPEN.has(c.status)); else if (S.filter==="mine") list = list.filter(c=>(c.assignees||[]).includes(S.uid)); else if (S.filter!=="all") list = list.filter(c=>c.status===S.filter);
+  if (S.filter==="open") list = list.filter(c=>OPEN.has(c.status) && !caseFinished(c)); else if (S.filter==="mine") list = list.filter(c=>(c.assignees||[]).includes(S.uid)); else if (S.filter!=="all") list = list.filter(c=>c.status===S.filter);
   if (q) list = list.filter(c => [c.caseNo,(c.otherCaseNos||[]).join(" "),c.title,c.client,c.court,c.circuit,c.subject,c.plaintiff,c.defendant,c.caseType,trackLabel(c),(c.odoo||{}).projectName].join(" ").toLowerCase().includes(q));
   return list.sort((a,b)=> (a.nextSession && isFuture(a.nextSession) ? a.nextSession : "9").localeCompare(b.nextSession && isFuture(b.nextSession) ? b.nextSession : "9") || (b.lastSession||"").localeCompare(a.lastSession||""));
 }
 function vCases(){
+  const allCases = () => allCasesAll().filter(c => trackOf(c)!=="exec");
+  const execN = allCasesAll().filter(c => trackOf(c)==="exec" && c.status!=="closed").length;
   const counts = {}; for (const c of allCases()) counts[c.status]=(counts[c.status]||0)+1;
   const mineN = S.uid ? allCases().filter(c=>(c.assignees||[]).includes(S.uid)).length : 0;
-  const F = [...(mineN?[["mine","قضاياي",mineN]]:[]),["open","المفتوحة",allCases().filter(c=>OPEN.has(c.status)).length],["active","قيد المرافعة",counts.active||0],["judged","صدر حكم",counts.judged||0],["appeal","استئناف",counts.appeal||0],["supreme","عليا",counts.supreme||0],["execution","تنفيذ",counts.execution||0],["archive","غير محدّثة",counts.archive||0],["closed","منتهية",counts.closed||0],["all","الكل",allCases().length]];
-  return header("القضايا", `${allCases().length} قضية · ${engagements().length} عقود سنوية · ${perCaseContracts().length} عقود بالمعاملة`, `${can("cases.edit")?`<button class="btn" id="cfOpen">${icon("shield")}فحص تعارض</button> `:""}<button class="btn primary" id="caseNew" ${S.canWrite?"":"disabled"}>+ قضية جديدة</button>`) + `
+  const F = [...(mineN?[["mine","قضاياي",mineN]]:[]),["open","المفتوحة",allCases().filter(c=>OPEN.has(c.status) && !caseFinished(c)).length],["active","قيد المرافعة",counts.active||0],["judged","صدر حكم",counts.judged||0],["appeal","استئناف",counts.appeal||0],["supreme","عليا",counts.supreme||0],["execution","تنفيذ",counts.execution||0],["archive","غير محدّثة",counts.archive||0],["closed","منتهية",counts.closed||0],["all","الكل",allCases().length]];
+  return header("القضايا", `${allCases().length} قضية · ${execN} طلب تنفيذ قائم · ${engagements().length} عقود سنوية · ${perCaseContracts().length} عقود بالمعاملة`, `${can("cases.edit")?`<button class="btn" id="cfOpen">${icon("shield")}فحص تعارض</button> `:""}<button class="btn primary" id="caseNew" ${S.canWrite?"":"disabled"}>+ قضية جديدة</button>`) + `
   <div class="toolbar"><label class="search">${icon("search")}<input id="q" type="search" placeholder="رقم القضية، الخصم، الموكل، المحكمة، النوع…" value="${esc(S.q)}" autocomplete="off" aria-label="بحث في القضايا"></label></div>
   <div class="chips" style="margin-bottom:14px">${F.map(([k,l,n])=>`<button class="chip" data-filter="${k}" aria-pressed="${S.filter===k}">${l} <span class="num muted">${n}</span></button>`).join("")}</div>
   ${trackUnclearPanel()}
@@ -8208,9 +8210,11 @@ try { S.tsecOpen = JSON.parse(localStorage.getItem("dq.tsec")||"{}") || {}; } ca
 function trackSections(list){
   const keep = S.filter; if (S.filter!=="mine") S.filter = "all"; const every = filteredCases(); S.filter = keep;
   const done = every.filter(c => caseFinished(c)).sort((a,b)=>(caseLastDate(b)||"").localeCompare(caseLastDate(a)||""));
-  const live = list.filter(c => !caseFinished(c));
+  // execution requests are not open cases: their own section, whatever status button is chosen (closed ones go to «المنتهية»)
+  const live = list.filter(c => !caseFinished(c) && trackOf(c)!=="exec");
+  const execL = every.filter(c => !caseFinished(c) && trackOf(c)==="exec");
   const sec = (k, title, n, sub, body) => `<details class="tsec" data-tsec="${k}" ${tsecOpen(k)?"open":""}><summary><span class="tsec-t">${esc(title)}</span><span class="pill num">${n}</span><span class="sub tsec-s">${esc(sub)}</span><span class="chev">${icon("chev")}</span></summary>${body}</details>`;
-  const out = TRACKS.map(t => { const L = live.filter(c => trackOf(c)===t.k); if (!L.length) return "";
+  const out = [...TRACKS.filter(t => t.k!=="exec"), TRACK.exec].map(t => { const L = t.k==="exec" ? execL : live.filter(c => trackOf(c)===t.k); if (!L.length) return "";
     return sec(t.k, t.l, L.length, t.hint, `<div class="table-wrap">${t.k==="courts" ? caseTable(L) : trackTable(L, t.k)}</div>`); }).join("");
   const doneBody = done.length ? `<div class="table-wrap"><table><thead><tr><th>الرقم</th><th>الملف</th><th class="hide-sm">المسار / الجهة</th><th>آخر جلسة</th><th class="hide-sm">لماذا هي هنا</th></tr></thead><tbody>${done.map(c => { const why = caseFinished(c); const ld = caseLastDate(c);
       return `<tr class="clickable" data-case="${esc(c.id)}"><td class="mono">${esc(c.caseNo||"—")}</td><td><div class="ttl">${esc(c.title)}</div><div class="sub">${esc(c.client||"")}</div></td>
@@ -8221,6 +8225,8 @@ function trackSections(list){
 function bindTrackSections(){
   document.querySelectorAll("details.tsec").forEach(d => d.addEventListener("toggle", () => { S.tsecOpen = {...(S.tsecOpen||{}), [d.dataset.tsec]: d.open}; try { localStorage.setItem("dq.tsec", JSON.stringify(S.tsecOpen)); } catch {} }));
 }
+// every file, whatever the cases page counts (it leaves execution requests out of the open cases)
+const allCasesAll = () => allCases();
 
 // ---------- إدارة العملاء (v54): a prospective client is recorded, checked for conflicts, and given a quotation written on one of
 // the office's two approved forms (per matter, annual retainer). Whoever may see client management writes it; the office owner
