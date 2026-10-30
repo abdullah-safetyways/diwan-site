@@ -369,7 +369,7 @@ h2.sec{font-size:1.02rem;margin:0;display:flex;gap:8px;align-items:baseline}
 .team-item:first-of-type{border-top:0}
 tr[aria-selected="true"] td{background:var(--accent-soft)}
 .pill.track{background:var(--brass-soft);color:var(--brass)}
-.tsecs{display:grid;gap:12px}
+.tsecs{display:grid;gap:12px;grid-template-columns:minmax(0,1fr)}.tsec{min-width:0}
 .tsec>summary{list-style:none;display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;cursor:pointer;padding:10px 4px;color:var(--ink)}
 .tsec>summary::-webkit-details-marker{display:none}.tsec>summary::marker{content:""}
 .tsec .tsec-t{font-family:var(--f-display);font-weight:700;font-size:1.08rem}
@@ -749,7 +749,7 @@ function vCases(){
   const F = [...(mineN?[["mine","قضاياي",mineN]]:[]),["open","المفتوحة",allCases().filter(c=>OPEN.has(c.status) && !caseFinished(c)).length],["active","قيد المرافعة",counts.active||0],["judged","صدر حكم",counts.judged||0],["appeal","استئناف",counts.appeal||0],["supreme","عليا",counts.supreme||0],["execution","تنفيذ",execN + (counts.execution||0)],["archive","غير محدّثة",counts.archive||0],["closed","منتهية",allCasesAll().filter(c=>caseFinished(c)).length],["all","الكل",allCasesAll().length]];
   return header("القضايا", `${allCases().length} قضية · ${execN} طلب تنفيذ قائم · ${engagements().length} عقود سنوية · ${perCaseContracts().length} عقود بالمعاملة`, `${can("cases.edit")?`<button class="btn" id="cfOpen">${icon("shield")}فحص تعارض</button> `:""}<button class="btn primary" id="caseNew" ${S.canWrite?"":"disabled"}>+ قضية جديدة</button>`) + `
   <div class="toolbar"><label class="search">${icon("search")}<input id="q" type="search" placeholder="رقم القضية، الخصم، الموكل، المحكمة، النوع…" value="${esc(S.q)}" autocomplete="off" aria-label="بحث في القضايا"></label></div>
-  <div class="chips" style="margin-bottom:14px">${F.map(([k,l,n])=>`<button class="chip" data-filter="${k}" aria-pressed="${S.filter===k}">${l} <span class="num muted">${n}</span></button>`).join("")}</div>
+  <div class="chips" style="margin-bottom:14px">${F.filter(([k,,n]) => n || ["open","all","mine"].includes(k) || S.filter===k).map(([k,l,n])=>`<button class="chip" data-filter="${k}" aria-pressed="${S.filter===k}">${l} <span class="num muted">${n}</span></button>`).join("")}</div>
   ${trackUnclearPanel()}
   <div id="caseTable" class="tsecs">${caseTable()}</div>`;
 }
@@ -2238,7 +2238,7 @@ function openCaseEdit(c){
   trackBindForm(dr);
 }
 function openCaseNew(pre){
-  S.crmPending = null;
+  S.crmPending = null; S.reqPending = null;
   S.feeDraft = S.feeDraft || {}; delete S.feeDraft["new"];
   const fees = can("billing.edit");
   const dr = openDrawer(`<header><div><span class="lbl">قضية جديدة</span><h2 style="margin-top:4px">إضافة قضية إلى الديوان</h2><div class="sub">إن كانت مقيدة في ناجز فأدخل رقمها؛ يكمل التحديث من ناجز جلساتها وأحكامها. دعوى لم تُرفع بعد؟ <button type="button" class="btn ghost sm" style="padding:0" id="toFiling">افتحها من «رفع الدعوى»</button>.${fees?"":" ويحرّر مالك المكتب عقد أتعابها بالمعاملة من «استكمال البيانات»."}</div></div><button class="btn sm" data-close>إغلاق</button></header>
@@ -2262,7 +2262,7 @@ function openCaseNew(pre){
     const tracked = ["plaintiff","defendant","subject","court","circuit","client","ourSide","caseType","status","stage","caseNo"]; const src = Object.fromEntries(tracked.filter(k=>v[k]).map(k=>[k,"user"]));
     const fz = cleanFees(S.feeDraft["new"]||{items:[]});
     const doc = { id, kind:"case", caseNo:v.caseNo, otherCaseNos:v.otherCaseNos, title: v.title || (v.plaintiff&&v.defendant ? `${v.plaintiff} ضد ${v.defendant}` : v.client), plaintiff:v.plaintiff, defendant:v.defendant, subject:v.subject, court:v.court, circuit:v.circuit, client:v.client, ourSide:v.ourSide, caseType:v.caseType,
-      track:v.track||null, trackDue:v.trackDue||null, clientPhone:v.clientPhone, clientIdNo:v.clientIdNo, clientCity:v.clientCity, urgent:v.urgent, engagementId:v.engagementId||null, status:v.status, stage:v.stage, sessions:[], tasks:[], invoices:[], odoo:null, notes:e.target.elements.notes.value,
+      track:v.track && v.track!==trackOf({...v, track:null, source:"manual"}) ? v.track : null, trackDue:v.trackDue||null, clientPhone:v.clientPhone, clientIdNo:v.clientIdNo, clientCity:v.clientCity, urgent:v.urgent, engagementId:v.engagementId||null, status:v.status, stage:v.stage, sessions:[], tasks:[], invoices:[], odoo:null, notes:e.target.elements.notes.value,
       execNo:v.execNo, execAmount:v.execAmount, execCollected:v.execCollected,
       assignees: [...new Set([...(v.assignees||[]), ...(S.me?.uid && !S.me.owner ? [S.me.uid] : [])])],
       fees: fz.items.length ? fz : null, source:"manual", fieldSources:src, editedFields:[...Object.keys(src), ...(v.title?["title"]:[])], needsReview:[], reviewNotes:[], related:S.trackFrom && S.cases.get(S.trackFrom) ? [S.trackFrom] : [], parentId:S.trackFrom && S.cases.get(S.trackFrom) ? S.trackFrom : null, sessionCount:0, nextSession:null, lastSession:null, importedAt:new Date().toISOString(),
@@ -5152,7 +5152,7 @@ const cfTokens = (s) => cfNorm(s).split(" ").filter(t => t.length > 1 && !CF_STO
 // every name the office has dealt with, with the side it was on
 function conflictIndex(){
   const out = [];
-  const add = (name, role, side, c, extra={}) => { const n = cfNorm(name); if (!n || cfNever(n)) return; out.push({name, n, toks: cfTokens(name), role, side, caseId: c.id, caseNo: c.caseNo || null, title: c.title || c.client || "", status: c.status, deleted: !!c.deleted, kind: c.kind || "case", ...extra}); };
+  const add = (name, role, side, c, extra={}) => { name = cfStrip(name); const n = cfNorm(name); if (!n) return; out.push({name, n, toks: cfTokens(name), role, side, caseId: c.id, caseNo: c.caseNo || null, title: c.title || c.client || "", status: c.status, deleted: !!c.deleted, kind: c.kind || "case", ...extra}); };
   for (const c of S.cases.values()) {
     if (c.kind === "merged") continue;
     if (c.kind === "engagement") { if (c.client) add(c.client, "موكل (عقد سنوي)", "ours", c); continue; }
@@ -5167,7 +5167,7 @@ function conflictIndex(){
 }
 // a name matches when it is the same name, or when most of its meaningful words are there, or when the identity number is the same
 function conflictSearch(q, idx){
-  idx = idx || conflictIndex(); const qn = cfNorm(q); if (!qn || cfNever(qn)) return []; const qt = cfTokens(q); const qid = String(q || "").replace(/\D/g, "");
+  idx = idx || conflictIndex(); q = cfStrip(q); const qn = cfNorm(q); if (!qn) return []; const qt = cfTokens(q); const qid = String(q || "").replace(/\D/g, "");
   const hits = [];
   for (const e of idx) {
     let score = 0;
@@ -6837,8 +6837,8 @@ function openReqDecide(r, act){
     const status = act==="accept" ? "accepted" : act==="reject" ? "rejected" : act==="done" ? "done" : "new";
     const decision = act==="reopen" ? null : {by:S.uid||null, at:new Date().toISOString(), note:note||null};
     try { await S.db.doc("requests/"+r.id).update({status, decision}); await logAction(r.caseId||null, `${t}: ${r.title}${note?" — "+note:""}`); closeDrawer(); toast(act==="reject"?"رُفض الطلب وأُبلغ الممثل بالسبب":act==="accept"?"قُبل الطلب":act==="done"?"أُنجز الطلب":"أُعيد فتح الطلب");
-      if (act==="accept" && r.type!=="action") { S.reqPending = r.id; const co = portalCompanies().find(x => (r.engagementId && x.eng===r.engagementId) || (!r.engagementId && keyEq(x.key, r.clientKey)));
-        openCaseNew(r.type==="work" ? {client:co?.name||r.client||"", engagementId:r.engagementId||co?.eng||"", track:"work", caseType:"عمل غير قضائي", stage:"مطلوب", subject:r.title, title:r.title, notes:`طلب الممثل: ${r.title}${r.details?"\n"+r.details:""}`} : r.type==="exec" ? {client:co?.name||r.client||"", caseType:"تنفيذ", court:"محكمة التنفيذ بالرياض", stage:"تنفيذ", engagementId:r.engagementId||co?.eng||"", subject:r.title, notes:`طلب الممثل: ${r.title}${r.details?"\n"+r.details:""}`} : {client:co?.name||r.client||"", engagementId:r.engagementId||co?.eng||"", subject:r.title, notes:`طلب الممثل: ${r.title}${r.details?"\n"+r.details:""}`}); }
+      if (act==="accept" && r.type!=="action") { const co = portalCompanies().find(x => (r.engagementId && x.eng===r.engagementId) || (!r.engagementId && keyEq(x.key, r.clientKey)));
+        openCaseNew(r.type==="work" ? {client:co?.name||r.client||"", engagementId:r.engagementId||co?.eng||"", track:"work", caseType:"عمل غير قضائي", stage:"مطلوب", subject:r.title, title:r.title, notes:`طلب الممثل: ${r.title}${r.details?"\n"+r.details:""}`} : r.type==="exec" ? {client:co?.name||r.client||"", track:"exec", caseType:"تنفيذ", court:"محكمة التنفيذ بالرياض", stage:"تنفيذ", engagementId:r.engagementId||co?.eng||"", subject:r.title, notes:`طلب الممثل: ${r.title}${r.details?"\n"+r.details:""}`} : {client:co?.name||r.client||"", engagementId:r.engagementId||co?.eng||"", subject:r.title, notes:`طلب الممثل: ${r.title}${r.details?"\n"+r.details:""}`}); S.reqPending = r.id; }
       else render(); } catch { toast("تعذّر الحفظ ولم يُحفظ التغيير — تحقق من الاتصال ثم أعد المحاولة"); } };
 }
 function reqHomePanel(){
@@ -8262,9 +8262,9 @@ function trackBindForm(dr){
   trackApply(f);
 }
 // a deadline written on the file becomes a task with that date, so it shows in «عملي» and on the home page
-async function trackDueTask(id, title, due, prev){
+async function trackDueTask(id, title, due, prev, doc){
   if (!due || due===prev || !S.db || !can("tasks.edit")) return;
-  const c = S.cases.get(id); const tid = "tk"+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
+  const c = S.cases.get(id) || doc; const tid = "tk"+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
   try { await S.db.doc("tasks/"+tid).set({id:tid, caseId:id, client:c?.client||null, clientKey:c?.client ? normName(c.client) : null, engagementId:c?.engagementId||null,
       title:`موعد: ${title}`, due, assignee:S.uid||null, priority:"high", note:null, files:[], shared:false, done:false, createdAt:new Date().toISOString(), createdBy:S.uid||null, via:"track"});
     await logAction(id, `أضاف موعداً: ${fmtD(due)}`); } catch {}
@@ -8273,7 +8273,7 @@ async function trackDueTask(id, title, due, prev){
 // link (written with it), so neither of these holds up opening it.
 async function trackAfterCreate(id, doc){
   const pid = doc.parentId; S.trackFrom = null;
-  trackDueTask(id, doc.title || doc.subject || "", doc.trackDue, null);
+  trackDueTask(id, doc.title || doc.subject || "", doc.trackDue, null, doc);
   const p = pid && S.cases.get(pid); if (!p) return;
   patchCase(p, {related:[...new Set([...(p.related||[]), id])]}, `حُوِّل إلى ${TRACK[doc.track||"courts"]?.l||""}: ${doc.title||""}`).catch(() => {});
 }
@@ -8288,7 +8288,7 @@ function openTrackConvert(c){
   dr.querySelectorAll("[data-convto]").forEach(b => b.onclick = () => {
     const t = b.dataset.convto; closeDrawer();
     openCaseNew({track:t, ...(t==="exec" ? {stage:"تنفيذ", status:"execution"} : {status:"active"}), client:c.client, plaintiff:c.plaintiff, defendant:c.defendant, ourSide:c.ourSide, clientPhone:c.clientPhone, clientIdNo:c.clientIdNo, clientCity:c.clientCity,
-      engagementId:c.engagementId||"", caseType:t==="exec"?"تنفيذ":t==="settle"?"تراضي/صلح":(c.caseType && c.caseType!=="عمل غير قضائي" ? c.caseType : null), subject:c.subject,
+      engagementId:c.engagementId||"", caseType:t==="exec"?"تنفيذ":t==="settle"?"تراضي/صلح":(c.caseType && !["عمل غير قضائي","تراضي/صلح","تنفيذ"].includes(c.caseType) ? c.caseType : null), subject:c.subject,
       title:c.title, parentId:c.id, notes:`نشأ عن: ${c.caseNo?c.caseNo+" — ":""}${c.title}`});
   });
 }
@@ -8318,7 +8318,7 @@ function trackNext(c){
   const t = todayKey(); const ds = [];
   if (c.nextSession && isFuture(c.nextSession)) ds.push(dkey(D(c.nextSession)));
   if (c.trackDue && c.trackDue >= t) ds.push(c.trackDue);
-  const tk = (typeof tasksOf==="function" ? tasksOf(c) : []).find(x => !x.done && x.due); if (tk) ds.push(tk.due);
+  for (const x of (typeof tasksOf==="function" ? tasksOf(c) : [])) if (!x.done && x.due && x.due >= t) ds.push(x.due);
   return ds.sort()[0] || null;
 }
 function trackTable(list, k = S.trackF){
@@ -8343,7 +8343,7 @@ function caseLastDate(c){
 }
 function caseFinished(c){
   if (c.status==="closed") return "closed";
-  if (!["courts","admin"].includes(trackOf(c))) return null;
+  if (!["courts","admin"].includes(trackOf(c)) || ["appeal","supreme"].includes(c.status)) return null;
   if (c.nextSession && isFuture(c.nextSession)) return null;
   const ref = caseLastDate(c) || c.najiz?.filedAt?.slice?.(0,10) || c.filing?.registeredAt?.slice?.(0,10) || (c.createdAt||"").slice(0,10) || null;
   return ref && ref < addDays(todayKey(), -FINISH_DAYS) ? "stale" : null;
@@ -8394,8 +8394,10 @@ const crmFollowDue = () => leadsAll().filter(l => ["new","quoted"].includes(l.st
 function crmInvoiceDue(){
   const bi = billingItems(); const out = [];
   for (const l of leadsAll()) { if (l.status!=="accepted") continue;
-    const items = bi.filter(b => (l.caseId && b.src==="case" && b.id===l.caseId) || (l.engagementId && b.src==="contract" && b.id===l.engagementId));
-    const due = items.filter(b => b.state==="due"); if (due.length) out.push({l, due}); }
+    // only the first payment of what was accepted: later payments are the billing page's ordinary business
+    const items = bi.filter(b => (l.caseId && b.src==="case" && b.id===l.caseId && b.key==="q0") || (l.engagementId && b.src==="contract" && b.id===l.engagementId));
+    const first = items.sort((a,b)=>(a.due||"").localeCompare(b.due||""))[0];
+    if (first && first.state==="due") out.push({l, due:[first]}); }
   return out;
 }
 function nextQuoteNo(){
@@ -8405,6 +8407,7 @@ function nextQuoteNo(){
 }
 const qTotal = (q) => (q.payments||[]).reduce((a,p)=>a+(+p.amount||0),0);
 const trigText = (p) => p.trigger==="date" ? (p.date ? fmtD(p.date) : "") : (TRIG[p.trigger] || "");
+const leadNow = (l) => (S.leads||[]).find(x => x.id===l.id) || l;
 async function leadPatch(l, patch, action){
   if (!S.db) { toast("قاعدة البيانات غير متاحة"); return false; }
   try { await S.db.doc("leads/"+l.id).update({...patch, updatedAt:new Date().toISOString(), updatedBy:S.uid||null}); if (action) await logAction(null, `${action} — ${l.name}`);
@@ -8414,7 +8417,7 @@ async function leadPatch(l, patch, action){
   catch { toast("تعذّر الحفظ ولم يُحفظ التغيير — تحقق من الاتصال ثم أعد المحاولة"); return false; }
 }
 async function quotePatch(l, no, patch, action){
-  const quotes = (l.quotes||[]).map(q => q.no===no ? {...q, ...patch} : q);
+  const quotes = (leadNow(l).quotes||[]).map(q => q.no===no ? {...q, ...patch} : q);
   return leadPatch(l, {quotes}, action);
 }
 
@@ -8428,7 +8431,7 @@ function vCrm(){
   const all = leadsAll(); const q = (UI.q||"").trim();
   const F = [["open","المفتوحة",l=>["new","quoted"].includes(l.status||"new")],["pending","بانتظار اعتمادك",l=>(l.quotes||[]).some(x=>x.state==="pending")],["accepted","صاروا موكلين",l=>l.status==="accepted"],["lost","لم يوافقوا",l=>l.status==="lost"],["all","الكل",()=>true]];
   const fx = (F.find(x=>x[0]===UI.f)||F[0])[2];
-  const list = all.filter(fx).filter(l => !q || [l.name,l.request,l.phone,l.idNo,l.opponent].join(" ").includes(q));
+  const qn = arNorm(fromHindi(q)); const list = all.filter(fx).filter(l => !qn || arNorm([l.name,l.request,l.phone,l.idNo,l.opponent].join(" ")).includes(qn));
   const inv = crmInvoiceDue();
   return header("إدارة العملاء", "العملاء المحتملون وعروض الأسعار — يكتب العرضَ الفريق، ويعتمده مالك المكتب", `<button class="btn primary" id="leadNew" ${S.canWrite?"":"disabled"}>+ عميل محتمل</button>`) + `
   ${inv.length ? `<div class="notice warn" style="margin-bottom:12px"><b>فواتير مطلوب إصدارها:</b> ${inv.map(x=>`${esc(x.l.name)} — ${x.due.map(b=>`${esc(b.label)} ${sar(b.total)} ريال`).join("، ")}`).join(" · ")} <button class="btn sm" data-nav="finance">الفوترة</button></div>` : ""}
@@ -8464,14 +8467,14 @@ function vLead(l){
 }
 function quoteRow(l, q){
   const s = qState(q); const [lbl, cls] = Q_ST[s]; const id = esc(q.no); const own = crmOwner(); const ro = S.canWrite ? "" : "disabled";
-  const amt = q.kind==="annual" ? [["سنوي",q.annual?.yearly],["نصف سنوي",q.annual?.semi],["ربع سنوي",q.annual?.quarterly],["شهري",q.annual?.monthly]].filter(x=>x[1]).map(([k,v])=>`${k} ${sar(v)}`).join(" · ") + (q.annual?.pct?` · أتعاب التقاضي ${q.annual.pct}%`:"")
-    : `${sar(qTotal(q))} ريال${q.percent?` + ${q.percent}% من المحصّل`:""}`;
+  const amt = q.kind==="annual" ? [["سنوي",q.annual?.yearly],["نصف سنوي",q.annual?.semi],["ربع سنوي",q.annual?.quarterly],["شهري",q.annual?.monthly]].filter(x=>x[1]).map(([k,v])=>`${k} ${sar(v)}`).join(" · ") + (q.annual?.pct?` · أتعاب التقاضي ${esc(q.annual.pct)}%`:"")
+    : `${sar(qTotal(q))} ريال${q.percent?` + ${esc(q.percent)}% من المحصّل`:""}`;
   const acts = [];
   if (["draft"].includes(s)) { acts.push(`<button class="btn sm" data-qedit="${id}" ${ro}>تعديل</button>`); acts.push(own ? `<button class="btn sm primary" data-qapprove="${id}" ${ro}>اعتمد العرض</button>` : `<button class="btn sm primary" data-qsubmit="${id}" ${ro}>أرسله للاعتماد</button>`); }
   if (s==="pending") { if (own) { acts.push(`<button class="btn sm primary" data-qapprove="${id}" ${ro}>اعتمد العرض</button>`); acts.push(`<button class="btn sm" data-qback="${id}" ${ro}>أعده للتعديل</button>`); } else acts.push(`<span class="sub">ينتظر اعتماد مالك المكتب</span>`); }
   if (["approved","sent"].includes(s)) { acts.push(`<button class="btn sm" data-qdoc="${id}">ملف العرض (Word)</button>`); if (s==="approved") acts.push(`<button class="btn sm" data-qsent="${id}" ${ro}>سُلّم للعميل</button>`);
-    if (own) acts.push(`<button class="btn sm primary" data-qaccept="${id}" ${ro}>وافق العميل — ابدأ العمل</button>`); else acts.push(`<span class="sub">البدء بعد موافقة العميل لمالك المكتب</span>`); }
-  if (s==="expired") acts.push(`<button class="btn sm" data-qrenew="${id}" ${ro}>جدّد الصلاحية ${Q_VALID_DAYS} يوماً</button>`);
+    if (own && l.status!=="accepted") acts.push(`<button class="btn sm primary" data-qaccept="${id}" ${ro}>وافق العميل — ابدأ العمل</button>`); else acts.push(`<span class="sub">البدء بعد موافقة العميل لمالك المكتب</span>`); }
+  if (s==="expired") acts.push(own ? `<button class="btn sm" data-qrenew="${id}" ${ro}>جدّد الصلاحية ${Q_VALID_DAYS} يوماً</button>` : `<button class="btn sm" data-qedit="${id}" ${ro}>عدّله وأرسله للاعتماد من جديد</button>`);
   if (["accepted"].includes(s)) acts.push(`<button class="btn sm" data-qdoc="${id}">ملف العرض (Word)</button>`);
   return `<div class="task" style="display:grid;gap:6px;padding:10px 0;border-bottom:1px dashed var(--line)">
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><span class="mono small">${esc(q.no)}</span><b>${esc(Q_KIND[q.kind])}</b><span class="pill ${cls}">${lbl}</span><span class="sub">${esc(q.subject||"")}</span></div>
@@ -8494,7 +8497,7 @@ function openLeadForm(l){
   dr.querySelector("#leadForm").onsubmit = async (e) => { e.preventDefault(); if (!S.db) { toast("قاعدة البيانات غير متاحة"); return; }
     const f = e.target; const g = (n) => (f.elements[n]?.value||"").trim();
     const data = {name:g("name"), idNo:fromHindi(g("idNo"))||null, rep:g("rep")||null, activity:g("activity")||null, phone:fromHindi(g("phone"))||null, email:g("email")||null, source:g("source")||null, request:g("request")||null, track:g("track")||"courts", opponent:g("opponent")||null, followUp:g("followUp")||null};
-    if (l) { const changed = data.name!==l.name || (data.opponent||null)!==(l.opponent||null); if (await leadPatch(l, {...data, ...(changed ? {conflict:null} : {})}, "عدّل بيانات عميل محتمل")) { closeDrawer(); toast(changed && l.conflict ? "حُفظ — أعد فحص التعارض بعد تغيير الاسم" : "حُفظ"); } return; }
+    if (l) { const changed = data.name!==l.name || (data.opponent||null)!==(l.opponent||null) || (data.idNo||null)!==(l.idNo||null); if (await leadPatch(l, {...data, ...(changed ? {conflict:null} : {})}, "عدّل بيانات عميل محتمل")) { closeDrawer(); toast(changed && l.conflict ? "حُفظ — أعد فحص التعارض بعد تغيير الاسم" : "حُفظ"); } return; }
     const id = newId("L"); const doc = {id, ...data, status:"new", quotes:[], conflict:null, createdAt:new Date().toISOString(), createdBy:S.uid||null};
     try { await S.db.doc("leads/"+id).set(doc); await logAction(null, `أضاف عميلاً محتملاً — ${data.name}`); closeDrawer(); S.leadId = id; S.leadWait = Date.now(); S.view = "crm"; render(); toast("أُضيف — افحص التعارض ثم اكتب العرض"); } catch { toast("تعذّرت الإضافة"); } };
 }
@@ -8512,7 +8515,7 @@ function openQuoteForm(l, kind, q){
   const val = q?.validUntil || addDays(todayKey(), Q_VALID_DAYS);
   const pay = (i, lbl, fixedTrig) => { const p = q?.payments?.[i] || {}; return `<div class="fee-row"><span style="font-weight:600">${lbl}</span>
       <input class="inp num" type="number" min="0" step="any" name="pa${i}" value="${esc(p.amount??"")}" placeholder="المبلغ (ريال، شامل الضريبة)" aria-label="مبلغ ${lbl}">
-      ${fixedTrig ? `<span class="sub">عند توقيع العرض</span>` : `<select class="inp" name="pt${i}" aria-label="استحقاق ${lbl}">${Object.entries(TRIG).filter(([k])=>!["signing","collection"].includes(k)).map(([k,t])=>`<option value="${k}" ${(p.trigger||"judgment")===k?"selected":""}>${t}</option>`).join("")}</select>`}
+      ${fixedTrig ? `<span class="sub">عند توقيع العرض</span>` : `<select class="inp" name="pt${i}" aria-label="استحقاق ${lbl}">${Object.entries(TRIG).filter(([k])=>!["signing","collection"].includes(k)).map(([k,t])=>`<option value="${k}" ${(p.trigger||(COURT_TRACKS.has(l.track||"courts")?"judgment":"date"))===k?"selected":""}>${t}</option>`).join("")}</select>`}
       ${fixedTrig ? "" : `<input class="inp" type="date" name="pd${i}" value="${esc(p.date||"")}" aria-label="تاريخ استحقاق ${lbl} (إن كان بتاريخ)">`}</div>`; };
   const dr = openDrawer(`<header><div><span class="lbl">${q?"تعديل عرض":"عرض سعر جديد"} · ${esc(no)}</span><h2 style="margin-top:4px">${esc(Q_KIND[isA?"annual":"case"])} — ${esc(l.name)}</h2><div class="sub">النموذج المعتمد للمكتب. المبالغ يكتبها المكتب، وكلها شاملة ضريبة القيمة المضافة. يُعتمد العرض من مالك المكتب قبل تسليمه.</div></div><button class="btn sm" data-close>إغلاق</button></header>
     <form class="body" id="quoteForm">
@@ -8550,7 +8553,8 @@ function openQuoteForm(l, kind, q){
     const base = {no, kind:isA?"annual":"case", subject:g("subject"), validUntil:g("validUntil"), date:q?.date||todayKey(), ...body};
     if (q) { if (await quotePatch(l, q.no, {...base, state:"draft", approvedBy:null, approvedAt:null, backNote:q.backNote||null}, `عدّل العرض ${q.no}`)) { closeDrawer(); toast("حُفظ — يحتاج اعتماداً من جديد"); } return; }
     const nq = {...base, state:"draft", createdAt:new Date().toISOString(), createdBy:S.uid||null};
-    if (await leadPatch(l, {quotes:[...(l.quotes||[]), nq], status: l.status==="lost" ? "quoted" : (l.status||"new")==="new" ? "quoted" : l.status}, `كتب العرض ${no}`)) { closeDrawer(); toast(crmOwner() ? "حُفظت المسودة — اعتمدها ثم سلّمها" : "حُفظت المسودة — أرسلها للاعتماد"); } };
+    const cur = leadNow(l); if ((cur.quotes||[]).some(x => x.no===no)) nq.no = nextQuoteNo();   // the number was taken meanwhile
+    if (await leadPatch(l, {quotes:[...(cur.quotes||[]), nq], status: l.status==="lost" ? "quoted" : (l.status||"new")==="new" ? "quoted" : l.status}, `كتب العرض ${no}`)) { closeDrawer(); toast(crmOwner() ? "حُفظت المسودة — اعتمدها ثم سلّمها" : "حُفظت المسودة — أرسلها للاعتماد"); } };
 }
 
 // ---- the quotation document: the office's form, its {{places}} filled, unused stages, payments and notes taken out
@@ -8593,7 +8597,7 @@ async function quoteDoc(l, q, btn){
 }
 
 // ---- the client agreed (owner): the file opens in its track with its fee agreement from the quotation
-const netOf = (x) => x==null ? null : Math.round(+x / (1 + VAT_RATE) * 100) / 100;
+const netOf = (x) => x==null ? null : Math.round(+x / (1 + VAT_RATE) * 1e6) / 1e6;   // 1000 → 869.565217 → with VAT 1000.00 (2 places would give 1000.01)
 function quoteAccept(l, q){
   if (!crmOwner()) { toast("البدء بالعمل لمالك المكتب"); return; }
   if (q.kind==="annual") {
@@ -8615,7 +8619,7 @@ function quoteAccept(l, q){
 async function crmAfterCreate(id, kind){
   const P = S.crmPending; S.crmPending = null; if (!P) return;
   const l = (S.leads||[]).find(x => x.id===P.lead); if (!l) return;
-  const quotes = (l.quotes||[]).map(q => q.no===P.no ? {...q, state:"accepted", acceptedAt:new Date().toISOString()} : q);
+  const quotes = (leadNow(l).quotes||[]).map(q => q.no===P.no ? {...q, state:"accepted", acceptedAt:new Date().toISOString()} : q);
   await leadPatch(l, {quotes, status:"accepted", ...(kind==="engagement" ? {engagementId:id} : {caseId:id}), acceptedAt:new Date().toISOString()}, `وافق العميل على العرض ${P.no} وفُتح ملفه`);
   setTimeout(() => toast("الدفعة الأولى مستحقة الآن — أصدر الفاتورة وسجّل رقمها من «الفوترة»"), 3200);
 }
@@ -8644,7 +8648,7 @@ function bindCrm(){
   on("[data-leadlost]", () => { const dr = openDrawer(`<header><div><span class="lbl">لم يوافق العميل</span><h2 style="margin-top:4px">${esc(l.name)}</h2></div><button class="btn sm" data-close>إغلاق</button></header>
       <form class="body" id="lostForm"><label class="f">السبب<select class="inp" name="why">${["السعر","التوقيت","اختار مكتباً آخر","لم يرد","غير ذلك"].map(x=>`<option>${x}</option>`).join("")}</select></label><label class="f">ملاحظة<input class="inp" name="note"></label><button class="btn primary" type="submit">حفظ</button></form>`);
     dr.querySelector("#lostForm").onsubmit = async (e) => { e.preventDefault(); const why = [e.target.elements.why.value, e.target.elements.note.value.trim()].filter(Boolean).join(" — ");
-      const quotes = (l.quotes||[]).map(x => ["draft","pending","approved","sent"].includes(x.state) ? {...x, state:"declined"} : x);
+      const quotes = (leadNow(l).quotes||[]).map(x => ["draft","pending","approved","sent"].includes(x.state) ? {...x, state:"declined"} : x);
       if (await leadPatch(l, {status:"lost", lostReason:why, quotes}, "لم يوافق العميل")) { closeDrawer(); toast("حُفظ"); } }; });
   on("[data-qnew]", (b) => openQuoteForm(l, b.dataset.qnew, null));
   on("[data-qedit]", (b) => { const x = qOf(b.dataset.qedit); if (x) openQuoteForm(l, x.kind, x); });
@@ -8655,12 +8659,14 @@ function bindCrm(){
     dr.querySelector("#qbForm").onsubmit = async (e) => { e.preventDefault(); if (await quotePatch(l, b.dataset.qback, {state:"draft", backNote:e.target.elements.note.value.trim()}, `أعاد العرض ${b.dataset.qback} للتعديل`)) { closeDrawer(); toast("أُعيد للتعديل"); } }; });
   on("[data-qdoc]", (b) => { const x = qOf(b.dataset.qdoc); if (x) quoteDoc(l, x, b); });
   on("[data-qsent]", async (b) => { if (await quotePatch(l, b.dataset.qsent, {state:"sent", sentAt:todayKey()}, `سلّم العرض ${b.dataset.qsent} للعميل`)) { if (!l.followUp || l.followUp < todayKey()) await leadPatch(l, {followUp:addDays(todayKey(), 3)}); toast("سُجّل التسليم — المتابعة بعد 3 أيام"); } });
-  on("[data-qrenew]", async (b) => { if (await quotePatch(l, b.dataset.qrenew, {validUntil:addDays(todayKey(), Q_VALID_DAYS)}, `جدّد صلاحية العرض ${b.dataset.qrenew}`)) toast("جُدّدت الصلاحية"); });
+  on("[data-qrenew]", async (b) => { if (!crmOwner()) return; if (await quotePatch(l, b.dataset.qrenew, {validUntil:addDays(todayKey(), Q_VALID_DAYS)}, `جدّد صلاحية العرض ${b.dataset.qrenew}`)) toast("جُدّدت الصلاحية"); });
   on("[data-qaccept]", (b) => { const x = qOf(b.dataset.qaccept); if (x) quoteAccept(l, x); });
 }
 
-// parties that are never a conflict, whichever side they stood on: the Public Prosecution (and its former name)
-const cfNever = (n) => /(^| )النيابه العامه( |$)|هييه التحقيق والادعاء العام/.test(cfNorm(n));
+// parties that are never a conflict, whichever side they stood on: the Public Prosecution (and its former name), with the city
+// written after it («النيابة العامة بالرياض»); what else the field names stays
+const cfStrip = (s) => String(s||"").replace(/(?:ال)?نياب[ةه] العام[ةه](?:\s+(?:بمنطق[ةه]\s+|في\s+|ب)\S+)?|هيئ[ةه] التحقيق والادعاء العام(?:\s+ب\S+)?/g, " ")
+  .replace(/\s*[،,]\s*(?=[،,]|$)/g, "").replace(/^[\s،,\-–—\/]+|[\s،,\-–—\/]+$/g, "").replace(/^و\s+|\s+و$/g, "").replace(/\s+/g, " ").trim();
 // ---------- the cloud copy's files (Supabase, site/cloud/cloud-files.js — integrate_cloud.py adds this part to the cloud build only):
 // the page hands its own PDF and Word readers to the cloud store, so a file's text is extracted the way the Diwan already reads
 // Arabic documents; and the documents tab takes files dropped on it (or picked on a phone) into the case's folder.
