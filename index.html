@@ -402,6 +402,29 @@ tr[aria-selected="true"] td{background:var(--accent-soft)}
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 <style>
+.tabs:has(.tab-more){overflow:visible;flex-wrap:wrap}
+.tab-more{position:relative}
+.tab-more>summary{list-style:none;display:inline-flex;align-items:center;gap:4px}
+.tab-more>summary::-webkit-details-marker{display:none}
+.tab-more>summary[aria-selected="true"]{color:var(--accent);border-bottom-color:var(--accent)}
+.tab-more .chev,.ux-rev>summary .chev{display:inline-flex;color:var(--ink-3);transition:transform 150ms cubic-bezier(.23,1,.32,1)}
+.tab-more .chev svg,.ux-rev>summary .chev svg{width:14px;height:14px}
+.tab-more[open] .chev,.ux-rev[open]>summary .chev{transform:rotate(180deg)}
+.tab-menu{position:absolute;top:calc(100% + 4px);inset-inline-end:0;z-index:12;min-width:220px;display:grid;gap:2px;padding:6px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.14);transform-origin:top left}
+.tab-more[open] .tab-menu{animation:uxPop 160ms cubic-bezier(.23,1,.32,1)}
+@keyframes uxPop{from{opacity:0;transform:scale(.96)}}
+.tab-item{display:block;width:100%;text-align:start;border:0;background:none;padding:10px 12px;border-radius:8px;cursor:pointer;color:var(--ink-2);font-weight:600;white-space:nowrap}
+.tab-item[aria-selected="true"]{color:var(--accent);background:var(--accent-soft)}
+@media (hover:hover) and (pointer:fine){.tab-item:hover{background:var(--surface-2)}}
+@media (pointer:coarse){.tab-item{min-height:44px}}
+#main.ux-ov .case-head .facts{display:none}
+.ux-rev>summary{list-style:none;cursor:pointer;flex-wrap:nowrap;align-items:center}
+.ux-rev>summary::-webkit-details-marker{display:none}
+.ux-rev>summary>div{flex:1}
+.ux-rev:not([open]){gap:0}
+@media (prefers-reduced-motion:reduce){.tab-more[open] .tab-menu{animation:none}.tab-more .chev,.ux-rev>summary .chev{transition:none}}
+</style>
+<style>
 /* «اليوم» is a date, not an alarm: red stays for overdue items and deadlines within three days */
 .days.today,.day .dl span.days.today{background:var(--accent);color:var(--accent-ink)}
 ::placeholder{color:var(--ink-3);opacity:1}
@@ -8814,6 +8837,52 @@ toast = function(t){
   const arm = () => { clearTimeout(toast.t); toast.t = setTimeout(hide, ms); };
   el.onmouseenter = () => clearTimeout(toast.t); el.onmouseleave = arm; arm();
 };
+
+// ---------- the cloud site's lighter pages (integrate_cloud.py step 5, cloud build only):
+// (a) a case file shows its six main tabs and puts the rest under «المزيد»; a tab chosen from there takes the «المزيد» place.
+// (b) on «نظرة عامة» the facts line under the title is not repeated — the «بيانات القضية» card beside it says the same.
+// (c) «استكمال البيانات» is a queue: each file folds to its title line and the first is open; saving one opens the next.
+const UX_CASE_MAIN = ["overview", "sessions", "memos", "drafts", "files", "fees"];
+const uxCase0 = vCase;
+vCase = function(){
+  const h = uxCase0(); const a = h.indexOf('<div class="tabs" role="tablist">'); if (a < 0) return h;
+  const s0 = a + '<div class="tabs" role="tablist">'.length, s1 = h.indexOf('</div>', s0);
+  const btns = h.slice(s0, s1).match(/<button class="tab"[\s\S]*?<\/button>/g) || [];
+  const key = (b) => (b.match(/data-tab="([^"]+)"/) || [])[1];
+  const main = btns.filter(b => UX_CASE_MAIN.includes(key(b))), rest = btns.filter(b => !UX_CASE_MAIN.includes(key(b)));
+  if (rest.length < 2) return h;
+  const cur = rest.find(b => key(b) === S.caseTab); const label = (b) => b.replace(/^<button[^>]*>/, "").replace(/<\/button>$/, "");
+  const more = `<details class="tab-more"><summary class="tab" aria-selected="${!!cur}">${cur ? label(cur) : "المزيد"}<span class="chev" aria-hidden="true">${icon("chev")}</span></summary>`
+    + `<div class="tab-menu" role="menu">${rest.map(b => b.replace('class="tab"', 'class="tab-item"').replace('role="tab"', 'role="menuitem"')).join("")}</div></details>`;
+  return h.slice(0, s0) + main.join("") + more + h.slice(s1);
+};
+document.addEventListener("click", (e) => { for (const d of document.querySelectorAll("details.tab-more[open]")) if (!d.contains(e.target)) d.open = false; }, true);
+document.addEventListener("keydown", (e) => { if (e.key !== "Escape") return; const d = document.querySelector("details.tab-more[open]"); if (d) { d.open = false; d.querySelector("summary")?.focus(); } });
+
+// (b) and the review queue's state, after each render
+const uxDistAfter0 = afterRender;
+afterRender = function(){
+  uxDistAfter0();
+  $("main")?.classList.toggle("ux-ov", S.view === "case" && (S.caseTab || "overview") === "overview");
+};
+
+// (c) the queue: the first file open, or the ones the person opened (kept across re-renders while they stay in the list)
+S.uxRevOpen = S.uxRevOpen || null; let uxRevI = 0;
+const uxReview0 = vReview;
+vReview = function(){ uxRevI = 0; return uxReview0(); };
+const uxRevRow0 = revRow;
+revRow = function(c){
+  const h = uxRevRow0(c); const m = h.match(/^<div class="rev">\s*<div class="rev-head">([\s\S]*?)<\/span><\/div>/);
+  if (!m || !h.endsWith("</div>")) return h;
+  const live = S.uxRevOpen && [...S.uxRevOpen].some(id => S.cases.get(id) && reviewList().some(x => x.id === id));
+  const open = live ? S.uxRevOpen.has(c.id) : uxRevI === 0; uxRevI++;
+  return `<details class="rev ux-rev" data-rev-id="${esc(c.id)}"${open ? " open" : ""}><summary class="rev-head">${m[1]}</span><span class="chev" aria-hidden="true">${icon("chev")}</span></summary>`
+    + h.slice(m[0].length, -"</div>".length) + `</details>`;
+};
+document.addEventListener("toggle", (e) => {
+  const d = e.target; if (!(d instanceof Element) || !d.matches("details.ux-rev")) return;
+  S.uxRevOpen = new Set([...document.querySelectorAll("details.ux-rev[open]")].map(x => x.dataset.revId));
+}, true);
 
 // ---------- events
 // the home page's third column exists on wide screens only: its panels move there, and back when the window narrows
