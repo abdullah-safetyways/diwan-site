@@ -3163,7 +3163,6 @@ async function learnFromEdits(onStep){
 }
 // a draft the lawyer edited before saving is a lesson for the next one
 async function recordEdit(c, kind, gen, final){
-  return;
   if (!S.db || !gen || !final) return; const a = arNorm(gen).replace(/\s+/g," "), b = arNorm(final).replace(/\s+/g," ");
   if (a===b || Math.abs(a.length-b.length) + (a.slice(0,400)!==b.slice(0,400) ? 50 : 0) < 30) return;
   try { await S.db.doc("learn/edits/items/"+newId("e")).set({caseId:c.id, kind, gen:fitBytes(gen, 30000), final:fitBytes(final, 30000), at:new Date().toISOString(), by:S.uid||null, used:false}); S.learn.edits = null; } catch {}
