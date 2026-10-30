@@ -382,6 +382,7 @@ tr[aria-selected="true"] td{background:var(--accent-soft)}
 .cdrop.over{border-color:var(--accent);background:var(--surface-2,rgba(0,0,0,.03))}
 </style>
 
+<a class="skip" href="#main">تخطَّ إلى المحتوى</a>
 <div class="app">
   <aside class="rail" aria-label="الأقسام">
     <div class="brand" id="brandBox"><b>ديوان القضايا</b><span id="brandSub"></span></div>
@@ -392,14 +393,61 @@ tr[aria-selected="true"] td{background:var(--accent-soft)}
   </aside>
   <div style="min-width:0">
     <nav class="mob-nav" id="mobNav" aria-label="الأقسام"></nav>
-    <main class="main" id="main">
+    <main class="main" id="main" tabindex="-1">
       <div class="topline"><div><h1>ديوان القضايا</h1><div class="date" id="todayLbl"></div></div></div>
       <div class="panel"><div class="thinking"><span class="dot"></span>تحميل القضايا والجلسات من قاعدة بيانات المكتب…</div>
       <p class="muted small" style="margin:.6rem 0 0">تظهر هنا قضايا المكتب من ناجز وجلساتها وأحكامها بعد اكتمال التحميل. إن لم يكتمل التحميل فافتح الصفحة من حسابك في Claude.</p></div>
     </main>
   </div>
 </div>
-<div class="toast" id="toast" hidden></div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<nav class="ux-bar" id="uxBar" aria-label="الأقسام" hidden></nav>
+<div class="ux-sheet" id="uxSheet" data-open="0" aria-hidden="true" inert><div class="bg" data-ux-close></div><div class="card" role="dialog" aria-modal="true" aria-label="كل الأقسام"><div class="grab" aria-hidden="true"></div><div id="uxSheetBody" class="grid" style="gap:4px"></div></div></div>
+<style>
+.skip{position:fixed;inset-inline-start:12px;top:-64px;z-index:40;background:var(--accent);color:var(--accent-ink);padding:10px 16px;border-radius:8px;font-weight:600;text-decoration:none;transition:top 160ms cubic-bezier(.23,1,.32,1)}
+.skip:focus{top:12px}
+#main:focus{outline:none}
+.search:focus-within,.gsearch:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+.ev .where{grid-column:2;font-size:.82rem;color:var(--ink-3);line-height:1.5}
+[role=link][data-case]:focus-visible,[role=link][data-client]:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+tr[role=link]:focus-visible td{background:var(--accent-soft)}
+.ck-row input[type=checkbox]{width:20px;height:20px;accent-color:var(--accent)}
+.ux-bar,.ux-sheet{display:none}
+@media (max-width:860px){
+  .mob-nav{display:none}
+  .main{padding-block-end:calc(96px + env(safe-area-inset-bottom,0px))}
+  .as-fab{bottom:calc(80px + env(safe-area-inset-bottom,0px))}
+  .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
+  .ux-bar{display:flex;position:fixed;inset-inline:0;bottom:0;z-index:24;background:var(--surface);border-top:1px solid var(--line);padding:4px 6px calc(4px + env(safe-area-inset-bottom,0px))}
+  .uxt{flex:1 1 0;min-width:0;min-height:58px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border:0;background:none;color:var(--ink-3);font-size:.74rem;font-weight:600;border-radius:12px;position:relative;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform 120ms cubic-bezier(.23,1,.32,1),color 120ms ease}
+  .uxt svg{width:22px;height:22px;padding:3px 16px;box-sizing:content-box;border-radius:999px;transition:background-color 160ms ease}
+  .uxt[aria-current=true]{color:var(--accent)}
+  .uxt[aria-current=true] svg{background:var(--accent-soft)}
+  .uxt:active{transform:scale(.96)}
+  .uxt .count{position:absolute;top:2px;inset-inline-start:calc(50% + 8px);min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--warn-soft);color:var(--warn);font-size:.68rem;line-height:18px;text-align:center}
+  .ux-sheet{display:block;position:fixed;inset:0;z-index:30;pointer-events:none}
+  .ux-sheet[data-open="1"]{pointer-events:auto}
+  .ux-sheet .bg{position:absolute;inset:0;background:rgba(21,21,71,.42);opacity:0;transition:opacity 200ms ease}
+  .ux-sheet[data-open="1"] .bg{opacity:1}
+  .ux-sheet .card{position:absolute;inset-inline:0;bottom:0;max-height:min(80vh,660px);overflow:auto;overscroll-behavior:contain;background:var(--surface);border-radius:16px 16px 0 0;padding:8px 16px calc(16px + env(safe-area-inset-bottom,0px));transform:translateY(100%);transition:transform 240ms cubic-bezier(.32,.72,0,1);box-shadow:0 -8px 30px rgba(0,0,0,.2)}
+  .ux-sheet[data-open="1"] .card{transform:none}
+  .ux-sheet .grab{width:36px;height:4px;border-radius:2px;background:var(--line);margin:4px auto 10px}
+  .ux-sheet .nav{min-height:48px;width:100%}
+  @media (hover:none){.ux-sheet .nav:not([aria-current=true]):hover{background:none}}
+  .uxg h3{font-size:.78rem;color:var(--ink-3);margin:14px 4px 4px;font-weight:600}
+  .onb-mini summary{display:flex;justify-content:space-between;align-items:center;gap:12px;cursor:pointer;list-style:none;font-weight:600;min-height:28px}
+  .onb-mini summary::-webkit-details-marker{display:none}
+  .onb-go{display:inline-flex;align-items:center;gap:4px;color:var(--accent);font-size:.88rem}
+  .onb-go svg{width:14px;height:14px}
+  .onb-mini[open] .onb-go{display:none}
+  .onb-mini[open] summary{margin-bottom:8px}
+}
+@media (max-width:860px) and (pointer:coarse){
+  .btn,.chip,.tab{min-height:44px}
+  .ck-row label{min-height:44px;display:inline-flex;align-items:center;gap:6px}
+}
+@media (prefers-reduced-motion:reduce){.skip,.uxt,.uxt svg,.ux-sheet .bg,.ux-sheet .card{transition:none}}
+</style>
 
 <script>
 (() => {
@@ -8627,6 +8675,99 @@ document.addEventListener("submit", async (e) => {
   try { const n = await cloudFiles().linkFile(r, other.id, docKind); await logAction(other.id, `رُبط «${r.name}» من القضية ${c.caseNo || c.id}`);
     toast(n ? `رُبط «${r.name}» بالقضية ${other.caseNo || other.id}` : "مربوط بها من قبل"); e.target.reset(); } catch { toast("تعذّر الربط"); }
 });
+
+// ---------- the cloud site's phone and keyboard layer (integrate_cloud.py adds this part to the cloud build only; claude.ai keeps its page):
+// (1) on a phone the sections are a bottom bar — الرئيسية · الأجندة · القضايا · المهام · المزيد — and «المزيد» opens a sheet with the rest in
+// the rail's groups; the home page leads with the coming hearings and the setup cards fold into one line.
+// (2) a hearing row says where it is: the court, the circuit, «عن بُعد» when the hearing is remote, and which side our client is on.
+// (3) every row that opens a case or a client opens from the keyboard too, and the page has a skip link.
+const UX_TABS = [["home","الرئيسية"],["agenda","الأجندة"],["cases","القضايا"],["memos","المهام"]];
+const UX_PHONE = window.matchMedia ? window.matchMedia("(max-width:860px)") : null;
+const uxPhone = () => !!UX_PHONE?.matches;
+
+// (2) the hearing row: the base row with a muted «where» line under the title
+const uxEvRow0 = evRow;
+evRow = function(e){
+  const row = uxEvRow0(e); const c = e.caseId ? S.cases.get(e.caseId) : null;
+  if (!c || roleClass(e.role)) return row;
+  const bits = [c.court, e.circuit || c.circuit, e.video ? "عن بُعد" : "", c.ourSide ? "موكلنا: " + c.ourSide : ""].filter(Boolean);
+  if (!bits.length) return row;
+  // the line goes in the row's grid right after the title, before what the hearing requires
+  const at = row.lastIndexOf(row.includes(`<div class="req">`) ? `<div class="req">` : `</div>`);
+  return row.slice(0, at) + `<div class="where">${bits.map(esc).join(" · ")}</div>` + row.slice(at);
+};
+
+// (1) the setup cards fold into one line on a phone; the full cards open under it
+const uxOnboard0 = onboardPanel;
+onboardPanel = function(){
+  const h = uxOnboard0(); if (!h || !uxPhone()) return h;
+  const m = h.match(/<p class="sub"[^>]*>(\d+) من (\d+)/); const done = m ? m[1] : "", all = m ? m[2] : "";
+  return `<details class="panel onb-mini" style="margin-bottom:16px"><summary><span>إعداد المكتب${m ? ` <span class="num">${done} من ${all}</span>` : ""}</span><span class="onb-go">أكمل${icon("chev")}</span></summary>${h.replace(/^<section class="panel"[^>]*>/, "<div>").replace(/<\/section>$/, "</div>")}</details>`;
+};
+
+// (1) the bottom bar and the «المزيد» sheet, built from the sections the person may open (the same buttons the top strip carries)
+function uxNavButtons(){
+  const out = new Map();
+  for (const b of document.querySelectorAll("#mobNav [data-nav]")) { const k = b.dataset.nav; if (k==="home" && b.classList.contains("mark")) continue;
+    const n = +(b.querySelector(".count")?.textContent || 0); out.set(k, {k, label: b.querySelector("span:not(.count)")?.textContent || k, n, html: b.outerHTML}); }
+  return out;
+}
+function uxRenderBar(){
+  let bar = $("uxBar"); if (!bar) return;
+  const all = uxNavButtons(); if (!all.size) { bar.hidden = true; uxSheet(false); return; }
+  const cur = S.view==="case" ? "cases" : S.view==="client" ? "clients" : S.view;
+  const tabs = all.size <= 5 ? [...all.keys()] : UX_TABS.map(x => x[0]).filter(k => all.has(k));
+  const rest = [...all.keys()].filter(k => !tabs.includes(k));
+  const short = Object.fromEntries(UX_TABS);
+  const tab = (k) => { const x = all.get(k); const iconHtml = (x.html.match(/<svg[\s\S]*?<\/svg>/) || [""])[0];
+    return `<button type="button" class="uxt" data-nav="${k}" aria-current="${cur===k}">${iconHtml}<span>${esc(short[k] || x.label)}</span>${x.n ? `<span class="count num">${x.n}</span>` : ""}</button>`; };
+  const restN = rest.reduce((a, k) => a + all.get(k).n, 0); const restCur = rest.includes(cur) || cur==="search";
+  bar.innerHTML = tabs.map(tab).join("") + (rest.length ? `<button type="button" class="uxt" id="uxMore" aria-haspopup="dialog" aria-expanded="${!!S.uxSheet}" aria-current="${restCur}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg><span>المزيد</span>${restN ? `<span class="count num">${restN}</span>` : ""}</button>` : "");
+  bar.hidden = false;
+  const groups = NAV_GROUPS.map(g => ({label: g.label || "العمل", items: g.items.filter(k => rest.includes(k)).map(k => all.get(k).html)})).filter(g => g.items.length);
+  $("uxSheetBody").innerHTML = `<button type="button" class="nav" data-nav="search" aria-current="${cur==="search"}">${icon("search")}<span>بحث شامل</span></button>` + groups.map(g => `<div class="uxg"><h3>${esc(g.label)}</h3>${g.items.join("")}</div>`).join("");
+  const more = $("uxMore"); if (more) more.onclick = () => uxSheet(!S.uxSheet);
+}
+function uxSheet(open){
+  const sh = $("uxSheet"); if (!sh) return; const was = !!S.uxSheet; S.uxSheet = !!open;
+  sh.dataset.open = open ? "1" : "0"; sh.setAttribute("aria-hidden", open ? "false" : "true"); sh.inert = !open;
+  const more = $("uxMore"); if (more) more.setAttribute("aria-expanded", String(!!open));
+  if (open) requestAnimationFrame(() => sh.querySelector("[data-nav]")?.focus({preventScroll:true}));
+  else if (was && sh.contains(document.activeElement)) more?.focus({preventScroll:true});
+}
+const uxRenderNav0 = renderNav;
+renderNav = function(){ uxRenderNav0(); uxRenderBar(); };
+
+// (1) on a phone the coming hearings come first on the home page, right under the greeting
+const uxAfter0 = afterRender;
+afterRender = function(){
+  uxAfter0();
+  const main = $("main"); if (!main) return;
+  if (S.view==="home" && uxPhone()) { const top = main.querySelector(":scope > .topline"); const ag = main.querySelector(".cols.home3 > section.panel");
+    if (top && ag) { ag.classList.add("ux-first"); top.after(ag); } }
+  uxKeyRows(main);
+};
+
+// (3) rows that open a case or a client: reachable by Tab, opened by Enter or Space, announced as links
+function uxKeyRows(root){
+  for (const el of root.querySelectorAll("[data-case],[data-client]")) {
+    if (el.matches("a,button,input,select,textarea,label,summary") || el.hasAttribute("tabindex")) continue;
+    el.tabIndex = 0; if (!el.hasAttribute("role")) el.setAttribute("role", "link");
+  }
+}
+document.addEventListener("keydown", (e) => {
+  if (e.key==="Escape" && S.uxSheet) { uxSheet(false); return; }
+  if (e.key!=="Enter" && e.key!==" ") return;
+  const el = e.target; if (!(el instanceof Element) || el.getAttribute("role")!=="link" || !el.matches("[data-case],[data-client]")) return;
+  e.preventDefault(); el.click();
+});
+// in the capture phase: the page's own handler re-renders the sheet's buttons before a bubbling listener would see the click
+document.addEventListener("click", (e) => {
+  if (!S.uxSheet) return;
+  if (e.target.closest("#uxSheetBody [data-nav]") || e.target.closest("[data-ux-close]")) uxSheet(false);
+}, true);
+UX_PHONE?.addEventListener?.("change", () => { if (!uxPhone()) uxSheet(false); if (S.loaded) render(); });
+if (window.MutationObserver) { let q = false; new MutationObserver(() => { if (q) return; q = true; requestAnimationFrame(() => { q = false; const m = $("main"); if (m) uxKeyRows(m); }); }).observe(document.body, {childList:true, subtree:true}); }
 
 // ---------- events
 // the home page's third column exists on wide screens only: its panels move there, and back when the window narrows
