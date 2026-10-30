@@ -6,6 +6,7 @@
 (() => {
   "use strict";
   const CFG = window.__DIWAN_CLOUD || {};
+  const RECOVERY = /type=recovery/.test(location.hash);   // opened from the «نسيت كلمة المرور» e-mail: a new password is chosen after the authenticator code
   const sb = window.supabase.createClient(CFG.url, CFG.key, {auth: {persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storageKey: "diwan.cloud.auth"}});
   const clone = (x) => x === undefined ? undefined : JSON.parse(JSON.stringify(x));
   const T = "docs";
@@ -206,12 +207,24 @@
   const say = (m) => { const e = document.getElementById("dcMsg"); if (e) e.textContent = m; };
   const form = (html, onSubmit) => new Promise((res) => { screen(`<form id="dcF">${html}</form>`); const f = document.getElementById("dcF");
     f.onsubmit = async (e) => { e.preventDefault(); const b = f.querySelector("button[type=submit]"); b.disabled = true; say(""); try { const v = await onSubmit(f); if (v !== false) res(v); } catch (x) { say(x.message || String(x)); } b.disabled = false; }; return f; });
-  const AR = (m) => /Invalid login/i.test(m) ? "البريد أو كلمة المرور غير صحيحة" : /Invalid TOTP|invalid.*code|expired/i.test(m) ? "الرمز غير صحيح أو انتهت صلاحيته" : /rate limit/i.test(m) ? "محاولات كثيرة؛ انتظر قليلاً ثم أعد المحاولة" : m;
+  const AR = (m) => /Invalid login/i.test(m) ? "البريد أو كلمة المرور غير صحيحة" : /Invalid TOTP|invalid.*code|expired/i.test(m) ? "الرمز غير صحيح أو انتهت صلاحيته" : /rate limit|security purposes/i.test(m) ? "محاولات كثيرة؛ انتظر قليلاً ثم أعد المحاولة"
+    : /not authorized|Email address/i.test(m) ? "خدمة البريد الحالية لا تستطيع الإرسال إلى هذا العنوان؛ اطلب من مالك المكتب كلمة مرور مؤقتة" : m;
 
   async function signIn(){
-    await form(`<p>الدخول بحساب المكتب</p><label>البريد الإلكتروني</label><input class="ltr" name="email" type="email" autocomplete="username" required>
-      <label>كلمة المرور</label><input class="ltr" name="pw" type="password" autocomplete="current-password" required><button type="submit">دخول</button>`,
+    const done = form(`<p>الدخول بحساب المكتب</p><label>البريد الإلكتروني</label><input class="ltr" name="email" type="email" autocomplete="username" required>
+      <label>كلمة المرور</label><input class="ltr" name="pw" type="password" autocomplete="current-password" required><button type="submit">دخول</button>
+      <button type="button" class="link" id="dcForgot">نسيت كلمة المرور؟</button>`,
       async (f) => { const {error} = await sb.auth.signInWithPassword({email: f.email.value.trim(), password: f.pw.value}); if (error) throw new Error(AR(error.message)); });
+    // a forgotten password: a link goes to the account's e-mail; opened here, it leads to the authenticator code then a new password
+    const fg = document.getElementById("dcForgot");
+    if (fg) fg.onclick = async () => { const f = document.getElementById("dcF"); const email = (f?.email?.value || "").trim();
+      if (!email) { say("اكتب بريدك في الخانة أولاً ثم اضغط «نسيت كلمة المرور؟»"); f?.email?.focus(); return; }
+      fg.disabled = true; say("");
+      try { const {error} = await sb.auth.resetPasswordForEmail(email, {redirectTo: location.origin + location.pathname}); if (error) throw new Error(AR(error.message));
+        say("إن كان هذا البريد مسجلاً فقد أُرسل إليه رابط لتعيين كلمة مرور جديدة؛ افتحه من هذا الجهاز خلال ساعة."); }
+      catch (x) { say(x.message || String(x)); }
+      fg.disabled = false; };
+    await done;
   }
   async function secondFactor(){
     const {data: lvl} = await sb.auth.mfa.getAuthenticatorAssuranceLevel(); if (lvl?.currentLevel === "aal2") return;
@@ -228,10 +241,11 @@
   function qrSrc(q){ q = String(q || ""); let svg = /^data:/.test(q) ? q.slice(q.indexOf(",") + 1) : q; if (!svg.includes("<")) { try { svg = decodeURIComponent(svg); } catch {} }
     return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg); }
   async function newPassword(){
-    if (!SESSION.user.user_metadata?.must_change_password) return;
-    await form(`<p>كلمة المرور الحالية مؤقتة. اختر كلمة مرور جديدة (12 حرفاً على الأقل).</p><label>كلمة المرور الجديدة</label><input class="ltr" name="a" type="password" autocomplete="new-password" minlength="12" required>
+    if (!RECOVERY && !SESSION.user.user_metadata?.must_change_password) return;
+    await form(`<p>${RECOVERY ? "وصلت من رابط استعادة كلمة المرور." : "كلمة المرور الحالية مؤقتة."} اختر كلمة مرور جديدة (12 حرفاً على الأقل).</p><label>كلمة المرور الجديدة</label><input class="ltr" name="a" type="password" autocomplete="new-password" minlength="12" required>
       <label>تأكيدها</label><input class="ltr" name="b" type="password" autocomplete="new-password" minlength="12" required><button type="submit">حفظ</button>`,
-      async (f) => { if (f.a.value !== f.b.value) throw new Error("كلمتا المرور غير متطابقتين"); const {error} = await sb.auth.updateUser({password: f.a.value, data: {must_change_password: false}}); if (error) throw new Error(AR(error.message)); });
+      async (f) => { if (f.a.value !== f.b.value) throw new Error("كلمتا المرور غير متطابقتين"); const {error} = await sb.auth.updateUser({password: f.a.value, data: {must_change_password: false}}); if (error) throw new Error(AR(error.message));
+        if (RECOVERY) history.replaceState(null, "", location.pathname + location.search); });
   }
   async function boot(){
     if (!document.body) await new Promise(r => document.addEventListener("DOMContentLoaded", r, {once: true}));
