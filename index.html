@@ -367,8 +367,15 @@ h2.sec{font-size:1.02rem;margin:0;display:flex;gap:8px;align-items:baseline}
 .team-item:first-of-type{border-top:0}
 tr[aria-selected="true"] td{background:var(--accent-soft)}
 .pill.track{background:var(--brass-soft);color:var(--brass)}
-.nav-tracks{margin-top:0;margin-bottom:4px}.nav-tracks .nav{font-size:.86rem;padding:6px 8px}
-.nav-tracks .count.muted-count{background:var(--surface-2);color:var(--ink-3)}
+.tsecs{display:grid;gap:12px}
+.tsec>summary{list-style:none;display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;cursor:pointer;padding:10px 4px;color:var(--ink)}
+.tsec>summary::-webkit-details-marker{display:none}.tsec>summary::marker{content:""}
+.tsec .tsec-t{font-family:var(--f-display);font-weight:700;font-size:1.08rem}
+.tsec .tsec-s{flex:1 1 260px;min-width:0}
+.tsec>summary .chev{margin-inline-start:auto;display:inline-flex;color:var(--ink-3);transition:transform .15s}.tsec>summary .chev svg{width:16px;height:16px}
+.tsec:not([open])>summary .chev{transform:rotate(-90deg)}
+.tsec[data-tsec="done"]>summary .tsec-t{color:var(--ink-3)}
+@media (prefers-reduced-motion:reduce){.tsec>summary .chev{transition:none}}
 .cdest{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin-top:8px;font-size:.88rem}
 .cdest label{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
 .cdrop{border:2px dashed var(--line);border-radius:10px;padding:14px;text-align:center;margin:8px 0 10px;color:var(--ink-2)}
@@ -496,7 +503,7 @@ function renderNav(){
   const badge = (k) => k==="crm" ? cc : k==="filing" ? fc : k==="review" ? rc : k==="memos" ? mc : k==="staff" ? jr : k==="portal" ? rq : 0;
   const btn = (k,l,i) => `<button class="nav" data-nav="${k}" aria-current="${S.view===k || (k==="cases"&&S.view==="case") || (k==="clients"&&S.view==="client")}">${icon(i)}<span>${l}</span>${badge(k)?`<span class="count num">${badge(k)}</span>`:""}</button>`;
   const html = items.map(x => btn(...x)).join("");
-  $("nav").innerHTML = navRailHtml(items, btn, badge); bindNavGroups(); bindTrackNav(); $("mobNav").innerHTML = `<button class="nav mark" data-nav="home" aria-label="الرئيسية">${brandSvg("mark")}</button>` + html + `<button class="nav" data-nav="search" aria-current="${S.view==="search"}">${icon("search")}<span>بحث</span></button>`;
+  $("nav").innerHTML = navRailHtml(items, btn, badge); bindNavGroups(); $("mobNav").innerHTML = `<button class="nav mark" data-nav="home" aria-label="الرئيسية">${brandSvg("mark")}</button>` + html + `<button class="nav" data-nav="search" aria-current="${S.view==="search"}">${icon("search")}<span>بحث</span></button>`;
 }
 document.addEventListener("click", (e) => {
   const n = e.target.closest("[data-nav]"); if (n){ go(n.dataset.nav); return; }
@@ -609,20 +616,19 @@ function filteredCases(){
   return list.sort((a,b)=> (a.nextSession && isFuture(a.nextSession) ? a.nextSession : "9").localeCompare(b.nextSession && isFuture(b.nextSession) ? b.nextSession : "9") || (b.lastSession||"").localeCompare(a.lastSession||""));
 }
 function vCases(){
-  const allCases = () => S.trackF && TRACK[S.trackF] ? allCasesAll().filter(c => trackOf(c)===S.trackF) : allCasesAll();
   const counts = {}; for (const c of allCases()) counts[c.status]=(counts[c.status]||0)+1;
   const mineN = S.uid ? allCases().filter(c=>(c.assignees||[]).includes(S.uid)).length : 0;
   const F = [...(mineN?[["mine","قضاياي",mineN]]:[]),["open","المفتوحة",allCases().filter(c=>OPEN.has(c.status)).length],["active","قيد المرافعة",counts.active||0],["judged","صدر حكم",counts.judged||0],["appeal","استئناف",counts.appeal||0],["supreme","عليا",counts.supreme||0],["execution","تنفيذ",counts.execution||0],["archive","غير محدّثة",counts.archive||0],["closed","منتهية",counts.closed||0],["all","الكل",allCases().length]];
-  return header(S.trackF && TRACK[S.trackF] ? TRACK[S.trackF].l : "القضايا", S.trackF && TRACK[S.trackF] ? `${allCases().filter(c=>trackOf(c)===S.trackF).length} ملفاً — ${TRACK[S.trackF].hint}` : `${allCases().length} قضية · ${engagements().length} عقود سنوية · ${perCaseContracts().length} عقود بالمعاملة`, `${can("cases.edit")?`<button class="btn" id="cfOpen">${icon("shield")}فحص تعارض</button> `:""}<button class="btn primary" id="caseNew" ${S.canWrite?"":"disabled"}>+ قضية جديدة</button>`) + `
+  return header("القضايا", `${allCases().length} قضية · ${engagements().length} عقود سنوية · ${perCaseContracts().length} عقود بالمعاملة`, `${can("cases.edit")?`<button class="btn" id="cfOpen">${icon("shield")}فحص تعارض</button> `:""}<button class="btn primary" id="caseNew" ${S.canWrite?"":"disabled"}>+ قضية جديدة</button>`) + `
   <div class="toolbar"><label class="search">${icon("search")}<input id="q" type="search" placeholder="رقم القضية، الخصم، الموكل، المحكمة، النوع…" value="${esc(S.q)}" autocomplete="off" aria-label="بحث في القضايا"></label></div>
-  ${trackChips()}<div class="chips" style="margin-bottom:14px">${F.map(([k,l,n])=>`<button class="chip" data-filter="${k}" aria-pressed="${S.filter===k}">${l} <span class="num muted">${n}</span></button>`).join("")}</div>
+  <div class="chips" style="margin-bottom:14px">${F.map(([k,l,n])=>`<button class="chip" data-filter="${k}" aria-pressed="${S.filter===k}">${l} <span class="num muted">${n}</span></button>`).join("")}</div>
   ${trackUnclearPanel()}
-  <div class="table-wrap" id="caseTable">${caseTable()}</div>`;
+  <div id="caseTable" class="tsecs">${caseTable()}</div>`;
 }
-function caseTable(){
-  const list = filteredCases();
+function caseTable(given){
+  const list = given || filteredCases();
+  if (!given && !S.trackF) return trackSections(list);
   if (!list.length) return `<div class="empty">لا توجد قضايا مطابقة.</div>`;
-  if (S.trackF && S.trackF!=="courts" && TRACK[S.trackF]) return trackTable(list);
   return `<table><thead><tr><th>رقم القضية</th><th>الأطراف</th><th class="hide-sm">المحكمة / الموكل</th><th>الموعد القادم</th><th class="hide-sm">الحالة</th></tr></thead><tbody>${list.map(c=>{ const nx = c.nextSession && isFuture(c.nextSession) ? c.nextSession : null; const rv=(c.needsReview||[]).length && OPEN.has(c.status); return `
     <tr class="clickable" data-case="${esc(c.id)}"><td class="mono">${esc(c.caseNo||"—")}</td>
     <td><div class="ttl">${esc(c.title)}${rv?'<span class="dot-rev" title="بيانات ناقصة"></span>':""}</div><div class="sub">${esc([trackOf(c)!=="courts"?trackLabel(c):null,c.caseType&&c.caseType!=="غير واضح"&&c.caseType!=="عمل غير قضائي"?c.caseType:null,c.subject].filter(Boolean).join(" · "))}</div></td>
@@ -6316,7 +6322,7 @@ try { S.navOpen = JSON.parse(localStorage.getItem("dq.navOpen")||"{}") || {}; } 
 function navRailHtml(items, btn, badge){
   const vis = new Map(items.map(x => [x[0], x])); const curView = S.view==="case" ? "cases" : S.view==="client" ? "clients" : S.view; let out = "";
   for (const g of NAV_GROUPS) { const its = g.items.map(k => vis.get(k)).filter(Boolean); if (!its.length) continue;
-    if (!g.label || its.length===1) { out += its.map(x => btn(...x) + (x[0]==="cases" ? trackNavHtml() : "")).join(""); continue; }
+    if (!g.label || its.length===1) { out += its.map(x => btn(...x)).join(""); continue; }
     const cur = its.some(x => x[0]===curView); const st = (S.navOpen||{})[g.key]; const open = st===undefined ? cur : !!st; const n = its.reduce((a,x) => a + (badge(x[0])||0), 0);
     out += `<details class="navg${cur?" cur":""}" data-navg="${g.key}" data-open="${open?1:0}"${open?" open":""}><summary class="nav" title="${esc(its.map(x=>x[1]).join(" · "))}">${icon(g.icon)}<span>${g.label}</span>${!open&&n?`<span class="count num">${n}</span>`:""}<span class="chev">${icon("chev")}</span></summary><div class="navg-items">${its.map(x => btn(...x)).join("")}</div></details>`; }
   return out;
@@ -8162,17 +8168,6 @@ function bindTracks(){
     if (!COURT_TRACKS.has(k) && !stagesFor(k).includes(c.stage)) patch.stage = stagesFor(k)[0];
     if (await patchCase(c, patch, `حدّد المسار: ${TRACK[k].l}`)) toast(`صار في «${TRACK[k].l}»`); });
 }
-// ---- the side menu: under «القضايا», one list per track the office has, each with the columns that fit it
-function trackNavHtml(){
-  if (!S.loaded) return "";
-  const n = {}; for (const c of allCases()) { if (!OPEN.has(c.status)) continue; const k = trackOf(c); n[k] = (n[k]||0) + 1; }
-  const all = new Set(allCases().map(trackOf)); if (all.size < 2) return "";
-  const cur = S.view==="cases" ? S.trackF : S.view==="case" && S.cases.get(S.caseId) ? (S.trackF ? trackOf(S.cases.get(S.caseId)) : null) : null;
-  return `<div class="navg-items nav-tracks">${TRACKS.filter(t=>all.has(t.k)).map(t=>`<button class="nav" data-navtrack="${t.k}" aria-current="${cur===t.k}"><span>${esc(t.l)}</span>${n[t.k]?`<span class="count num muted-count">${n[t.k]}</span>`:""}</button>`).join("")}</div>`;
-}
-function bindTrackNav(){
-  document.querySelectorAll("[data-navtrack]").forEach(b => b.onclick = () => { S.view = "cases"; S.caseId = null; S.trackF = b.dataset.navtrack; if (S.filter!=="open" && S.filter!=="all") S.filter = "open"; render(); window.scrollTo({top:0}); });
-}
 // the next date of a file outside the courts: its own deadline, a hearing, or its earliest open task
 function trackNext(c){
   const t = todayKey(); const ds = [];
@@ -8181,8 +8176,8 @@ function trackNext(c){
   const tk = (typeof tasksOf==="function" ? tasksOf(c) : []).find(x => !x.done && x.due); if (tk) ds.push(tk.due);
   return ds.sort()[0] || null;
 }
-function trackTable(list){
-  const k = S.trackF; const T = TRACK[k]; const ex = k==="exec";
+function trackTable(list, k = S.trackF){
+  const T = TRACK[k]; const ex = k==="exec";
   const short = T.no.replace(/ \(إن وُجد\)$/, "");
   return `<table><thead><tr><th>${esc(short)}</th><th>الملف</th><th class="hide-sm">${esc(T.forum)} / الموكل</th><th>${ex?"السند / المحصّل":"الموعد القادم"}</th><th class="hide-sm">المرحلة</th></tr></thead><tbody>${list.map(c => { const nx = ex ? null : trackNext(c);
     return `<tr class="clickable" data-case="${esc(c.id)}"><td class="mono">${esc(c.caseNo||"—")}</td>
@@ -8192,8 +8187,40 @@ function trackTable(list){
       : nx ? `<div class="num">${fmtD(nx)}</div>${daysPill(nx)}` : `<span class="muted small">لا يوجد</span>`}</td>
     <td class="hide-sm"><div>${esc(c.stage||"—")}</div><span class="pill ${stCls(c.status)}">${esc(trackStatusLabel(c))}</span></td></tr>`; }).join("")}</tbody></table>`;
 }
-// every file, whatever list is open (vCases counts within the open track)
-const allCasesAll = () => allCases();
+// ---- «القضايا» in sections: one per track the office has, each with its columns and count, folding; then the finished ones.
+// A case before a court (the courts, the Board of Grievances) with no hearing in the past year is finished in effect, whatever its
+// status says; other tracks have no hearings, so only their status closes them. Nothing is written: this is how the list reads.
+const FINISH_DAYS = 365;
+function caseLastDate(c){
+  const ds = (c.sessions||[]).map(s => s.start && dkey(D(s.start))).filter(Boolean);
+  for (const x of [c.lastSession, c.nextSession]) if (x) ds.push(dkey(D(x)));
+  return ds.sort().at(-1) || null;
+}
+function caseFinished(c){
+  if (c.status==="closed") return "closed";
+  if (!["courts","admin"].includes(trackOf(c))) return null;
+  if (c.nextSession && isFuture(c.nextSession)) return null;
+  const ref = caseLastDate(c) || c.najiz?.filedAt?.slice?.(0,10) || c.filing?.registeredAt?.slice?.(0,10) || (c.createdAt||"").slice(0,10) || null;
+  return ref && ref < addDays(todayKey(), -FINISH_DAYS) ? "stale" : null;
+}
+function tsecOpen(k){ const st = (S.tsecOpen||{})[k]; return st===undefined ? k!=="done" : !!st; }
+try { S.tsecOpen = JSON.parse(localStorage.getItem("dq.tsec")||"{}") || {}; } catch { S.tsecOpen = {}; }
+function trackSections(list){
+  const keep = S.filter; if (S.filter!=="mine") S.filter = "all"; const every = filteredCases(); S.filter = keep;
+  const done = every.filter(c => caseFinished(c)).sort((a,b)=>(caseLastDate(b)||"").localeCompare(caseLastDate(a)||""));
+  const live = list.filter(c => !caseFinished(c));
+  const sec = (k, title, n, sub, body) => `<details class="tsec" data-tsec="${k}" ${tsecOpen(k)?"open":""}><summary><span class="tsec-t">${esc(title)}</span><span class="pill num">${n}</span><span class="sub tsec-s">${esc(sub)}</span><span class="chev">${icon("chev")}</span></summary>${body}</details>`;
+  const out = TRACKS.map(t => { const L = live.filter(c => trackOf(c)===t.k); if (!L.length) return "";
+    return sec(t.k, t.l, L.length, t.hint, `<div class="table-wrap">${t.k==="courts" ? caseTable(L) : trackTable(L, t.k)}</div>`); }).join("");
+  const doneBody = done.length ? `<div class="table-wrap"><table><thead><tr><th>الرقم</th><th>الملف</th><th class="hide-sm">المسار / الجهة</th><th>آخر جلسة</th><th class="hide-sm">لماذا هي هنا</th></tr></thead><tbody>${done.map(c => { const why = caseFinished(c); const ld = caseLastDate(c);
+      return `<tr class="clickable" data-case="${esc(c.id)}"><td class="mono">${esc(c.caseNo||"—")}</td><td><div class="ttl">${esc(c.title)}</div><div class="sub">${esc(c.client||"")}</div></td>
+      <td class="hide-sm"><div>${esc(trackLabel(c))}</div><div class="sub">${esc(c.court||"")}</div></td><td class="num">${ld?fmtD(ld):`<span class="muted small">لا جلسات</span>`}</td>
+      <td class="hide-sm">${why==="closed"?`<span class="pill closed">منتهية</span>`:`<span class="pill archive">بلا جلسة منذ سنة</span><div class="sub">${esc(STATUS[c.status]||"")} في الديوان</div>`}</td></tr>`; }).join("")}</tbody></table></div>` : `<div class="empty">لا قضايا منتهية.</div>`;
+  return (out || `<div class="panel empty">لا قضايا مطابقة.</div>`) + sec("done", "المنتهية", done.length, "المنتهية في الديوان، وكل قضية أمام المحاكم أو ديوان المظالم لم تُعقد لها جلسة خلال السنة الماضية ولا جلسة قادمة لها", doneBody);
+}
+function bindTrackSections(){
+  document.querySelectorAll("details.tsec").forEach(d => d.addEventListener("toggle", () => { S.tsecOpen = {...(S.tsecOpen||{}), [d.dataset.tsec]: d.open}; try { localStorage.setItem("dq.tsec", JSON.stringify(S.tsecOpen)); } catch {} }));
+}
 
 // ---------- إدارة العملاء (v54): a prospective client is recorded, checked for conflicts, and given a quotation written on one of
 // the office's two approved forms (per matter, annual retainer). Whoever may see client management writes it; the office owner
@@ -8600,12 +8627,12 @@ if (WIDE) { try { WIDE.addEventListener("change", () => { if (S.view==="home") r
 function homeRail(){ const r = $("homeRail"); if (!r || !WIDE?.matches) return; [...document.querySelectorAll("[data-rail]")].sort((a,b)=>a.dataset.rail-b.dataset.rail).forEach(p => r.append(p)); }
 function afterRender(){
   homeRail();
-  bindLibrary(); bindLearn(); bindStaff(); bindBackup(); if (S.view==="sync") { bindNajizSync(); bindMoenSync(); } bindMemos(); bindKpi(); bindContracts2(); bindPortal(); bindConflict(); bindChecklists(); bindTrust(); bindTime(); bindComms(); bindTasks(); bindWork(); bindAssist(); bindNzPolicy(); bindOdLink(); bindStale(); bindRequests(); bindExtract(); bindLedger(); bindNzReqs(); bindFiling(); bindTracks(); bindCrm(); nzEnforce();
+  bindLibrary(); bindLearn(); bindStaff(); bindBackup(); if (S.view==="sync") { bindNajizSync(); bindMoenSync(); } bindMemos(); bindKpi(); bindContracts2(); bindPortal(); bindConflict(); bindChecklists(); bindTrust(); bindTime(); bindComms(); bindTasks(); bindWork(); bindAssist(); bindNzPolicy(); bindOdLink(); bindStale(); bindRequests(); bindExtract(); bindLedger(); bindNzReqs(); bindFiling(); bindTracks(); bindCrm(); bindTrackSections(); nzEnforce();
   document.querySelectorAll("[data-ftab]").forEach(b=>b.onclick=()=>{ S.finTab=b.dataset.ftab; render(); });
   document.querySelectorAll("[data-onb]").forEach(b=>b.onclick=()=>{ const [v,t] = b.dataset.onb.split(":"); if (t) S.learnTab = t; go(v); });
   const ox = $("onbHide"); if (ox) ox.onclick = () => { try { localStorage.setItem("dq.onb", "1"); } catch {} S.onbHidden = true; render(); };
   setTimeout(applyPerms, 0);
-  const q = $("q"); if (q){ q.oninput = () => { S.q=q.value; $("caseTable").innerHTML = caseTable(); }; }
+  const q = $("q"); if (q){ q.oninput = () => { S.q=q.value; $("caseTable").innerHTML = caseTable(); bindTrackSections(); }; }
   document.querySelectorAll("[data-filter]").forEach(b=>b.onclick=()=>{ S.filter=b.dataset.filter; try{localStorage.setItem("dq.filter",S.filter)}catch{} render(); });
   document.querySelectorAll("[data-role]").forEach(b=>b.onclick=()=>{ S.agendaRole=b.dataset.role; render(); });
   document.querySelectorAll("[data-past]").forEach(b=>b.onclick=()=>{ S.agendaPast=b.dataset.past==="1"; render(); });
