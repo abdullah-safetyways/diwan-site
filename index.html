@@ -5018,7 +5018,7 @@ const cfTokens = (s) => cfNorm(s).split(" ").filter(t => t.length > 1 && !CF_STO
 // every name the office has dealt with, with the side it was on
 function conflictIndex(){
   const out = [];
-  const add = (name, role, side, c, extra={}) => { const n = cfNorm(name); if (!n) return; out.push({name, n, toks: cfTokens(name), role, side, caseId: c.id, caseNo: c.caseNo || null, title: c.title || c.client || "", status: c.status, deleted: !!c.deleted, kind: c.kind || "case", ...extra}); };
+  const add = (name, role, side, c, extra={}) => { const n = cfNorm(name); if (!n || cfNever(n)) return; out.push({name, n, toks: cfTokens(name), role, side, caseId: c.id, caseNo: c.caseNo || null, title: c.title || c.client || "", status: c.status, deleted: !!c.deleted, kind: c.kind || "case", ...extra}); };
   for (const c of S.cases.values()) {
     if (c.kind === "merged") continue;
     if (c.kind === "engagement") { if (c.client) add(c.client, "موكل (عقد سنوي)", "ours", c); continue; }
@@ -5033,7 +5033,7 @@ function conflictIndex(){
 }
 // a name matches when it is the same name, or when most of its meaningful words are there, or when the identity number is the same
 function conflictSearch(q, idx){
-  idx = idx || conflictIndex(); const qn = cfNorm(q); if (!qn) return []; const qt = cfTokens(q); const qid = String(q || "").replace(/\D/g, "");
+  idx = idx || conflictIndex(); const qn = cfNorm(q); if (!qn || cfNever(qn)) return []; const qt = cfTokens(q); const qid = String(q || "").replace(/\D/g, "");
   const hits = [];
   for (const e of idx) {
     let score = 0;
@@ -8514,6 +8514,8 @@ function bindCrm(){
   on("[data-qaccept]", (b) => { const x = qOf(b.dataset.qaccept); if (x) quoteAccept(l, x); });
 }
 
+// parties that are never a conflict, whichever side they stood on: the Public Prosecution (and its former name)
+const cfNever = (n) => /(^| )النيابه العامه( |$)|هييه التحقيق والادعاء العام/.test(cfNorm(n));
 // ---------- the cloud copy's files (Supabase, site/cloud/cloud-files.js — integrate_cloud.py adds this part to the cloud build only):
 // the page hands its own PDF and Word readers to the cloud store, so a file's text is extracted the way the Diwan already reads
 // Arabic documents; and the documents tab takes files dropped on it (or picked on a phone) into the case's folder.
