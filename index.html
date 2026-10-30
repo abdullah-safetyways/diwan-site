@@ -387,8 +387,8 @@ tr[aria-selected="true"] td{background:var(--accent-soft)}
   <aside class="rail" aria-label="الأقسام">
     <div class="brand" id="brandBox"><b>ديوان القضايا</b><span id="brandSub"></span></div>
     <form class="gsearch" id="gForm" role="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="gQ" type="search" placeholder="بحث شامل…" aria-label="بحث شامل في القضايا والجلسات والمستندات"></form>
-    <div id="qaRailBox"></div>
     <nav id="nav" class="grid" style="gap:4px"></nav>
+    <section class="qa-rail" aria-labelledby="qaRailH"><h2 id="qaRailH">مهمة سريعة</h2><div id="qaRailBox"></div></section>
     <div class="rail-foot" id="railFoot"><span>جارٍ الاتصال بقاعدة البيانات…</span></div>
   </aside>
   <div style="min-width:0">
@@ -402,6 +402,25 @@ tr[aria-selected="true"] td{background:var(--accent-soft)}
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 <style>
+.qa-rail{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.qa-rail h2{font-size:.78rem;font-weight:600;color:var(--ink-3);margin:0 4px 6px}
+.qa-rail:has(#qaRailBox:empty){display:none}
+.date-echo{display:block;font-size:.78rem;color:var(--ink-3);margin-top:3px;min-height:1em}
+.st-m{display:none;margin-top:4px}
+@media (max-width:860px){.st-m{display:inline-flex}}
+.ux-kpi-note{margin:8px 0 16px}
+.ux-routine{display:grid;gap:6px;margin-bottom:16px;padding-block:10px;border-inline-start:3px solid var(--brass)}
+.ux-rt{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;justify-content:space-between;font-size:.9rem}
+.ux-rt-acts{display:inline-flex;gap:6px}
+.ev-court+.ev-court{margin-top:10px}
+.ev-court h3{display:flex;align-items:center;gap:6px;margin:2px 10px 4px;font-size:.8rem;font-weight:600;color:var(--brass)}
+.ev-court h3 .num{font-size:.72rem;color:var(--ink-3);font-weight:500}
+.onb-mini summary{display:flex;justify-content:space-between;align-items:center;gap:12px;cursor:pointer;list-style:none;font-weight:600;min-height:28px}
+.onb-mini summary::-webkit-details-marker{display:none}
+.onb-go{display:inline-flex;align-items:center;gap:4px;color:var(--accent);font-size:.88rem}
+.onb-go svg{width:14px;height:14px}
+.onb-mini[open] .onb-go{display:none}
+.onb-mini[open] summary{margin-bottom:8px}
 .tabs:has(.tab-more){overflow:visible;flex-wrap:wrap}
 .tab-more{position:relative}
 .tab-more>summary{list-style:none;display:inline-flex;align-items:center;gap:4px}
@@ -652,7 +671,7 @@ function evRow(e){
 }
 function agendaBlocks(evs){
   const by = new Map(); for (const e of evs){ const k=dkey(D(e.start)); if(!by.has(k)) by.set(k,[]); by.get(k).push(e); }
-  if (!by.size) return `<div class="empty">لا توجد مواعيد في هذه الفترة.</div>`;
+  if (!by.size) return `<div class="empty">لا مواعيد في هذه الفترة. تصل جلسات ناجز بالتحديث من ناجز، ويُضاف الموعد اليدوي من تبويب «الجلسات» في القضية.</div>`;
   return `<div class="agenda">${[...by.entries()].map(([k,list]) => { const d=D(k); return `<div class="day"><div class="dl"><b>${esc(fmtWd.format(d))}</b><span class="num">${fmtDate.format(d)}</span><span>${fmtHijri.format(d)}</span>${daysPill(k)}</div><div>${list.map(evRow).join("")}</div></div>`; }).join("")}</div>`;
 }
 
@@ -1014,7 +1033,7 @@ const KIND_CLS = {"صك حكم":"k-judg","لائحة اعتراضية":"k-obj","
 const KIND_ORDER = ["صك حكم","لائحة اعتراضية","مذكرة","لائحة دعوى","تقرير جلسة","ضبط","خبرة","عقد أتعاب","عقد","وكالة","مالي","مستند","صورة","صوت/فيديو"];
 const KIND_RULES = [["تقرير جلسة",/تقرير\s*(ال)?جلس|تقرير\s*لل?عميل|تقرير\s*للموكل/],["لائحة اعتراضية",/لائحة\s*اعتراض|اللائحة الاعتراضية|لائحة\s*(استئناف|نقض)|استئناف|نقض|التماس/],["مذكرة",/مذكرة|مذكره|رد على|ردود|مرئيات|دفاع|جواب/],["خبرة",/خبير|خبرة/],["صك حكم",/صك|حكم|judg/i],["لائحة دعوى",/لائحة|لائحه|صحيفة|دعوى/],["تقرير جلسة",/تقرير|report/i],["ضبط",/ضبط|محضر/],["عقد أتعاب",/أتعاب|اتعاب|آتعاب/],["وكالة",/وكالة|وكاله|توكيل/],["عقد",/عقد|اتفاقية|contract|agreement/i],["مالي",/فاتورة|فاتوره|سند|إيصال|ايصال|تحويل|كشف حساب|invoice/i]];
 function docKind(name){ for (const [k,rx] of KIND_RULES) if (rx.test(name)) return k; const ext=(name.split(".").pop()||"").toLowerCase(); if (["jpg","jpeg","png","heic","gif","webp"].includes(ext)) return "صورة"; if (["m4a","mp3","mp4","mov","wav"].includes(ext)) return "صوت/فيديو"; return "مستند"; }
-const readable = (f) => /\.(pdf|docx?|pptx?|txt|md|rtf|csv)$/i.test(f.name||"");
+const readable = (f) => /\.(pdf|docx?|pptx?|txt|md|rtf|csv)$/i.test(f.name||"") || (!!window.diwanCloudFiles && /\.(jpe?g|png|gif|webp|tiff?)$/i.test(f.name||""));
 const href = (u) => { const t = String(u ?? "").trim(); if (!/^(https?:|mailto:|tel:)/i.test(t)) return "#"; try { return encodeURI(decodeURI(t)); } catch { return "#"; } };
 const fmtSize = (n) => !n ? "" : n>1048576 ? (n/1048576).toFixed(1)+" م.ب" : Math.max(1,Math.round(n/1024))+" ك.ب";
 const CONF = {high:["مطابقة مؤكدة","ok"],medium:["مجلد الموكل العام","warn"],low:["مطابقة ضعيفة","crit"]};
@@ -1148,7 +1167,7 @@ async function openReader(c, f){
   const load = async () => {
     const t = $("rdText"); if (!t) return;
     try { const txt = await docText(f.uri, `${page}-${page+4}`); const more = /truncated: pages \d+-(\d+) of (\d+)/.exec(txt); const clean = txt.replace(/\[truncated:[^\]]*\]/g,"").trim();
-      if (page===1) t.textContent = clean || "(لا يوجد نص قابل للقراءة في هذا الملف — قد يكون صورة ممسوحة)"; else t.textContent += "\n\n" + clean;
+      if (page===1) t.textContent = clean || "(لا نص مقروء في هذا الملف بعد — إن كان صورة أو ممسوحاً فشغّل «القراءة المجانية» من «ملفات المكتب» أعلى الصفحة ثم افتحه ثانية)"; else t.textContent += "\n\n" + clean;
       const btn = $("rdMore"); if (more && +more[1] < +more[2]) { btn.hidden=false; btn.textContent=`الصفحات التالية (${+more[1]+1}–${Math.min(+more[1]+5,+more[2])} من ${more[2]})`; btn.onclick=()=>{ page=+more[1]+1; btn.hidden=true; load(); }; } else btn.hidden = true;
     } catch(e){ t.innerHTML = `<div class="notice err">تعذّرت قراءة الملف (${esc(e?.code||"خطأ")}). افتحه في ملفات المكتب.</div>`; }
   };
@@ -1937,7 +1956,7 @@ async function saveFees(c){
   if (await patchCase(c, {fees:fz, feesNA:false}, "حدّث عقد الأتعاب بالمعاملة", {الأتعاب:[feeSummary(c.fees)||"—", feeSummary(fz)||"—"]})) { delete S.feeDraft["case:"+c.id]; S.feeEditing=null; render(); toast("حُفظ عقد الأتعاب بالمعاملة"); }
 }
 function billRows(items, withCase){
-  if (!items.length) return `<div class="empty">لا بنود.</div>`;
+  if (!items.length) return `<div class="empty">لا بنود هنا. تظهر حين يُسجَّل عقد أتعاب لقضية أو تُصدر فاتورة. <button type="button" class="btn sm" data-nav="retainers">عقود الأتعاب</button></div>`;
   return `<div class="table-wrap" style="border:0"><table><thead><tr><th>الاستحقاق</th>${withCase?"<th>العميل / الملف</th>":""}<th>البند</th><th>المبلغ</th><th>الحالة</th><th></th></tr></thead><tbody>${items.map(b=>{ const [l,cls] = BILL_STATE[b.state]; return `<tr>
     <td class="num">${b.due?`${fmtD(b.due)}${b.state==="due"||b.state==="invoiced"?"<br>"+daysPill(b.due):""}`:`<span class="sub">بانتظار ${esc(b.waiting||"")}</span>`}</td>
     ${withCase?`<td><button class="btn ghost sm" style="padding-inline:0;text-align:start" data-case="${esc(b.src==="legacy"?(b.caseId||""):b.id)}" ${b.src==="legacy"&&!b.caseId?"disabled":""}>${esc(b.client||"—")}</button><div class="sub">${esc(b.src==="contract"?"عقد سنوي":b.src==="legacy"?"أرشيف":"عقد بالمعاملة · "+(b.caseNo||"")+" "+(b.title||"").slice(0,50))}</div></td>`:""}
@@ -5534,7 +5553,7 @@ function vTasks(){
   const FL = [["mine","مهامي",t=>!t.done&&taskMine(t)],["today","اليوم",t=>!t.done&&t.due&&t.due<=T],["week","هذا الأسبوع",t=>!t.done&&t.due&&daysUntil(t.due)<=7],["late","متأخرة",t=>taskLate(t)],["open","كل المفتوحة",t=>!t.done],["done","المنجزة",t=>t.done]];
   const f = FL.find(x=>x[0]===UI.f) || FL[0]; const list = all.filter(f[2]).sort((a,b)=> f[0]==="done" ? (b.doneAt||"").localeCompare(a.doneAt||"") : (a.due||"9").localeCompare(b.due||"9"));
   return `<div class="chips" style="margin-bottom:12px">${FL.map(([k,l,fn])=>`<button class="chip" data-tf="${k}" aria-pressed="${f[0]===k}">${l} <span class="num muted">${all.filter(fn).length}</span></button>`).join("")}${can("tasks.edit")?`<button class="btn sm primary" id="taskNew" style="margin-inline-start:auto" ${S.canWrite?"":"disabled"}>+ مهمة</button>`:""}</div>
-  <section class="panel">${list.length?`<div class="tasks">${list.slice(0,200).map(t=>taskRow(t)).join("")}</div>`:`<div class="empty">لا مهام هنا.</div>`}</section>`;
+  <section class="panel">${list.length?`<div class="tasks">${list.slice(0,200).map(t=>taskRow(t)).join("")}</div>`:`<div class="empty">لا مهام هنا. أضف مهمة من «مهمة سريعة» في الشريط الجانبي أو من تبويب «المذكرات والمهام» في القضية.</div>`}</section>`;
 }
 function homeTasksPanel(){
   const list = tasksAll().filter(t => !t.done && taskMine(t) && (!t.due || daysUntil(t.due) <= 7)).sort((a,b)=>(a.due||"9").localeCompare(b.due||"9"));
@@ -8085,7 +8104,7 @@ function bindQa(form){
 function railQa(){
   if (!S.loaded || !S.me?.allowed || S.me.role==="client" || S.me.scope==="client" || !(can("tasks.edit") || can("memos.edit"))) { $("qaRailBox") && ($("qaRailBox").innerHTML = ""); return; }
   const box = $("qaRailBox"); if (!box || box.firstChild) return;
-  box.innerHTML = qaBar("qaRail", "+ مهمة سريعة… «مذكرة الرد 4870… الأحد لفهد»"); bindQa($("qaRail"));
+  box.innerHTML = qaBar("qaRail", "مثل: مذكرة الرد الأحد لفهد"); bindQa($("qaRail"));
 }
 // one list of what is on a member: their open tasks and memos, by when
 function workItems(uid){
@@ -8325,7 +8344,7 @@ function trackSections(list){
       return `<tr class="clickable" data-case="${esc(c.id)}"><td class="mono">${esc(c.caseNo||"—")}</td><td><div class="ttl">${esc(c.title)}</div><div class="sub">${esc(c.client||"")}</div></td>
       <td class="hide-sm"><div>${esc(trackLabel(c))}</div><div class="sub">${esc(c.court||"")}</div></td><td class="num">${ld?fmtD(ld):`<span class="muted small">لا جلسات</span>`}</td>
       <td class="hide-sm">${why==="closed"?`<span class="pill closed">منتهية</span>`:`<span class="pill archive">بلا جلسة منذ سنة</span><div class="sub">${esc(STATUS[c.status]||"")} في الديوان</div>`}</td></tr>`; }).join("")}</tbody></table></div>` : `<div class="empty">لا قضايا منتهية.</div>`;
-  return (out || `<div class="panel empty">لا قضايا مطابقة.</div>`) + sec("done", "المنتهية", done.length, "المنتهية في الديوان، وكل قضية أمام المحاكم أو ديوان المظالم لم تُعقد لها جلسة خلال السنة الماضية ولا جلسة قادمة لها", doneBody);
+  return (out || `<div class="panel empty">لا قضايا مطابقة. جرّب كلمة أخرى أو امسح التصفية.</div>`) + sec("done", "المنتهية", done.length, "المنتهية في الديوان، وكل قضية أمام المحاكم أو ديوان المظالم لم تُعقد لها جلسة خلال السنة الماضية ولا جلسة قادمة لها", doneBody);
 }
 function bindTrackSections(){
   document.querySelectorAll("details.tsec").forEach(d => d.addEventListener("toggle", () => { S.tsecOpen = {...(S.tsecOpen||{}), [d.dataset.tsec]: d.open}; try { localStorage.setItem("dq.tsec", JSON.stringify(S.tsecOpen)); } catch {} }));
@@ -8399,7 +8418,7 @@ function vCrm(){
       <td><div>${esc((l.request||"").slice(0,80))}</div><div class="sub">${esc(TRACK[l.track||"courts"]?.l||"")}</div></td>
       <td class="hide-sm">${lq ? `<span class="mono small">${esc(lq.no)}</span> <span class="pill ${qs[1]}">${qs[0]}</span>` : `<span class="sub">لا عرض بعد</span>`}</td>
       <td>${l.followUp && ["new","quoted"].includes(l.status||"new") ? `<div class="num">${fmtD(l.followUp)}</div>${daysPill(l.followUp)}` : `<span class="muted small">—</span>`}</td>
-      <td class="hide-sm"><span class="pill ${st[1]}">${st[0]}</span></td></tr>`; }).join("")}</tbody></table>` : `<div class="empty">لا عملاء هنا.</div>`}</div>`;
+      <td class="hide-sm"><span class="pill ${st[1]}">${st[0]}</span></td></tr>`; }).join("")}</tbody></table>` : `<div class="empty">لا موكلين في هذا التصنيف. اختر تصنيفاً آخر، أو افتح قضية وسجّل موكلها.</div>`}</div>`;
 }
 function vLead(l){
   const st = LEAD_ST[l.status||"new"]; const cf = l.conflict; const ro = S.canWrite ? "" : "disabled";
@@ -8747,17 +8766,18 @@ const uxEvRow0 = evRow;
 evRow = function(e){
   const row = uxEvRow0(e); const c = e.caseId ? S.cases.get(e.caseId) : null;
   if (!c || roleClass(e.role)) return row;
-  const bits = [c.court, e.circuit || c.circuit, e.video ? "عن بُعد" : "", c.ourSide ? "موكلنا: " + c.ourSide : ""].filter(Boolean);
+  // under a court heading (v61: the agenda grouped by court) the line need not repeat the court
+  const bits = [S.uxNoCourt ? "" : c.court, e.circuit || c.circuit, e.video ? "عن بُعد" : "", c.ourSide ? "موكلنا: " + c.ourSide : ""].filter(Boolean);
   if (!bits.length) return row;
   // the line goes in the row's grid right after the title, before what the hearing requires
   const at = row.lastIndexOf(row.includes(`<div class="req">`) ? `<div class="req">` : `</div>`);
   return row.slice(0, at) + `<div class="where">${bits.map(esc).join(" · ")}</div>` + row.slice(at);
 };
 
-// (1) the setup cards fold into one line on a phone; the full cards open under it
+// (1) the setup cards fold into one line (on every screen since v60); the full cards open under it
 const uxOnboard0 = onboardPanel;
 onboardPanel = function(){
-  const h = uxOnboard0(); if (!h || !uxPhone()) return h;
+  const h = uxOnboard0(); if (!h) return h;
   const m = h.match(/<p class="sub"[^>]*>(\d+) من (\d+)/); const done = m ? m[1] : "", all = m ? m[2] : "";
   return `<details class="panel onb-mini" style="margin-bottom:16px"><summary><span>إعداد المكتب${m ? ` <span class="num">${done} من ${all}</span>` : ""}</span><span class="onb-go">أكمل${icon("chev")}</span></summary>${h.replace(/^<section class="panel"[^>]*>/, "<div>").replace(/<\/section>$/, "</div>")}</details>`;
 };
@@ -8837,6 +8857,195 @@ toast = function(t){
   const arm = () => { clearTimeout(toast.t); toast.t = setTimeout(hide, ms); };
   el.onmouseenter = () => clearTimeout(toast.t); el.onmouseleave = arm; arm();
 };
+
+// ---------- the cloud site's remaining review items (integrate_cloud.py step 6, cloud build only):
+// (a) «مؤشرات الأداء» hides tiles that have nothing to show yet and says why in one line, with a way to see them all;
+// (b) «/» from anywhere (outside a field) goes to the global search;
+// (c) every date field shows the date it holds the way the Diwan writes dates — the weekday and Gregorian date, then Hijri;
+// (d) on a phone the cases list keeps each file's status under its title (the status column is hidden there).
+
+// (a) the empty tiles, after each render of the page
+const uxMoreAfter0 = afterRender;
+afterRender = function(){
+  uxMoreAfter0();
+  const main = $("main"); if (!main) return;
+  if (S.view === "kpi") uxKpiEmpty(main);
+  if (S.view === "cases") uxCaseStatus(main);
+  uxDateEcho(main);
+};
+function uxKpiEmpty(main){
+  const tiles = [...main.querySelectorAll(".kpis .kpi")]; const empty = tiles.filter(t => /^(—|-|)$/.test((t.querySelector(".v")?.textContent || "").trim()));
+  if (!empty.length || S.kpiShowAll) return;
+  empty.forEach(t => t.hidden = true);
+  const grid = empty[0].closest(".kpis"); const note = document.createElement("p"); note.className = "muted small ux-kpi-note";
+  note.innerHTML = `${arN(empty.length, "مؤشر واحد مخفي", "مؤشران مخفيان", "مؤشرات مخفية", "مؤشراً مخفياً")} — بلا بيانات بعد. تظهر حين تُسجَّل التقديرات الأولية وتقييمات القضايا المنتهية ومواعيد المذكرات. <button type="button" class="btn ghost sm" id="uxKpiAll">إظهار الكل</button>`;
+  grid.after(note); $("uxKpiAll").onclick = () => { S.kpiShowAll = true; render(); };
+}
+
+// (b) «/» to search: the rail's box on a wide screen, the search page otherwise
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return;
+  const t = e.target; if (t instanceof Element && (t.closest("input,textarea,select,[contenteditable='true']"))) return;
+  if (!S.loaded || !can("cases.view")) return;
+  e.preventDefault();
+  const g = $("gQ"); if (g && g.offsetParent) { g.focus(); g.select(); return; }
+  go("search"); requestAnimationFrame(() => $("sQ")?.focus());
+});
+
+// (c) the date a date field holds, written out beside it (and kept in step as it changes)
+function uxDateText(v){ if (!/^\d{4}-\d{2}-\d{2}$/.test(v || "")) return ""; const d = D(v); return `${fmtDay.format(d)} ${d.getFullYear()} — ${fmtHijri.format(d)}`; }
+// writes only what changed, so the observer below does not wake itself
+function uxDateEcho(root){
+  for (const inp of root.querySelectorAll('input[type="date"]')) {
+    let echo = inp.nextElementSibling; if (!echo || !echo.classList.contains("date-echo")) { echo = document.createElement("span"); echo.className = "date-echo"; echo.setAttribute("aria-hidden", "true"); inp.after(echo); }
+    const t = uxDateText(inp.value); if (echo.textContent !== t) echo.textContent = t;
+  }
+}
+document.addEventListener("input", (e) => { const t = e.target; if (t instanceof HTMLInputElement && t.type === "date" && t.nextElementSibling?.classList.contains("date-echo")) t.nextElementSibling.textContent = uxDateText(t.value); }, true);
+if (window.MutationObserver) { let q = false; new MutationObserver(() => { if (q) return; q = true; requestAnimationFrame(() => { q = false; uxDateEcho(document.body); }); }).observe(document.body, {childList: true, subtree: true}); }
+
+// (d) the status under the title on a phone
+function uxCaseStatus(main){
+  for (const tr of main.querySelectorAll("tr[data-case]")) {
+    const st = tr.querySelector("td.hide-sm .pill"); const cell = tr.children[1]; if (!st || !cell || cell.querySelector(".st-m")) continue;
+    const p = st.cloneNode(true); p.classList.add("st-m"); cell.append(p);
+  }
+}
+
+// ---------- the cloud site's agenda as a docket (integrate_cloud.py step 7, cloud build only): on a day with hearings in more than one
+// court, the day's hearings stand under their court — in the order of each court's first hearing — and the rest (deadlines, the
+// office's own appointments) follow under «مواعيد أخرى». A day with one court stays a plain list, since its rows already name it.
+const uxAgenda0 = agendaBlocks;
+const uxCourtOf = (e) => e.caseId && !roleClass(e.role) ? (S.cases.get(e.caseId)?.court || "") : "";
+function uxDayRows(list){
+  const courts = [...new Set(list.map(uxCourtOf).filter(Boolean))];
+  if (courts.length < 2) return list.map(evRow).join("");
+  const groups = courts.map(k => [k, list.filter(e => uxCourtOf(e) === k)]); const rest = list.filter(e => !uxCourtOf(e));
+  if (rest.length) groups.push(["مواعيد أخرى", rest]);
+  S.uxNoCourt = true;
+  try { return groups.map(([k, l]) => `<div class="ev-court"><h3>${esc(k)}${k !== "مواعيد أخرى" ? ` <span class="num">${l.length}</span>` : ""}</h3>${l.map(e => { S.uxNoCourt = k !== "مواعيد أخرى"; return evRow(e); }).join("")}</div>`).join(""); }
+  finally { S.uxNoCourt = false; }
+}
+agendaBlocks = function(evs){
+  const by = new Map(); for (const e of evs){ const k = dkey(D(e.start)); if (!by.has(k)) by.set(k, []); by.get(k).push(e); }
+  if (!by.size) return uxAgenda0(evs);
+  return `<div class="agenda">${[...by.entries()].map(([k, list]) => { const d = D(k); return `<div class="day"><div class="dl"><b>${esc(fmtWd.format(d))}</b><span class="num">${fmtDate.format(d)}</span><span>${fmtHijri.format(d)}</span>${daysPill(k)}</div><div>${uxDayRows(list)}</div></div>`; }).join("")}</div>`;
+};
+
+// ---------- the cloud site's files, the rest of step 2 (integrate_cloud.py step 8, cloud build only; site/cloud/cloud-files.js v62):
+// (a) the global search finds words inside the office's files too (the text read from PDF, Word and scans), not only their names;
+// (b) a case's documents carry the «داخلي» mark, and the office sets it there: an internal file is never shown to the client's
+//     representative (the database enforces it — files_read), so internal memos can sit in the case folder;
+// (c) the company page («متابعة الشركات», and a representative's own page) lists the files of the company's cases, each one opening
+//     through open.html with the reader's own session — a representative sees only what the database lets them read;
+// (d) an image read by the free reader opens in the reader like a PDF (readable() counts images in the cloud copy; integrate_cloud.py).
+const uxF = () => window.diwanCloudFiles?.search ? window.diwanCloudFiles : null;
+
+// (a) the search page: a fourth panel, filled when the database answers
+S.uxDocSearch = S.uxDocSearch || {};
+const uxSearch0 = vSearch;
+vSearch = function(){
+  const h = uxSearch0(); const q = (S.gq || "").trim(); const F = uxF();
+  if (!F || q.length < 2 || !can("docs.use")) return h;
+  let st = S.uxDocSearch[q]; if (!st) { st = S.uxDocSearch[q] = {loading: true};
+    F.search(q, 40).then(r => { st.rows = r; }).catch(e => { st.error = e?.message || "خطأ"; }).finally(() => { st.loading = false; if (S.view === "search" && (S.gq || "").trim() === q) render(); }); }
+  const row = (r, i) => { const c = r.case_id ? S.cases.get(r.case_id) : null;
+    return `<div class="doc"${c ? ` data-case="${esc(c.id)}" data-tab="files"` : ""}><span class="kind ${KIND_CLS[docKind(r.name)] || ""}">${esc(docKind(r.name))}</span>
+      <div style="min-width:0"><div class="nm">${esc(r.name)}${r.inText ? ' <span class="src">في النص</span>' : ""}</div></div>
+      <div class="acts"><button class="btn sm" type="button" data-sxread="${i}">قراءة</button><a class="btn sm ghost" href="${esc(href(r.webUrl))}" target="_blank" rel="noopener">فتح</a></div>
+      <div class="meta">${esc([c ? `${c.caseNo || ""} ${c.title}`.trim() : "", r.path.replace(/^Law Firm\//, "").split("/").slice(0, -1).join(" › ")].filter(Boolean).join(" · "))}</div></div>`; };
+  const body = st.loading ? `<div class="thinking"><span class="dot"></span>يبحث في نصوص المستندات…</div>` : st.error ? `<div class="notice err">${esc(st.error)}</div>`
+    : (st.rows || []).length ? `<div class="docs">${st.rows.map(row).join("")}</div>` : `<div class="empty">لا مستند فيه هذه الكلمات. الممسوح يُبحث فيه بعد قراءته من «ملفات المكتب».</div>`;
+  return h.replace(/<\/div>$/, `<section class="panel" id="uxDocText"><header><h2>في نصوص المستندات</h2><span class="sub">ملفات المكتب كلها: الأسماء والنص المقروء منها</span></header>${body}</section></div>`);
+};
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-sxread]"); if (!b) return; e.stopPropagation();
+  const r = S.uxDocSearch[(S.gq || "").trim()]?.rows?.[+b.dataset.sxread]; if (!r) return;
+  openReader(S.cases.get(r.case_id) || {id: "_search"}, {name: r.name, uri: r.uri, webUrl: r.webUrl, path: r.path, kind: docKind(r.name)});
+}, true);
+
+// (b) «داخلي» on a case's documents: each row knows its file, the marks come from the database, the office toggles them
+const uxDocRow0 = docRow;
+docRow = function(c, f, i, w){ return uxDocRow0(c, f, i, w).replace('<div class="doc">', `<div class="doc" data-uri="${esc(f.uri || "")}">`); };
+S.uxFlags = S.uxFlags || {};
+async function uxLoadFlags(c){
+  const F = uxF(); const ids = docsOf(c).map(f => F.idOf(f.uri)).filter(Boolean); const st = S.uxFlags[c.id] = {loading: true, at: Date.now(), map: S.uxFlags[c.id]?.map || {}};
+  try { st.map = await F.flags(ids); } catch { st.error = true; }
+  st.loading = false; if (S.view === "case" && S.caseId === c.id && S.caseTab === "files") uxMarkDocs();
+}
+function uxMarkDocs(){
+  const F = uxF(); const c = S.view === "case" ? S.cases.get(S.caseId) : null; if (!F || !c || S.caseTab !== "files") return;
+  let st = S.uxFlags[c.id]; if (!st || (!st.loading && Date.now() - st.at > 60000)) { uxLoadFlags(c); st = S.uxFlags[c.id]; }
+  const rw = S.canWrite && can("docs.use");
+  for (const el of document.querySelectorAll("#tabBody .doc[data-uri]")) {
+    const id = F.idOf(el.dataset.uri); const fl = id && st.map[id]; if (!fl) continue;
+    const nm = el.querySelector(".nm"); let tag = nm.querySelector(".ux-int");
+    if (fl.internal && !tag) nm.insertAdjacentHTML("beforeend", ' <span class="src ux-int" title="لا يراه ممثل الموكل">داخلي</span>'); else if (!fl.internal && tag) tag.remove();
+    if (!rw) continue; const acts = el.querySelector(".acts"); let b = acts.querySelector("[data-uxint]");
+    if (!b) { b = document.createElement("button"); b.type = "button"; b.className = "btn sm ghost"; b.dataset.uxint = id; acts.append(b); }
+    b.textContent = fl.internal ? "إظهار للموكل" : "داخلي"; b.title = fl.internal ? "يراه ممثل الموكل في صفحة شركته" : "لا يراه ممثل الموكل (مذكرة داخلية، مراسلة خاصة…)";
+  }
+}
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-uxint]"); if (!b) return; const F = uxF(); const c = S.cases.get(S.caseId); if (!F || !c) return;
+  const id = b.dataset.uxint; const st = S.uxFlags[c.id]; const now = !(st?.map[id]?.internal); b.disabled = true;
+  try { await F.setInternal(id, now); st.map[id] = {...(st.map[id] || {}), internal: now}; const f = docsOf(c).find(x => F.idOf(x.uri) === id);
+    await logAction(c.id, `${now ? "جعل" : "أظهر للموكل"} «${f?.name || "مستند"}»${now ? " داخلياً" : ""}`); toast(now ? "صار داخلياً: لا يراه ممثل الموكل" : "يراه ممثل الموكل الآن"); }
+  catch { toast("تعذّر الحفظ ولم يُحفظ التغيير — تحقق من الاتصال ثم أعد المحاولة"); }
+  b.disabled = false; uxMarkDocs();
+});
+
+// (c) the company page: the files of its cases
+S.uxPortalFiles = S.uxPortalFiles || {};
+const uxPortalBody0 = portalBody;
+portalBody = function(K, o){
+  const h = uxPortalBody0(K, o); const F = uxF(); if (!F || !K) return h;
+  const cases = portalScope(K); const ids = cases.map(c => c.id); const key = (K.eng || "") + "|" + (K.key || "");
+  let st = S.uxPortalFiles[key]; if (!st || (!st.loading && Date.now() - st.at > 120000)) { st = S.uxPortalFiles[key] = {loading: true, at: Date.now()};
+    F.caseFiles(ids).then(r => { st.rows = r; }).catch(e => { st.error = e?.message || "خطأ"; }).finally(() => { st.loading = false; st.at = Date.now(); if (S.view === "portal") render(); }); }
+  const byCase = new Map(cases.map(c => [c.id, c]));
+  const office = !!o?.internal; const rows = (st.rows || []);
+  const row = (r) => { const cs = r.cases.map(id => byCase.get(id)).filter(Boolean);
+    return `<div class="doc"><span class="kind ${KIND_CLS[docKind(r.name)] || ""}">${esc(docKind(r.name))}</span><div style="min-width:0"><div class="nm">${esc(r.name)}${office && r.internal ? ' <span class="src ux-int">داخلي — لا يراه الممثل</span>' : ""}</div></div>
+      <div class="acts"><a class="btn sm ghost" href="${esc(href(r.webUrl))}" target="_blank" rel="noopener">فتح</a></div>
+      <div class="meta">${esc([r.modified_at ? fmtDate.format(new Date(r.modified_at)) : "", fmtSize(r.size), cs.map(c => c.caseNo || c.title).join("، ")].filter(Boolean).join(" · "))}</div></div>`; };
+  const shown = office ? rows : rows.filter(r => !r.internal);
+  const body = st.loading && !st.rows ? `<div class="thinking"><span class="dot"></span>يقرأ مستندات القضايا…</div>` : st.error ? `<div class="notice err">${esc(st.error)}</div>`
+    : shown.length ? `<div class="docs">${shown.slice(0, 200).map(row).join("")}</div>` : `<div class="empty">${office ? "لا مستندات في مجلدات قضايا هذه الشركة بعد." : "لا مستندات مشتركة بعد. يضيفها المكتب إلى مجلدات القضايا."}</div>`;
+  return h + `<section class="panel" id="uxPortalFiles"><header><h2>مستندات القضايا</h2><span class="sub">${office ? "ما عليه «داخلي» لا يراه ممثل الشركة؛ يُغيَّر من تبويب «المستندات» في القضية" : "تُفتح من ملفات المكتب بحسابك"}</span></header>${body}</section>`;
+};
+
+const uxFilesAfter0 = afterRender;
+afterRender = function(){ uxFilesAfter0(); uxMarkDocs(); };
+
+// ---------- the cloud site's routine reminders (integrate_cloud.py step 9, cloud build only): on the home page the office's owner sees,
+// in one quiet line each, the routine work that is late — the weekly backup (office/backup, more than 7 days or never) and the
+// Moen link of the Board of Grievances (meta/sync moen.syncedAt, more than 7 days, once it has been used). The Najiz refresh has its
+// own panel already (nzDuePanel). «لاحقاً» puts the line away for two days on this device.
+const UX_ROUTINE_DAYS = 7;
+const uxAge = (iso) => iso ? Math.floor((Date.now() - new Date(iso)) / 864e5) : null;
+function uxRoutineItems(){
+  if (!(S.me?.owner || S.me?.legacy)) return [];
+  const out = []; const b = S.office?.backup; const ba = uxAge(b?.at);
+  if (!b || ba > UX_ROUTINE_DAYS) out.push({k: "backup", t: b ? `مضى على آخر نسخة احتياطية ${arN(ba, "يوم واحد", "يومان", "أيام", "يوماً")}` : "لم تُحفظ نسخة احتياطية من داخل الديوان بعد", go: "bkGo", btn: "النسخة الاحتياطية"});
+  const mn = S.meta?.moen; const ma = uxAge(mn?.syncedAt);
+  if (mn?.syncedAt && ma > UX_ROUTINE_DAYS && can("najiz.sync")) out.push({k: "moen", t: `آخر تحديث من «معين» (ديوان المظالم) قبل ${arN(ma, "يوم واحد", "يومين", "أيام", "يوماً")}`, go: "mnPanel", btn: "ربط معين"});
+  const snoozed = (k) => { try { return +localStorage.getItem("dq.routine." + k) > Date.now(); } catch { return false; } };
+  return out.filter(x => !snoozed(x.k));
+}
+const uxRoutineAfter0 = afterRender;
+afterRender = function(){
+  uxRoutineAfter0();
+  const main = $("main"); if (S.view !== "home" || !main || main.querySelector(".ux-routine")) return;
+  const items = uxRoutineItems(); if (!items.length) return;
+  const box = document.createElement("section"); box.className = "panel ux-routine"; box.setAttribute("aria-label", "أعمال دورية");
+  box.innerHTML = items.map(x => `<div class="ux-rt"><span>${esc(x.t)}</span><span class="ux-rt-acts"><button type="button" class="btn sm" data-uxgo="${x.go}">${esc(x.btn)}</button><button type="button" class="btn sm ghost" data-uxsnooze="${x.k}">لاحقاً</button></span></div>`).join("");
+  (main.querySelector(":scope > .ux-first") || main.querySelector(":scope > .topline")).after(box);
+};
+document.addEventListener("click", (e) => {
+  const g = e.target.closest("[data-uxgo]"); if (g) { const id = g.dataset.uxgo; go("sync"); requestAnimationFrame(() => { const el = $(id); if (el) { el.scrollIntoView({block: "center"}); el.focus?.({preventScroll: true}); } }); return; }
+  const z = e.target.closest("[data-uxsnooze]"); if (z) { try { localStorage.setItem("dq.routine." + z.dataset.uxsnooze, String(Date.now() + 2 * 864e5)); } catch {} z.closest(".ux-rt")?.remove(); const box = document.querySelector(".ux-routine"); if (box && !box.querySelector(".ux-rt")) box.remove(); }
+});
 
 // ---------- the cloud site's lighter pages (integrate_cloud.py step 5, cloud build only):
 // (a) a case file shows its six main tabs and puts the rest under «المزيد»; a tab chosen from there takes the «المزيد» place.

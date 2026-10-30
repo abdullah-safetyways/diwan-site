@@ -181,6 +181,35 @@
   };
   F.hidden = async () => { const {data} = await sb.from(T).select("id,path,name,size,deleted_at").not("deleted_at", "is", null).order("deleted_at", {ascending: false}).limit(200); return data || []; };
   F.restore = async (id) => { const {error} = await sb.from(T).update({deleted_at: null}).eq("id", id); if (error) throw tErr(error); };
+
+  // ---------------------------------------------------------------- search in the files' text, «داخلي», and a representative's files (v62)
+  // the global search: files_search ranks a name match first (1.0 + text rank), so a rank under 1 means the words are in the text only
+  F.search = async (q, lim = 30) => {
+    const {data, error} = await sb.rpc("files_search", {q: String(q || ""), lim, folders: false}); if (error) throw tErr(error);
+    return (data || []).filter(r => !JUNK(r.name)).map(r => ({...r, inText: r.rank < 1, uri: uriOf(r.id), webUrl: webUrlOf(r.path)}));
+  };
+  // «داخلي» and how the text was read, for the files a case lists (the database keeps internal files from representatives: files_read)
+  F.flags = async (ids) => {
+    ids = [...new Set(ids.filter(Boolean))]; const out = {};
+    for (let i = 0; i < ids.length; i += 200) { const {data, error} = await sb.from(T).select("id,internal,text_how").in("id", ids.slice(i, i + 200)); if (error) throw tErr(error);
+      for (const r of data || []) out[r.id] = {internal: !!r.internal, text_how: r.text_how}; }
+    return out;
+  };
+  F.setInternal = async (id, internal) => { const {error} = await sb.from(T).update({internal: !!internal}).eq("id", id); if (error) throw tErr(error); };
+  // the files of some cases — their own and those linked to them — as far as the reader may see them (for a representative, the
+  // database leaves out what is internal); each with the cases it belongs to
+  F.caseFiles = async (caseIds) => {
+    const ids = [...new Set(caseIds.filter(Boolean))]; if (!ids.length) return [];
+    const sel = "id,path,name,size,modified_at,case_id,internal", by = new Map(), add = (r, cid) => { if (JUNK(r.name)) return; const x = by.get(r.id) || {...r, cases: new Set(), uri: uriOf(r.id), webUrl: webUrlOf(r.path)}; x.cases.add(cid); by.set(r.id, x); };
+    for (let i = 0; i < ids.length; i += 100) { const part = ids.slice(i, i + 100);
+      const {data, error} = await sb.from(T).select(sel).in("case_id", part).eq("is_folder", false).is("deleted_at", null).order("modified_at", {ascending: false}).limit(1000); if (error) throw tErr(error);
+      for (const r of data || []) add(r, r.case_id);
+      const {data: links} = await sb.from("file_links").select("case_id,file_id").in("case_id", part).limit(2000);
+      const fids = [...new Set((links || []).map(l => l.file_id))];
+      for (let j = 0; j < fids.length; j += 200) { const {data: rows} = await sb.from(T).select(sel).in("id", fids.slice(j, j + 200)).is("deleted_at", null);
+        for (const r of rows || []) for (const l of links) if (l.file_id === r.id) add(r, l.case_id); } }
+    return [...by.values()].map(x => ({...x, cases: [...x.cases]})).sort((a, b) => String(b.modified_at || "").localeCompare(String(a.modified_at || "")));
+  };
   // a folder's files the way the page lists a case folder (its own files, then up to six sub-folders), as documents.files entries
   F.listForCase = async (folderPath, kindOf) => {
     const {data, error} = await sb.from(T).select("id,path,parent,name,is_folder,size,modified_at").is("deleted_at", null).or(`parent.eq."${folderPath.replace(/"/g, '\\"')}",parent.like."${(folderPath + "/%").replace(/"/g, '\\"')}"`).eq("is_folder", false).order("modified_at", {ascending: false}).limit(500);
