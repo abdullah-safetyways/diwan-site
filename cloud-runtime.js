@@ -140,7 +140,9 @@
   const authHeaders = () => ({"content-type": "application/json", authorization: "Bearer " + SESSION.access_token, apikey: CFG.key});
   async function sampleCore(input, opts = {}){
     const tier = ["quick", "default", "complex"].includes(opts.modelTier) ? opts.modelTier : "default";
-    let r; try { r = await realFetch(FN("sample"), {method: "POST", signal: opts.signal, headers: authHeaders(), body: JSON.stringify({input, tier})}); }
+    // the office's fixed instructions (its style, rules and verified law table) go apart, so the server can cache them
+    let stable = ""; try { const L = typeof lawyerPrompt === "function" ? lawyerPrompt() : ""; if (L && typeof input === "string" && input.startsWith(L)) { stable = L; input = input.slice(L.length).replace(/^\s+/, ""); } } catch {}
+    let r; try { r = await realFetch(FN("sample"), {method: "POST", signal: opts.signal, headers: authHeaders(), body: JSON.stringify(stable ? {input, tier, stable} : {input, tier})}); }
     catch (e) { if (e && e.name === "AbortError") throw {code: "cancelled", message: "cancelled"}; throw {code: "network", message: String(e && e.message || e)}; }
     if (!r.ok) { let b = {}; try { b = await r.json(); } catch {} throw {code: b.code || (r.status === 403 ? "not_granted" : r.status === 429 ? "rate_limited" : "unavailable"), message: b.message || ("HTTP " + r.status)}; }
     const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = "", text = "", stop = null;
@@ -150,6 +152,7 @@
           else if (ev.type === "message_delta" && ev.delta?.stop_reason) stop = ev.delta.stop_reason;
           else if (ev.type === "error") throw {code: "unavailable", message: ev.error?.message || "stream error", text}; } } }
     catch (e) { if (e && e.name === "AbortError") throw {code: "cancelled", message: "cancelled", text}; throw e; }
+    if (stop === "refusal") throw {code: "refused", message: "اعتذر النموذج عن هذا الطلب", text};
     return {text, truncated: stop === "max_tokens", modelTierApplied: tier};
   }
   const sample = Object.assign((input, opts) => sampleCore(input, opts), {

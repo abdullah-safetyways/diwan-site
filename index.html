@@ -1187,7 +1187,7 @@ async function openReader(c, f){
     if (!S.sample) { toast("المساعد غير متاح في هذا العرض"); return; }
     e.target.disabled = true; const out = $("rdSum"); out.innerHTML = `<div class="thinking"><span class="dot"></span>يلخّص المستند…</div>`;
     try { const txt = await docText(f.uri, "1-8"); const ctl = new AbortController(); S.drawerCtl = ctl;
-      await S.sample(`${lawyerPrompt()}\n\nلخّص المستند التالي من ملف القضية «${c.title}» (${c.caseNo||"بلا رقم"}) للمحامي في 5-8 نقاط: نوعه وتاريخه، أطرافه، أهم ما فيه (الطلبات، الدفوع، المنطوق، المبالغ، المواعيد)، وما يترتب عليه للخطوة القادمة. نص عادي بنقاط تبدأ بـ «•».\n\nاسم الملف: ${f.name}\n\n${txt.slice(0,60000)}`, { modelTier:"default", signal:ctl.signal, cache:{gcTime:86400000}, onText:({text})=>{ out.innerHTML = `<div class="next-card"><span class="lbl">خلاصة المستند</span><div class="brief">${esc(text)}</div></div>`; } });
+      await S.sample(`${lawyerPrompt()}\n\nلخّص المستند التالي من ملف القضية «${c.title}» (${c.caseNo||"بلا رقم"}) للمحامي في 5-8 نقاط: نوعه وتاريخه، أطرافه، أهم ما فيه (الطلبات، الدفوع، المنطوق، المبالغ، المواعيد)، وما يترتب عليه للخطوة القادمة. نص عادي بنقاط تبدأ بـ «•».\n\nاسم الملف: ${f.name}\n\n${txt.slice(0,60000)}`, { modelTier:"quick", signal:ctl.signal, cache:{gcTime:86400000}, onText:({text})=>{ out.innerHTML = `<div class="next-card"><span class="lbl">خلاصة المستند</span><div class="brief">${esc(text)}</div></div>`; } });
     } catch(err){ if (err?.code!=="cancelled") out.innerHTML = `<div class="notice err">${esc(aiErr(err))}</div>`; }
     e.target.disabled = false;
   };
@@ -3163,6 +3163,7 @@ async function learnFromEdits(onStep){
 }
 // a draft the lawyer edited before saving is a lesson for the next one
 async function recordEdit(c, kind, gen, final){
+  return;
   if (!S.db || !gen || !final) return; const a = arNorm(gen).replace(/\s+/g," "), b = arNorm(final).replace(/\s+/g," ");
   if (a===b || Math.abs(a.length-b.length) + (a.slice(0,400)!==b.slice(0,400) ? 50 : 0) < 30) return;
   try { await S.db.doc("learn/edits/items/"+newId("e")).set({caseId:c.id, kind, gen:fitBytes(gen, 30000), final:fitBytes(final, 30000), at:new Date().toISOString(), by:S.uid||null, used:false}); S.learn.edits = null; } catch {}
@@ -3180,7 +3181,7 @@ ${fitBytes(numbered, 120000)}
 حدّد وأعد JSON فقط بلا أي نص آخر:
 {"name":"اسم مختصر للنموذج","kind":"fee|report|notice|letter|poa|memo|contract|other","mode":"fill أو guide","uses":["أين يُستعمل: claim|reply|objection|report|fee|other"],"fields":[{"key":"معرف لاتيني قصير","label":"اسم الحقل بالعربية","sample":"النص الحالي في النموذج حرفياً","source":"أحد: ${Object.keys(TPL_SOURCES).join(", ")}"}],"structure":["عناوين الأقسام بالترتيب"],"notes":"ملاحظات أسلوب مختصرة"}
 القواعد: mode = "fill" إذا كان نصاً ثابتاً لا يتغير منه إلا بيانات محددة (أسماء، أرقام هويات، مبالغ، تواريخ، محل العقد)، و"guide" إذا كان مثالاً لمستند يُكتب كل مرة من جديد ويُستفاد منه البنية والأسلوب.
-في fill: لكل بيان متغير حقل واحد؛ sample أقصر نص يميز البيان كما ورد حرفاً بحرف (منسوخ من النص أعلاه دون رقم الفقرة)، وإن تكرر البيان في النموذج فحقل واحد يكفي. لا تجعل النص الثابت حقلاً. في guide اترك fields فارغة.`, {modelTier:AI_TIER, cache:false});
+في fill: لكل بيان متغير حقل واحد؛ sample أقصر نص يميز البيان كما ورد حرفاً بحرف (منسوخ من النص أعلاه دون رقم الفقرة)، وإن تكرر البيان في النموذج فحقل واحد يكفي. لا تجعل النص الثابت حقلاً. في guide اترك fields فارغة.`, {modelTier:"quick", cache:false});
   const j = parseJsonLoose(r.text);
   const flat = paras.join("\n");
   const seen = new Set();
@@ -3427,7 +3428,7 @@ function openTplTry(t){
 async function extractIdentity(){
   const lh = S.learn.letterhead; if (!lh || !S.sample) return;
   const UI = S.learnUI; UI.busy = "يقرأ بيانات المكتب من الورق الرسمي…"; render();
-  try { const opts = {modelTier:AI_TIER, cache:false};
+  try { const opts = {modelTier:"quick", cache:false};
     let img = null; try { const lim = await S.sample.limits(); if (lim?.images) { const bytes = await loadBlob(lh.src); const lg = await lhLogoFrom(bytes, lh.profile||{}); if (lg) img = new Blob([lg.bytes], {type:lg.type}); } } catch {}
     if (img) opts.images = [img];
     const r = await S.sample(`هذه ترويسة وتذييل الورق الرسمي لمكتب محاماة سعودي${img?" (الصورة المرفقة هي الترويسة)":""}. استخرج بيانات المكتب كما هي مكتوبة فقط، ولا تخترع شيئاً غير مكتوب. أعد JSON فقط بالمفاتيح: name (اسم المكتب الرسمي), short (اسم مختصر), lawyer (اسم المحامي), license (رقم الترخيص), city, phone, email, address, cr (السجل التجاري), vat (الرقم الضريبي). اترك المفتاح فارغاً إن لم يُكتب.\n\nنص الترويسة: ${lh.profile?.header?.text||"(صورة فقط)"}\nنص التذييل: ${lh.profile?.footer?.text||"—"}`, opts);
@@ -3861,7 +3862,7 @@ async function libDigest(id, onStep){
 أعد JSON فقط: {"summary":"…","deadlines":[…]}
 
 النصوص:
-${batches[i].join("\n")}`, {modelTier:AI_TIER, cache:false});
+${batches[i].join("\n")}`, {modelTier:"default", cache:false});
     parts.push(parseJsonLoose(r.text)); }
   const all = parts.flatMap(p => p.deadlines||[]).filter(d => d && d.what && d.period);
   const deadlines = all.map(d => { const n = +fromHindi(String(d.article||"").replace(/[^0-9٠-٩]/g,"")); const art = arts.find(a => a.n===n);
@@ -5906,7 +5907,7 @@ async function asJson(prompt, opts){
 async function assistPlan(text){
   const local = assistLocalParse(text);
   if (!S.sample || !can("ai.use")) return local;
-  try { const n = asNormPlan(await asJson(asPlanPrompt(text), {modelTier:"default", cache:false}));
+  try { const n = asNormPlan(await asJson(asPlanPrompt(text), {modelTier:"quick", cache:false}));
     if (n) { n.ai = true; if (!n.when.hijri && !n.when.gregorian && (local.when.hijri || local.when.gregorian)) { n.when.hijri = local.when.hijri; n.when.gregorian = local.when.gregorian; n.when.time = n.when.time || local.when.time; n.when.weekday = n.when.weekday || local.when.weekday; }
       if (!n.refs.idLast4 && local.refs.idLast4) n.refs.idLast4 = local.refs.idLast4;
       // what the message states in Najiz's own wording is read by rule as well, so a model that skips a field does not lose it
@@ -6375,13 +6376,13 @@ const AS_HELLO = "أهلاً. ألصق هنا أي رسالة من ناجز أو
 function assistOk(){ return !!(S.loaded && S.db && S.me?.allowed && S.me?.role!=="client" && S.me?.scope!=="client" && (can("sessions.edit") || can("tasks.edit") || (S.sample && can("ai.use")))); }
 async function asLoad(){
   const A = S.assist; if (A.loaded) return; A.loaded = true;
-  try { if (S.db && S.uid) { const d = await S.db.doc(`data/users/${S.uid}/assist`).get(); if (d.exists) A.msgs = (d.data().msgs||[]).filter(m => m && m.role && typeof m.text==="string"); } else { const v = localStorage.getItem("dq.assist"); if (v) A.msgs = JSON.parse(v); } } catch {}
+  try { if (false) { const d = null; if (d.exists) A.msgs = (d.data().msgs||[]).filter(m => m && m.role && typeof m.text==="string"); } } catch {}
   if (!A.msgs.length) A.msgs.push({role:"assistant", text:AS_HELLO, hello:true});
   asRender();
 }
 function asSave(){
   const msgs = S.assist.msgs.filter(m=>!m.hello).slice(-30).map(m => ({role:m.role, text:(m.text||"").slice(0,4000), card:m.card ? (m.card.done && m.card.ctx ? {type:m.card.type, done:m.card.done} : m.card) : null}));
-  try { if (S.db && S.uid) S.db.doc(`data/users/${S.uid}/assist`).set({msgs, at:new Date().toISOString()}).catch(()=>{}); else localStorage.setItem("dq.assist", JSON.stringify(msgs)); } catch {}
+  void msgs;
 }
 function asMsgHtml(m, i){
   if (m.role==="user") return `<div class="msg u">${esc(m.text)}</div>`;
@@ -6997,7 +6998,7 @@ async function xAsk(kind, text, imgs){
     : `هذا عقد أتعاب محاماة سعودي بين مكتب المحاماة (الطرف الأول) والعميل (الطرف الثاني). استخرج بيانات العميل (الطرف الثاني فقط، لا المكتب ولا المحامي) وشروط الأتعاب كما هي مكتوبة فقط. أعد JSON فقط:
 {"party":{"name":"","idType":"هوية|إقامة|سجل تجاري|رقم موحد","idNo":"","phone":"","city":""},"fees":{"vat":"true إن نُص على إضافة الضريبة، false إن نُص أنها شاملة، null إن لم تُذكر","items":[{"label":"وصف الدفعة","kind":"fixed أو percent","amount":"المبلغ بالريال كما كُتب","percent":"النسبة كما كُتبت","trigger":"signing|filing|judgment|final|execution|collection|date","date":"تاريخ الاستحقاق إن كان محدداً"}]}}`;
   const rules = `\nقواعد: انسخ الأرقام كما هي بلا تعديل ولا حساب. اترك أي حقل لم يُكتب في الوثيقة فارغاً (""، أو [] للدفعات). لا تخترع شيئاً.`;
-  try { const opts = {modelTier:"default", cache:false}; if (imgs?.length) opts.images = imgs.slice(0, 3);
+  try { const opts = {modelTier:"quick", cache:false}; if (imgs?.length) opts.images = imgs.slice(0, 3);
     const j = await asJson(ask + rules + (text ? `\n\nنص الوثيقة:\n"""${text.slice(0, 9000)}"""` : `\n\n(الوثيقة صورة مرفقة)`), opts);
     return j && typeof j === "object" ? j : null; } catch { return null; }
 }
