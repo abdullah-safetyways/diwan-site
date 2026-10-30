@@ -407,6 +407,7 @@ tr[aria-selected="true"] td{background:var(--accent-soft)}
 .qa-rail{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
 .qa-rail h2{font-size:.78rem;font-weight:600;color:var(--ink-3);margin:0 4px 6px}
 .qa-rail:has(#qaRailBox:empty){display:none}
+body:has(#asPanel:not([hidden])) .ux-bar{display:none}
 .date-echo{display:block;font-size:.78rem;color:var(--ink-3);margin-top:3px;min-height:1em}
 .st-m{display:none;margin-top:4px}
 @media (max-width:860px){.st-m{display:inline-flex}}
@@ -4044,7 +4045,7 @@ async function exportBackup(onStep){
   let i = 0; for (const d of cases) { const c = d.data(); i++;
     if ((c.sessions||[]).some(s => s.minLen || s.najizMinLen)) { onStep?.(`ضبوط الجلسات الطويلة (${i} من ${cases.length})…`); await coll(`cases/${d.id}/min`); }
     if ((c.draftsIdx||[]).length) await coll(`cases/${d.id}/drafts`); }
-  for (const p of ["meta","agenda","finance","office","memos","tasks","time","comms","trust","receipts","expenses","moves","ledger","conflicts","learn","learn/memos/items","learn/edits/items","learn/templates/items","learn/skills/items","logs","log","join"]) { onStep?.("سجلات المكتب…"); await coll(p).catch(() => []); }
+  for (const p of ["meta","agenda","finance","office","memos","tasks","time","comms","trust","receipts","expenses","moves","ledger","conflicts","leads","learn","learn/memos/items","learn/edits/items","learn/templates/items","learn/skills/items","logs","log","join"]) { onStep?.("سجلات المكتب…"); await coll(p).catch(() => []); }
   // v36: the representatives' requests (v32) and the owner's own private records were still outside the backup (v12 added tasks, time, contact, client money and conflict checks to the list above at build time)
   for (const p of ["requests", ...(S.uid ? [`data/users/${S.uid}`] : [])]) { onStep?.("سجلات المكتب…"); await coll(p).catch(() => []); }
   onStep?.("المكتبة القانونية…"); const libs = await coll("lib").catch(() => []); for (const d of libs) await coll(`lib/${d.id}/ch`).catch(() => []);
@@ -8272,7 +8273,11 @@ function trackBindForm(dr){
 // a deadline written on the file becomes a task with that date, so it shows in «عملي» and on the home page
 async function trackDueTask(id, title, due, prev, doc){
   if (!due || due===prev || !S.db || !can("tasks.edit")) return;
-  const c = S.cases.get(id) || doc; const tid = "tk"+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
+  const c = S.cases.get(id) || doc;
+  // a moved deadline moves its task: the open «موعد: …» task of this file is updated, not doubled
+  const prevTask = tasksAll().find(t => t.caseId===id && t.via==="track" && !t.done);
+  if (prevTask) { try { await S.db.doc("tasks/"+prevTask.id).update({due, title:`موعد: ${title}`, updatedAt:new Date().toISOString()}); await logAction(id, `نقل الموعد إلى ${fmtD(due)}`); } catch {} return; }
+  const tid = "tk"+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
   try { await S.db.doc("tasks/"+tid).set({id:tid, caseId:id, client:c?.client||null, clientKey:c?.client ? normName(c.client) : null, engagementId:c?.engagementId||null,
       title:`موعد: ${title}`, due, assignee:S.uid||null, priority:"high", note:null, files:[], shared:false, done:false, createdAt:new Date().toISOString(), createdBy:S.uid||null, via:"track"});
     await logAction(id, `أضاف موعداً: ${fmtD(due)}`); } catch {}
@@ -9047,7 +9052,7 @@ portalBody = function(K, o){
   const shown = office ? rows : rows.filter(r => !r.internal);
   const body = st.loading && !st.rows ? `<div class="thinking"><span class="dot"></span>يقرأ مستندات القضايا…</div>` : st.error ? `<div class="notice err">${esc(st.error)}</div>`
     : shown.length ? `<div class="docs">${shown.slice(0, 200).map(row).join("")}</div>` : `<div class="empty">${office ? "لا مستندات في مجلدات قضايا هذه الشركة بعد." : "لا مستندات مشتركة بعد. يضيفها المكتب إلى مجلدات القضايا."}</div>`;
-  return h + `<section class="panel" id="uxPortalFiles"><header><h2>مستندات القضايا</h2><span class="sub">${office ? "ما عليه «داخلي» لا يراه ممثل الشركة؛ يُغيَّر من تبويب «المستندات» في القضية" : "تُفتح من ملفات المكتب بحسابك"}</span></header>${body}</section>`;
+  return h + `<section class="panel" id="uxPortalFiles"><header><h2>مستندات القضايا</h2><span class="sub">${office ? "كل مستند داخلي لا يراه ممثل الشركة حتى يُضغط «إظهار للموكل» عليه في تبويب «المستندات» في القضية" : "تُفتح من ملفات المكتب بحسابك"}</span></header>${body}</section>`;
 };
 
 const uxFilesAfter0 = afterRender;
@@ -9128,6 +9133,10 @@ document.addEventListener("toggle", (e) => {
   S.uxRevOpen = new Set([...document.querySelectorAll("details.ux-rev[open]")].map(x => x.dataset.revId));
 }, true);
 
+window.diwanInvalidate = (p) => { let m = /^cases\/([^/]+)\/drafts\//.exec(p);
+  if (m) { DRAFTS.delete(m[1]); if (S.caseId===m[1] && !document.activeElement?.matches?.("input,textarea,select")) render(); return; }
+  m = /^cases\/([^/]+)\/min\//.exec(p); if (m) { MINS.delete(m[1]); return; }
+  m = /^logs\/(.+)$/.exec(p); if (m && S.logs) { delete S.logs[m[1]]; if (S.caseId===m[1] && !document.activeElement?.matches?.("input,textarea,select")) render(); } };
 // ---------- events
 // the home page's third column exists on wide screens only: its panels move there, and back when the window narrows
 const WIDE = window.matchMedia ? window.matchMedia("(min-width:1500px)") : null;
@@ -9226,7 +9235,7 @@ async function patchCase(c, patch, action, changes){
   try { await S.db.doc("cases/"+c.id).update(patch); await logAction(c.id, action, changes); return true; }
   catch(e){
     if (e?.code==="invalid_argument") { if (size > 200000) toast("ملف هذه القضية كبير جداً فلم يُحفظ التعديل."); else { S.canWrite=false; toast("لا تملك صلاحية التعديل على هذا الديوان"); render(); } }
-    else if (e?.code==="quota_exceeded") toast("امتلأت سعة قاعدة البيانات"); else toast("تعذّر الحفظ، حاول مجدداً");
+    else if (e?.code==="quota_exceeded") toast("امتلأت سعة قاعدة البيانات"); else if (e?.code==="conflict") { toast(e.message); render(); } else toast("تعذّر الحفظ، حاول مجدداً");
     return false; }
 }
 function fieldPatch(c, vals){
@@ -9327,7 +9336,7 @@ function caseContext(c, docs, maxBytes=150000){
   return fitBytes(out, maxBytes);
 }
 function aiErr(e){
-  const m = {not_granted:"لم يُسمح للديوان باستخدام Claude. فعّل الإذن من قائمة الصلاحيات أعلى الصفحة.", rate_limited:"وصلت لحد الاستخدام مؤقتاً. حاول بعد قليل.", prompt_too_large:"محتوى القضية أطول من اللازم. قلّل الملفات المختارة.", invalid_json:"جاء الرد بصيغة غير مكتملة. أعد المحاولة.", session_expired:"انتهت الجلسة. سجّل الدخول مجدداً.", refused:"اعتذر المساعد عن هذا الطلب. أعد صياغته."};
+  const m = {not_granted:"المساعد لأعضاء المكتب الذين يملكون صلاحية «استخدام المساعد»؛ يمنحها مالك المكتب من صفحة «الموظفون والصلاحيات».", rate_limited:"وصلت لحد الاستخدام مؤقتاً. حاول بعد قليل.", prompt_too_large:"محتوى القضية أطول من اللازم. قلّل الملفات المختارة.", invalid_json:"جاء الرد بصيغة غير مكتملة. أعد المحاولة.", session_expired:"انتهت الجلسة. سجّل الدخول مجدداً.", refused:"اعتذر المساعد عن هذا الطلب. أعد صياغته."};
   return m[e?.code] || "تعذّر الاتصال بالمساعد. أعد المحاولة.";
 }
 const odText = (r) => typeof r.payload==="string" ? r.payload : (r.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");

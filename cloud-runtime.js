@@ -18,6 +18,7 @@
     if (e && e.code && /^[a-z_]+$/.test(e.code)) return e;
     const c = String(e?.code || ""), m = String(e?.message || e || "");
     const code = c === "42501" || /row-level security|permission denied/i.test(m) ? "permission_denied"
+      : c === "P0003" || /^conflict/.test(m) ? "conflict"
       : c === "P0002" || /not_found/.test(m) ? "not_found"
       : c === "54000" || /too large|payload/i.test(m) ? "too_large"
       : /fetch|network|Failed to fetch|timeout/i.test(m) ? "unavailable" : "unavailable";
@@ -26,21 +27,33 @@
 
   // ---------------------------------------------------------------- the database («db»)
   const cache = new Map();           // path → data, for every document fetched or watched
+  const ver = new Map();             // path → version last seen, sent back with every write so a stale copy never overwrites a newer one
   const subs = [];                   // {kind:"doc"|"coll", path, f, filt, lim}
   const snapDoc = (path) => { const v = cache.get(path); return {id: idOf(path), exists: v !== undefined, data: () => clone(v), metadata: {}}; };
   const collDocs = (c) => [...cache.keys()].filter(k => parentOf(k) === c && k !== c).sort((a, b) => idOf(a) < idOf(b) ? -1 : idOf(a) > idOf(b) ? 1 : 0).map(snapDoc);
   function emit(path){ const par = parentOf(path); for (const s of [...subs]) if ((s.kind === "doc" && s.path === path) || (s.kind === "coll" && s.path === par)) { try { s.f(); } catch {} } }
 
+  const PORTAL = () => !!(WHO && WHO.client && !WHO.staff);
+  const portalPath = (p) => parentOf(p) === "cases" || parentOf(p) === "tasks" || p === "office/profile";
+  let portalBusy = null;
+  function portalLoad(){ if (portalBusy) return portalBusy; portalBusy = (async () => { try {
+      const {data, error} = await sb.rpc("portal_docs"); if (error) throw err(error);
+      const got = new Map((data || []).map(r => [r.path, r]));
+      for (const k of [...cache.keys()]) if (portalPath(k) && !got.has(k)) { cache.delete(k); ver.delete(k); emit(k); }
+      for (const [p, r] of got) { const was = JSON.stringify(cache.get(p)); cache.set(p, r.data); ver.set(p, r.version); if (was !== JSON.stringify(r.data)) emit(p); }
+    } finally { portalBusy = null; } })(); return portalBusy; }
   async function fetchDoc(path){
+    if (PORTAL() && portalPath(path)) { await portalLoad(); return; }
     if (path === STAFF) { const {data, error} = await sb.rpc("staff_doc"); if (error) throw err(error); if (data) cache.set(path, data); else cache.delete(path); return; }
-    const {data, error} = await sb.from(T).select("path,data").eq("path", path).maybeSingle();
+    const {data, error} = await sb.from(T).select("path,data,version").eq("path", path).maybeSingle();
     if (error) throw err(error);
-    if (data) cache.set(path, data.data); else cache.delete(path);
+    if (data) { cache.set(path, data.data); ver.set(path, data.version); } else { cache.delete(path); ver.delete(path); }
   }
   async function fetchColl(c, filt = [], lim = 0){
+    if (PORTAL() && (c === "cases" || c === "tasks")) { await portalLoad(); return [...cache.keys()].filter(k => parentOf(k) === c).map(k => ({path: k, data: cache.get(k), version: ver.get(k)})); }
     const out = []; const PAGE = 500;
     for (let from = 0; ; from += PAGE) {
-      let q = sb.from(T).select("path,data").eq("parent", c);
+      let q = sb.from(T).select("path,data,version").eq("parent", c);
       for (const [f, op, v] of filt) if (op === "==" && ["string", "number", "boolean"].includes(typeof v)) q = q.eq("data->>" + f, String(v));
       q = q.order("id").range(from, from + PAGE - 1);
       const {data, error} = await q; if (error) throw err(error);
@@ -52,23 +65,25 @@
 
   // changes from other people arrive by Realtime; the document is read again (the reader's rights apply, and big rows are not cut)
   const pending = new Set(); let flushT = null;
-  function changed(path){ if (!subs.some(s => (s.kind === "doc" && s.path === path) || (s.kind === "coll" && s.path === parentOf(path)))) { cache.delete(path); return; } pending.add(path); clearTimeout(flushT); flushT = setTimeout(flush, 120); }
+  function changed(path){ if (window.diwanInvalidate && /^(cases\/[^/]+\/(drafts|min)\/|logs\/)/.test(path)) { try { window.diwanInvalidate(path); } catch {} }
+    if (PORTAL() && portalPath(path)) { portalLoad().catch(() => {}); return; }
+    if (!subs.some(s => (s.kind === "doc" && s.path === path) || (s.kind === "coll" && s.path === parentOf(path)))) { cache.delete(path); return; } pending.add(path); clearTimeout(flushT); flushT = setTimeout(flush, 120); }
   async function flush(){
     const paths = [...pending]; pending.clear();
     if (paths.includes(STAFF)) { try { await fetchDoc(STAFF); } catch {} emit(STAFF); }
     const rest = paths.filter(p => p !== STAFF);
     for (let i = 0; i < rest.length; i += 100) {
       const chunk = rest.slice(i, i + 100);
-      const {data, error} = await sb.from(T).select("path,data").in("path", chunk);
+      const {data, error} = await sb.from(T).select("path,data,version").in("path", chunk);
       if (error) continue;
-      const got = new Map(data.map(r => [r.path, r.data]));
-      for (const p of chunk) { if (got.has(p)) cache.set(p, got.get(p)); else cache.delete(p); emit(p); }
+      const got = new Map(data.map(r => [r.path, r]));
+      for (const p of chunk) { if (got.has(p)) { cache.set(p, got.get(p).data); ver.set(p, got.get(p).version); } else { cache.delete(p); ver.delete(p); } emit(p); }
     }
   }
   async function resyncAll(){
     for (const s of [...subs]) {
       try { if (s.kind === "doc") await fetchDoc(s.path);
-        else { const rows = await fetchColl(s.path); const keep = new Set(rows.map(r => r.path)); for (const k of [...cache.keys()]) if (parentOf(k) === s.path && !keep.has(k)) cache.delete(k); for (const r of rows) cache.set(r.path, r.data); }
+        else { const rows = await fetchColl(s.path); const keep = new Set(rows.map(r => r.path)); for (const k of [...cache.keys()]) if (parentOf(k) === s.path && !keep.has(k)) { cache.delete(k); ver.delete(k); } for (const r of rows) { cache.set(r.path, r.data); ver.set(r.path, r.version); } }
         s.f(); } catch {}
     }
   }
@@ -79,15 +94,20 @@
   }
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && wasDown) { wasDown = false; resyncAll(); } });
 
+  // a write that lost to someone else's: the record is read again (and the page redrawn through its watchers) before the error goes up
+  async function conflict(path, error){ const e = err(error); if (e.code !== "conflict") return e;
+    try { await fetchDoc(path); } catch {} emit(path); return {code: "conflict", message: "تغيّر هذا السجل من جهاز آخر وأُعيد تحميله؛ راجع ما ظهر ثم أعد التعديل"}; }
   const unsub = (f) => () => { const i = subs.findIndex(s => s.f === f); if (i >= 0) subs.splice(i, 1); };
   const newId = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
   const db = {
     doc(path){ return {
       get: async () => { await fetchDoc(path); return snapDoc(path); },
-      set: async (d) => { const data = clone(d) || {}; const {error} = await sb.from(T).upsert({path, data}, {onConflict: "path"}); if (error) throw err(error); cache.set(path, data); emit(path); },
-      update: async (p) => { const patch = clone(p) || {}; const {error} = await sb.rpc("doc_update", {p_path: path, p_patch: patch}); if (error) throw err(error);
-        if (cache.has(path) && path !== STAFF) cache.set(path, {...cache.get(path), ...patch}); else await fetchDoc(path).catch(() => {}); emit(path); },
-      delete: async () => { const {error} = await sb.from(T).delete().eq("path", path); if (error) throw err(error); cache.delete(path); emit(path); },
+      set: async (d) => { const data = clone(d) || {}; const {data: v, error} = await sb.rpc("doc_set", {p_path: path, p_data: data, p_version: ver.get(path) ?? null}); if (error) throw await conflict(path, error);
+        cache.set(path, data); if (v != null) ver.set(path, v); emit(path); },
+      update: async (p) => { const patch = clone(p) || {}; const {data: v, error} = await sb.rpc("doc_update", {p_path: path, p_patch: patch, p_version: ver.get(path) ?? null}); if (error) throw await conflict(path, error);
+        if (cache.has(path) && path !== STAFF) cache.set(path, {...cache.get(path), ...patch}); else await fetchDoc(path).catch(() => {}); if (v != null) ver.set(path, v); emit(path); },
+      delete: async () => { const {data, error} = await sb.from(T).delete().eq("path", path).select("path"); if (error) throw err(error);
+        if (!data || !data.length) throw {code: "not_found", message: "لم يُحذف: السجل غير موجود أو لا تملك صلاحية حذفه"}; cache.delete(path); ver.delete(path); emit(path); },
       onSnapshot(cb, onErr){ const f = () => cb(snapDoc(path)); subs.push({kind: "doc", path, f});
         // office/staff was read at sign-in: hand it over at once, so the page knows the viewer's role before the cases arrive
         if (path === STAFF && staffAtBoot) { staffAtBoot = false; setTimeout(f, 0); return unsub(f); }
@@ -145,14 +165,16 @@
     let r; try { r = await realFetch(FN("sample"), {method: "POST", signal: opts.signal, headers: authHeaders(), body: JSON.stringify(stable ? {input, tier, stable} : {input, tier})}); }
     catch (e) { if (e && e.name === "AbortError") throw {code: "cancelled", message: "cancelled"}; throw {code: "network", message: String(e && e.message || e)}; }
     if (!r.ok) { let b = {}; try { b = await r.json(); } catch {} throw {code: b.code || (r.status === 403 ? "not_granted" : r.status === 429 ? "rate_limited" : "unavailable"), message: b.message || ("HTTP " + r.status)}; }
-    const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = "", text = "", stop = null;
+    const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = "", text = "", stop = null, ended = false;
     try { for (;;) { const {value, done: fin} = await reader.read(); if (fin) break; buf += dec.decode(value, {stream: true}); let i;
         while ((i = buf.indexOf("\n\n")) >= 0) { const chunk = buf.slice(0, i); buf = buf.slice(i + 2); const line = chunk.split("\n").find(l => l.startsWith("data:")); if (!line) continue; let ev; try { ev = JSON.parse(line.slice(5).trim()); } catch { continue; }
           if (ev.type === "content_block_delta" && ev.delta?.type === "text_delta") { text += ev.delta.text; opts.onText && opts.onText({text, delta: ev.delta.text}); }
           else if (ev.type === "message_delta" && ev.delta?.stop_reason) stop = ev.delta.stop_reason;
+          else if (ev.type === "message_stop") ended = true;
           else if (ev.type === "error") throw {code: "unavailable", message: ev.error?.message || "stream error", text}; } } }
     catch (e) { if (e && e.name === "AbortError") throw {code: "cancelled", message: "cancelled", text}; throw e; }
     if (stop === "refusal") throw {code: "refused", message: "اعتذر النموذج عن هذا الطلب", text};
+    if (!stop && !ended) throw {code: "unavailable", message: "انقطع رد المساعد قبل اكتماله؛ أعد المحاولة", text};
     return {text, truncated: stop === "max_tokens", modelTierApplied: tier};
   }
   const sample = Object.assign((input, opts) => sampleCore(input, opts), {
@@ -162,7 +184,9 @@
       if (v === undefined) throw {code: "invalid_json", message: "no json", text: r.text}; return v; },
     limits: async () => ({maxPromptBytes: 262144, tools: false, images: false}) });
   let sampleOn = null;
-  async function sampleReady(){ if (sampleOn !== null) return sampleOn; try { const r = await realFetch(FN("sample"), {method: "POST", headers: authHeaders(), body: JSON.stringify({probe: true})}); sampleOn = r.ok; } catch { sampleOn = false; } return sampleOn; }
+  async function sampleReady(){ if (sampleOn !== null) return sampleOn;
+    try { const r = await realFetch(FN("sample"), {method: "POST", headers: authHeaders(), body: JSON.stringify({probe: true})}); if (r.ok || r.status === 503 || r.status === 403) sampleOn = r.ok; return r.ok; }   // only a clear answer is remembered
+    catch { return false; } }
 
   // ---------------------------------------------------------------- the owner's accounts panel («admin» function on the server)
   async function admin(body){ const r = await realFetch(FN("admin"), {method: "POST", headers: authHeaders(), body: JSON.stringify(body)}); let b = {}; try { b = await r.json(); } catch {} if (!r.ok) throw new Error(b.message || ("HTTP " + r.status)); return b; }
@@ -220,6 +244,8 @@
       break;
     }
     const {data: who, error} = await sb.rpc("whoami"); if (error) throw err(error); WHO = who;
+    // a representative hears no change events for the cases (he never reads the rows): his copy is refreshed every minute while the page is in view
+    if (who && who.client && !who.staff) setInterval(() => { if (document.visibilityState === "visible") portalLoad().catch(() => {}); }, 60000);
     try { await fetchDoc(STAFF); staffAtBoot = true; } catch {}
     if (WHO?.staff) await loadTemplates();
     if (gate) { gate.remove(); gate = null; }

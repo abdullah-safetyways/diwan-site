@@ -89,7 +89,8 @@
   async function uploadTool({parentItemId, filename, contentBase64, conflictBehavior}){
     const parent = await rowById(parentItemId); if (!parent?.is_folder) throw {code: "tool_error", message: "parent folder not found"};
     const bin = atob(String(contentBase64 || "")); const bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    const row = await F.uploadFile(parent.path, new Blob([bytes], {type: mimeOf(filename)}), filename, {conflict: conflictBehavior === "replace" ? "replace" : "rename", bytes});
+    // what the Diwan itself writes into a case folder (a draft, a report) is the office's work: internal until someone shares it
+    const row = await F.uploadFile(parent.path, new Blob([bytes], {type: mimeOf(filename)}), filename, {conflict: conflictBehavior === "replace" ? "replace" : "rename", bytes, internal: true});
     return text(JSON.stringify(asItem(row)));
   }
   F.mcp = {
@@ -115,7 +116,8 @@
     folderCache.set(path, data); return data;
   };
   // one file into a folder; «rename» keeps both on a clash (name (2).ext), «replace» overwrites, «skip» returns the existing row
-  F.uploadFile = async (folderPath, blob, name, {conflict = "rename", bytes = null, extract: doExtract = true, internal = false} = {}) => {
+  // every file is the office's until someone shows it to the client (Abdullah, 30/10: «كلها داخلية إلا ما أمنح الممثل عليها حق الاطلاع»)
+  F.uploadFile = async (folderPath, blob, name, {conflict = "rename", bytes = null, extract: doExtract = true, internal = true} = {}) => {
     name = cleanName(name); const folder = await F.ensureFolder(folderPath);
     let path = folder.path + "/" + name, existing = await rowByPath(path);
     if (existing && conflict === "skip") return existing;
