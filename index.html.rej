@@ -1,0 +1,11 @@
+--- b0/index.html	2026-10-30 16:31:15.260638016 +0000
++++ remote_index.html	2026-10-30 16:31:31.028637378 +0000
+@@ -8123,7 +8142,7 @@
+ function railQa(){
+   if (!S.loaded || !S.me?.allowed || S.me.role==="client" || S.me.scope==="client" || !(can("tasks.edit") || can("memos.edit"))) { $("qaRailBox") && ($("qaRailBox").innerHTML = ""); return; }
+   const box = $("qaRailBox"); if (!box || box.firstChild) return;
+-  box.innerHTML = qaBar("qaRail", "مثل: مذكرة الرد الأحد لفهد"); bindQa($("qaRail"));
++  box.innerHTML = qaBar("qaRail", `مثل: مذكرة الرد الأحد ${qaExampleName() ? "ل" + qaExampleName() : "لي"}`); bindQa($("qaRail"));
+ }
+ // one list of what is on a member: their open tasks and memos, by when
+ function workItems(uid){

@@ -390,7 +390,7 @@ tr[aria-selected="true"] td{background:var(--accent-soft)}
     <div class="brand" id="brandBox"><b>ديوان القضايا</b><span id="brandSub"></span></div>
     <form class="gsearch" id="gForm" role="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="gQ" type="search" placeholder="بحث شامل…" aria-label="بحث شامل في القضايا والجلسات والمستندات"></form>
     <nav id="nav" class="grid" style="gap:4px"></nav>
-    <section class="qa-rail" aria-labelledby="qaRailH"><h2 id="qaRailH">مهمة سريعة</h2><div id="qaRailBox"></div></section>
+    <section class="qa-rail" aria-labelledby="qaRailH"><h2 id="qaRailH">المساعد الذكي</h2><div id="qaRailBox"></div></section>
     <div class="rail-foot" id="railFoot"><span>جارٍ الاتصال بقاعدة البيانات…</span></div>
   </aside>
   <div style="min-width:0">
@@ -5563,7 +5563,7 @@ function vTasks(){
   const FL = [["mine","مهامي",t=>!t.done&&taskMine(t)],["today","اليوم",t=>!t.done&&t.due&&t.due<=T],["week","هذا الأسبوع",t=>!t.done&&t.due&&daysUntil(t.due)<=7],["late","متأخرة",t=>taskLate(t)],["open","كل المفتوحة",t=>!t.done],["done","المنجزة",t=>t.done]];
   const f = FL.find(x=>x[0]===UI.f) || FL[0]; const list = all.filter(f[2]).sort((a,b)=> f[0]==="done" ? (b.doneAt||"").localeCompare(a.doneAt||"") : (a.due||"9").localeCompare(b.due||"9"));
   return `<div class="chips" style="margin-bottom:12px">${FL.map(([k,l,fn])=>`<button class="chip" data-tf="${k}" aria-pressed="${f[0]===k}">${l} <span class="num muted">${all.filter(fn).length}</span></button>`).join("")}${can("tasks.edit")?`<button class="btn sm primary" id="taskNew" style="margin-inline-start:auto" ${S.canWrite?"":"disabled"}>+ مهمة</button>`:""}</div>
-  <section class="panel">${list.length?`<div class="tasks">${list.slice(0,200).map(t=>taskRow(t)).join("")}</div>`:`<div class="empty">لا مهام هنا. أضف مهمة من «مهمة سريعة» في الشريط الجانبي أو من تبويب «المذكرات والمهام» في القضية.</div>`}</section>`;
+  <section class="panel">${list.length?`<div class="tasks">${list.slice(0,200).map(t=>taskRow(t)).join("")}</div>`:`<div class="empty">لا مهام هنا. اكتب المهمة في «المساعد الذكي» في الشريط الجانبي أو من تبويب «المذكرات والمهام» في القضية.</div>`}</section>`;
 }
 function homeTasksPanel(){
   const list = tasksAll().filter(t => !t.done && taskMine(t) && (!t.due || daysUntil(t.due) <= 7)).sort((a,b)=>(a.due||"9").localeCompare(b.due||"9"));
@@ -6287,11 +6287,12 @@ async function asCommit(ctx){
   }
   if (intent==="task") {
     if (!can("tasks.edit")) return asSay("ليست لديك صلاحية إضافة المهام.");
-    const id = "tk"+Date.now().toString(36)+Math.random().toString(36).slice(2,5); const who = asMember(plan.assignee) || S.uid || null;
+    const qp = quickParse(text.split("\n")[0]); const id = "tk"+Date.now().toString(36)+Math.random().toString(36).slice(2,5); const who = asMember(plan.assignee) || qp.assignee || S.uid || null;
+    if (!when.date && qp.due) when.date = qp.due;
     const title = (plan.title || plan.summary || text.split("\n")[0]).trim().slice(0,160);
-    const doc = {id, caseId:c?.id||null, title, due:when.date||null, assignee:who, priority:/عاجل|مستعجل/.test(text)?"high":"normal", note: plan.summary && plan.summary!==title ? plan.summary.slice(0,300) : null, done:false, createdAt:new Date().toISOString(), createdBy:S.uid||null, via:"assistant"};
+    const doc = {id, caseId:c?.id||null, title, due:when.date||null, assignee:who, priority:/عاجل|مستعجل/.test(text)||qp.priority==="high"?"high":"normal", note: plan.summary && plan.summary!==title ? plan.summary.slice(0,300) : null, done:false, createdAt:new Date().toISOString(), createdBy:S.uid||null, via:"assistant"};
     try { await S.db.doc("tasks/"+id).set(doc); await logAction(c?.id||null, `أضاف مهمة عبر المساعد: ${title}`); } catch { return asSay("تعذّر حفظ المهمة."); }
-    return asSay(pre + `سُجّلت المهمة${c?` على القضية ${c.caseNo||""} — ${c.title.slice(0,40)}`:" (عامة)"}:\n• ${title}${doc.due?`\n• آخر موعد ${asDateTxt(doc.due)}`:""}${who?`\n• المسؤول: ${who===S.uid?"أنت":memberName(who)}`:""}${tail}`, {type:"task", id, caseId:c?.id||null});
+    return asSay(pre + `سُجّلت المهمة${c?` على القضية ${c.caseNo||""} — ${c.title.slice(0,40)}`:" (عامة)"}:\n• ${title}${doc.due?`\n• آخر موعد ${asDateTxt(doc.due)}`:""}${who?`\n• المسؤول: ${who===S.uid?"أنت":memberName(who)}`:""}${doc.priority==="high"?"\n• عاجلة":""}${tail}`, {type:"task", id, caseId:c?.id||null});
   }
   if (intent==="memo") {
     if (!c) return asAskCase(ctx); if (!can("memos.edit")) return asSay("ليست لديك صلاحية تسجيل المذكرات.");
@@ -6363,10 +6364,16 @@ async function asAction(i, act, arg){
   k.done = "picked"; asSave();
   return asRun(() => asCommit({...k.ctx, caseId}));
 }
+function asQuickPlan(text, plan){
+  if (!["chat","question"].includes(plan.intent) || /\n|[?؟]/.test(text) || text.length > 200 || !(can("tasks.edit") || can("memos.edit"))) return plan;
+  const qp = quickParse(text); if (!qp.title || !(qp.due || qp.assignee || qp.priority==="high" || qp.kind==="memo")) return plan;
+  return {...plan, intent: qp.kind==="memo" ? "memo" : "task", memoKind: qp.memoKind || plan.memoKind, title: qp.title, summary: qp.title,
+    when: {...asEmptyWhen(), gregorian: qp.due || null}, caseNo: qp.caseNo || plan.caseNo, refs: {...plan.refs, numbers: qp.caseNo ? [String(qp.caseNo)] : (plan.refs?.numbers || [])}};
+}
 async function assistSend(text){
   const A = S.assist; text = String(text||"").trim(); if (!text || A.busy) return;
   A.msgs.push({role:"user", text}); A.busy = true; A.busyTxt = "يقرأ الرسالة…"; asRender(); asSave();
-  try { const plan = await assistPlan(text); if (plan.intent==="question" || plan.intent==="chat") A.busyTxt = "يفكر…"; else A.busyTxt = "يسجّل…"; asRender(); await assistAct(text, plan); }
+  try { const plan = asQuickPlan(text, await assistPlan(text)); if (plan.intent==="question" || plan.intent==="chat") A.busyTxt = "يفكر…"; else A.busyTxt = "يسجّل…"; asRender(); await assistAct(text, plan); }
   catch(e){ asSay(e?.text ? e.text : aiErr(e)); }
   A.busy = false; asSave(); asRender();
 }
@@ -6424,7 +6431,7 @@ function ensureAssistUI(){
     panel = document.createElement("section"); panel.id = "asPanel"; panel.className = "as-panel"; panel.setAttribute("role","dialog"); panel.setAttribute("aria-label","مساعد الديوان"); panel.hidden = true;
     panel.innerHTML = `<header class="as-head"><div><b>مساعد الديوان</b><div class="sub">ألصق رسالة ناجز أو المحكمة أو الموكل، أو اكتب طلبك، وسأسجله في مكانه.</div></div><div style="display:flex;gap:4px;flex:none"><button class="btn sm ghost" id="asClear" type="button" title="مسح المحادثة">مسح</button><button class="btn sm" id="asClose" type="button" aria-label="إغلاق">✕</button></div></header>
       <div class="chat as-log" id="asLog"></div><datalist id="asCases"></datalist>
-      <form class="as-in" id="asForm"><textarea class="inp" id="asIn" rows="2" placeholder="ألصق رسالة ناجز هنا… أو اكتب: ذكّرني بمراجعة قضية فلان الخميس القادم" aria-label="رسالتك"></textarea><button class="btn primary" id="asSend" type="submit">إرسال</button></form>`;
+      <form class="as-in" id="asForm"><textarea class="inp" id="asIn" rows="2" placeholder="ألصق رسالة ناجز هنا… أو اكتب مهمة: مذكرة الرد الأحد لفهد عاجل" aria-label="رسالتك"></textarea><button class="btn primary" id="asSend" type="submit">إرسال</button></form>`;
     document.body.appendChild(panel);
     panel.querySelector("#asClose").onclick = () => asOpen(false);
     panel.querySelector("#asClear").onclick = () => { S.assist.msgs = [{role:"assistant", text:AS_HELLO, hello:true}]; asSave(); asRender(); };
@@ -8121,9 +8128,10 @@ function bindQa(form){
     if (await quickSave(inp.value)) { inp.value = ""; show(); } delete form.dataset.busy; };
 }
 function railQa(){
-  if (!S.loaded || !S.me?.allowed || S.me.role==="client" || S.me.scope==="client" || !(can("tasks.edit") || can("memos.edit"))) { $("qaRailBox") && ($("qaRailBox").innerHTML = ""); return; }
+  if (!assistOk()) { $("qaRailBox") && ($("qaRailBox").innerHTML = ""); return; }
   const box = $("qaRailBox"); if (!box || box.firstChild) return;
-  box.innerHTML = qaBar("qaRail", `مثل: مذكرة الرد الأحد ${qaExampleName() ? "ل" + qaExampleName() : "لي"}`); bindQa($("qaRail"));
+  box.innerHTML = `<form class="qa" id="qaRail" autocomplete="off"><input class="inp" name="q" placeholder="مهمة أو طلب: مذكرة الرد الأحد لفهد" aria-label="اكتب للمساعد الذكي"><div class="qa-prev sub">Enter يرسلها إلى المساعد</div></form>`;
+  const f = $("qaRail"); f.onsubmit = (e) => { e.preventDefault(); const t = f.elements.q.value.trim(); if (!t || S.assist.busy) return; f.elements.q.value = ""; asOpen(true); assistSend(t); };
 }
 // one list of what is on a member: their open tasks and memos, by when
 function workItems(uid){
