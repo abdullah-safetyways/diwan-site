@@ -210,7 +210,7 @@
   const AR = (m) => /Invalid login/i.test(m) ? "البريد أو كلمة المرور غير صحيحة" : /Invalid TOTP|invalid.*code|expired/i.test(m) ? "الرمز غير صحيح أو انتهت صلاحيته" : /rate limit|security purposes/i.test(m) ? "محاولات كثيرة؛ انتظر قليلاً ثم أعد المحاولة"
     : /not authorized|Email address/i.test(m) ? "خدمة البريد الحالية لا تستطيع الإرسال إلى هذا العنوان؛ اطلب من مالك المكتب كلمة مرور مؤقتة" : m;
 
-  async function signIn(){
+  async function signIn(note){
     const done = form(`<p>الدخول بحساب المكتب</p><label>البريد الإلكتروني</label><input class="ltr" name="email" type="email" autocomplete="username" required>
       <label>كلمة المرور</label><input class="ltr" name="pw" type="password" autocomplete="current-password" required><button type="submit">دخول</button>
       <button type="button" class="link" id="dcForgot">نسيت كلمة المرور؟</button>`,
@@ -224,6 +224,7 @@
         say("إن كان هذا البريد مسجلاً فقد أُرسل إليه رابط لتعيين كلمة مرور جديدة؛ افتحه من هذا الجهاز خلال ساعة."); }
       catch (x) { say(x.message || String(x)); }
       fg.disabled = false; };
+    if (note) say(note);
     await done;
   }
   async function secondFactor(){
@@ -249,15 +250,23 @@
   }
   async function boot(){
     if (!document.body) await new Promise(r => document.addEventListener("DOMContentLoaded", r, {once: true}));
+    // a session kept on this device can be dead (the password was changed elsewhere, the sign-in was revoked): it is dropped
+    // and the sign-in form shown, instead of a page with no database
+    let note = "";
     for (;;) {
-      let {data: {session}} = await sb.auth.getSession();
-      if (!session) { await signIn(); continue; }
-      try { await secondFactor(); } catch (e) { say(AR(e.message || String(e))); await sb.auth.signOut(); continue; }
-      ({data: {session}} = await sb.auth.refreshSession()); SESSION = session;
-      await newPassword(); ({data: {session}} = await sb.auth.getSession()); SESSION = session;
+      let session = null; try { ({data: {session}} = await sb.auth.getSession()); } catch {}
+      if (!session) { await signIn(note); note = ""; continue; }
+      try { await secondFactor();
+        ({data: {session}} = await sb.auth.refreshSession()); if (!session) throw new Error("انتهت جلستك على هذا الجهاز؛ ادخل من جديد"); SESSION = session;
+        await newPassword(); ({data: {session}} = await sb.auth.getSession()); if (!session) throw new Error("انتهت جلستك على هذا الجهاز؛ ادخل من جديد"); SESSION = session; }
+      catch (e) { note = AR(e.message || String(e)); await sb.auth.signOut().catch(() => {}); continue; }
       break;
     }
-    const {data: who, error} = await sb.rpc("whoami"); if (error) throw err(error); WHO = who;
+    let who = null;
+    for (;;) { const r = await sb.rpc("whoami"); if (!r.error) { who = r.data; break; }
+      await new Promise((res) => { screen(`<p>تعذّر الاتصال بقاعدة المكتب: ${String(err(r.error).message || "").replace(/[<>&"]/g, "")}</p><button type="button" id="dcRetry">إعادة المحاولة</button><button type="button" class="link" id="dcOut2">خروج</button>`);
+        document.getElementById("dcRetry").onclick = res; document.getElementById("dcOut2").onclick = async () => { await sb.auth.signOut().catch(() => {}); location.reload(); }; }); }
+    WHO = who;
     // a representative hears no change events for the cases (he never reads the rows): his copy is refreshed every minute while the page is in view
     if (who && who.client && !who.staff) setInterval(() => { if (document.visibilityState === "visible") portalLoad().catch(() => {}); }, 60000);
     try { await fetchDoc(STAFF); staffAtBoot = true; } catch {}
