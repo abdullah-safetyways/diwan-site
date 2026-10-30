@@ -6320,7 +6320,7 @@ async function assistAnswer(text, plan){
   const hist = S.assist.msgs.slice(-7,-1).filter(m=>m.text && !m.hello).map(m=>`${m.role==="user"?"المستخدم":"المساعد"}: ${m.text.slice(0,400)}`).join("\n");
   const prompt = `أنت «مساعد الديوان» في مكتب محاماة سعودي. أجب عن سؤال المستخدم من البيانات التالية فقط، بالعربية وباختصار (نقاط تبدأ بـ «•» عند التعدد)، وإن لم تكن المعلومة في البيانات فقل إنها غير مسجلة في الديوان. لا تذكر أرقام مواد قانونية من الذاكرة.
 أنت في هذا الرد تجيب فقط ولا تحفظ شيئاً: لا تقل «سجّلت» أو «حفظت» أو «أضفت» أو «سُجّل في ملاحظاتي». والمساعد نفسه يستطيع بأمر صريح: حجز الجلسات والمهل، وتسجيل المهام والمذكرات والتواصل، وإنشاء ملف قضية جديدة من رسالة ناجز؛ فإن طلب المستخدم شيئاً من ذلك فلا تطلب منه أن يفعله بنفسه، بل اذكر له العبارة التي يكتبها، مثل: «أنشئ القضية رقم … ونحن وكلاء المدعي». اليوم ${AS_WD[asWd(todayKey())]} ${todayKey()} الموافق ${fmtHijri.format(new Date())}.\n\nأجندة الثلاثين يوماً القادمة (${allCases().length} قضية في الديوان):\n${lines||"لا مواعيد."}\n\nمتأخرات:\n${late||"لا شيء."}\n\nرسائل موكلين بانتظار الرد:\n${wait||"لا شيء."}${caseTxt}${hist?`\n\nسياق المحادثة:\n${hist}`:""}\n\nسؤال المستخدم: ${text}`;
-  try { const {text:ans} = await S.sample(fitBytes(prompt, 200000), {modelTier:"default", cache:false, onText:({text:t})=>{ const b = $("asBusy"); if (b) { b.textContent = t; b.scrollIntoView({block:"end"}); } }}); asSay(ans); }
+  try { const {text:ans} = await S.sample(fitBytes(prompt, 200000), {modelTier:"quick", cache:false, onText:({text:t})=>{ const b = $("asBusy"); if (b) { b.textContent = t; b.scrollIntoView({block:"end"}); } }}); asSay(ans); }
   catch(e){ asSay(e?.text ? e.text+"\n\n(انقطع الرد)" : aiErr(e)); }
 }
 async function asUndo(m){
