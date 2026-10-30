@@ -401,6 +401,40 @@ tr[aria-selected="true"] td{background:var(--accent-soft)}
   </div>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<style>
+/* «اليوم» is a date, not an alarm: red stays for overdue items and deadlines within three days */
+.days.today,.day .dl span.days.today{background:var(--accent);color:var(--accent-ink)}
+::placeholder{color:var(--ink-3);opacity:1}
+.lbl{font-size:.78rem}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){--shadow:0 1px 2px rgba(21,21,71,.06),0 4px 14px rgba(21,21,71,.05)}}
+:root[data-theme="light"]{--shadow:0 1px 2px rgba(21,21,71,.06),0 4px 14px rgba(21,21,71,.05)}
+.drawer-bg{background:rgba(15,16,32,.45)}
+/* the press: quick, from the control itself; colour changes ease in the same time */
+.btn,.chip,.kpi,.tab,.nav,.onb button,.link-chip{transition:transform 120ms cubic-bezier(.23,1,.32,1),background-color 120ms ease,border-color 120ms ease}
+.btn:active:not(:disabled),.chip:active,.link-chip:active,.tab:active,.nav:active{transform:scale(.97)}
+.kpi:active,.onb button:active{transform:scale(.98)}
+/* surfaces arrive: the drawer slides in from its edge, its backdrop fades, the toast rises, the Najiz notice grows from the centre */
+.drawer{transition:transform 240ms cubic-bezier(.32,.72,0,1)}
+@starting-style{.drawer{transform:translateX(-100%)}}
+.drawer-bg{transition:opacity 200ms ease}
+@starting-style{.drawer-bg{opacity:0}}
+.toast{transition:opacity 200ms ease,translate 200ms cubic-bezier(.23,1,.32,1)}
+@starting-style{.toast{opacity:0;translate:0 8px}}
+.toast.out{opacity:0;translate:0 4px;transition-duration:150ms}
+.nz-wall{transition:opacity 200ms ease,transform 200ms cubic-bezier(.23,1,.32,1)}
+@starting-style{.nz-wall{opacity:0;transform:translate(-50%,-50%) scale(.96)}}
+/* a tap on a phone should not leave a hover tint behind */
+@media (hover:none){
+  .nav:not([aria-current="true"]):hover{background:none}
+  .kpi:hover,.btn:hover,.link-chip:hover{border-color:var(--line)}
+  .ev[data-case]:hover{background:none;border-color:transparent}
+  tbody tr.clickable:hover td,.doc:hover{background:none}
+}
+@media (prefers-reduced-motion:reduce){
+  .btn,.chip,.kpi,.tab,.nav,.onb button,.link-chip,.drawer,.drawer-bg,.toast,.nz-wall{transition:none}
+  .btn:active:not(:disabled),.chip:active,.link-chip:active,.tab:active,.nav:active,.kpi:active,.onb button:active{transform:none}
+}
+</style>
 <nav class="ux-bar" id="uxBar" aria-label="الأقسام" hidden></nav>
 <div class="ux-sheet" id="uxSheet" data-open="0" aria-hidden="true" inert><div class="bg" data-ux-close></div><div class="card" role="dialog" aria-modal="true" aria-label="كل الأقسام"><div class="grab" aria-hidden="true"></div><div id="uxSheetBody" class="grid" style="gap:4px"></div></div></div>
 <style>
@@ -631,9 +665,9 @@ function vHome(){
   return header("صباح العمل", todayLine(), `<button class="btn primary" id="briefBtn">${icon("spark")}إحاطة اليوم</button>`) + onboardPanel() + nzDuePanel() + crmHomePanel() + reqHomePanel() + `
   <div class="kpis five">
     <button class="kpi" data-nav="cases"><span class="v num">${open.length}</span><span class="l">قضية مفتوحة</span>${execOpen?`<span class="sub">و${execOpen} طلب تنفيذ قائم</span>`:""}</button>
-    <button class="kpi ${memosLate?"alert":memosSoon.length?"warn":""}" data-nav="memos"><span class="v num">${memosSoon.length}</span><span class="l">مذكرة تُقدَّم خلال ١٤ يوماً${memosLate?` (${memosLate} متأخرة)`:""}</span></button>
-    <button class="kpi" data-nav="agenda"><span class="v num">${hear.length}</span><span class="l">جلسة خلال ٧ أيام</span></button>
-    <button class="kpi ${deadlines.length?"alert":""}" data-nav="agenda"><span class="v num">${deadlines.length}</span><span class="l">موعد نهائي خلال ٣٠ يوماً</span></button>
+    <button class="kpi ${memosLate?"alert":memosSoon.length?"warn":""}" data-nav="memos"><span class="v num">${memosSoon.length}</span><span class="l">مذكرة تُقدَّم خلال 14 يوماً${memosLate?` (${memosLate} متأخرة)`:""}</span></button>
+    <button class="kpi" data-nav="agenda"><span class="v num">${hear.length}</span><span class="l">جلسة خلال 7 أيام</span></button>
+    <button class="kpi ${deadlines.length?"alert":""}" data-nav="agenda"><span class="v num">${deadlines.length}</span><span class="l">موعد نهائي خلال 30 يوماً</span></button>
     <button class="kpi ${rev?"warn":""}" data-nav="review"><span class="v num">${rev}</span><span class="l">قضية تحتاج استكمال بيانات</span></button>
   </div>
   <div class="cols home3">
@@ -644,10 +678,10 @@ function vHome(){
       ${homeMemosPanel()}
       ${homeCommsPanel()}
       ${homeWorkPanel()}
-      ${deadlines.length?`<section class="panel" data-rail="2"><header><h2>مواعيد نهائية</h2><span class="sub">خلال ٣٠ يوماً</span></header>${deadlines.map(dlRow).join("")}</section>`:""}
+      ${deadlines.length?`<section class="panel" data-rail="2"><header><h2>مواعيد نهائية</h2><span class="sub">خلال 30 يوماً</span></header>${deadlines.map(dlRow).join("")}</section>`:""}
       <section class="panel" data-rail="1"><header><h2>إحاطة اليوم</h2>${brief?`<span class="sub num">${esc(fmtDate.format(D(brief.at)))} ${esc(fmtTime.format(D(brief.at)))}</span>`:""}</header>
         <div id="briefOut">${brief?briefHtml(brief.text):`<p class="muted small" style="margin:0">اضغط «إحاطة اليوم» ليقرأ المساعد جلسات الأسبوعين القادمين ومواعيدها النهائية والأحكام المنتظرة، ويرتّب لك ما يجب تجهيزه.</p>`}</div></section>
-      ${(()=>{ const recent = []; for (const c of allCases()) for (const f of docsOf(c)) if (f.modified && (Date.now()-new Date(f.modified))<14*864e5) recent.push({c,f}); recent.sort((x,y)=>y.f.modified.localeCompare(x.f.modified)); return recent.length?`<section class="panel"><header><h2>مستندات جديدة في ملفات المكتب</h2><span class="sub">آخر ١٤ يوماً</span></header><div class="docs">${recent.slice(0,6).map(({c,f})=>`<div class="doc" data-case="${esc(c.id)}" data-tab="files"><span class="kind ${KIND_CLS[f.kind]||""}">${esc(f.kind)}</span><div style="min-width:0"><div class="nm">${esc(f.name)}</div></div><div class="acts"></div><div class="meta">${esc(fmtDate.format(new Date(f.modified)))} · ${esc(c.title)}</div></div>`).join("")}</div></section>`:""; })()}
+      ${(()=>{ const recent = []; for (const c of allCases()) for (const f of docsOf(c)) if (f.modified && (Date.now()-new Date(f.modified))<14*864e5) recent.push({c,f}); recent.sort((x,y)=>y.f.modified.localeCompare(x.f.modified)); return recent.length?`<section class="panel"><header><h2>مستندات جديدة في ملفات المكتب</h2><span class="sub">آخر 14 يوماً</span></header><div class="docs">${recent.slice(0,6).map(({c,f})=>`<div class="doc" data-case="${esc(c.id)}" data-tab="files"><span class="kind ${KIND_CLS[f.kind]||""}">${esc(f.kind)}</span><div style="min-width:0"><div class="nm">${esc(f.name)}</div></div><div class="acts"></div><div class="meta">${esc(fmtDate.format(new Date(f.modified)))} · ${esc(c.title)}</div></div>`).join("")}</div></section>`:""; })()}
       ${nzReqsPanel()}
       ${can("billing.view")?homeBillingPanel():""}
     </div>
@@ -1908,7 +1942,7 @@ async function writeBill(b, patch, action){
     if (!Object.keys(cur).length) delete periods[b.key]; else periods[b.key] = cur;
     return patchCase(e, {contract:{...ct, periods}}, action); }
   if (b.src==="legacy") { const invoices = S.finance.map(i => i.no===b.key ? Object.fromEntries(Object.entries({...i, ...patch}).filter(([,v])=>v!==undefined)) : i);
-    try { await S.db.doc("finance/all").update({invoices}); await logAction(i_case(b), action); return true; } catch { toast("تعذّر الحفظ"); return false; } }
+    try { await S.db.doc("finance/all").update({invoices}); await logAction(i_case(b), action); return true; } catch { toast("تعذّر الحفظ ولم يُحفظ التغيير — تحقق من الاتصال ثم أعد المحاولة"); return false; } }
 }
 const i_case = (b) => b.caseId || "finance";
 function openBillAction(btn){
@@ -3291,7 +3325,7 @@ function openSkillEdit(s){
   dr.querySelector("#skForm").onsubmit = async (e) => { e.preventDefault(); const f = e.target; const id = s?.id || newId("s");
     const doc = {...(s||{}), title:f.elements.title.value.trim(), text:f.elements.text.value, kinds:[...f.querySelectorAll('input[name="k"]:checked')].map(x=>x.value), active:s?.active!==false, at:s?.at||new Date().toISOString(), editedAt:new Date().toISOString(), by:S.uid||null}; delete doc.id;
     if (utf8(doc.text) > 200000) { toast("المهارة أطول من اللازم"); return; }
-    try { await S.db.doc("learn/skills/items/"+id).set(doc); closeDrawer(); toast("حُفظت المهارة"); } catch { toast("تعذّر الحفظ"); } };
+    try { await S.db.doc("learn/skills/items/"+id).set(doc); closeDrawer(); toast("حُفظت المهارة"); } catch { toast("تعذّر الحفظ ولم يُحفظ التغيير — تحقق من الاتصال ثم أعد المحاولة"); } };
 }
 function openTplEdit(t, isNew, step){
   const dr = openDrawer(`<header><div><span class="lbl">${isNew?`نموذج جديد${step?` (${step})`:""} — راجع ما قرأه الديوان`:"نموذج من نماذج المكتب"}</span><h2 style="margin-top:4px">${esc(t.name)}</h2><div class="sub">${esc(t.file||"")}</div></div><button class="btn sm" data-close>إغلاق</button></header>
@@ -3373,8 +3407,8 @@ function bindLearn(){
   const el = $("editsLearn"); if (el) el.onclick = async () => { UI.busy = "يقارن المسودات بتعديلاتك…"; learnRerender();
     try { const n = await learnFromEdits((m)=>{ UI.busy = m; learnRerender(); }); toast(`أضاف ${n} قاعدة من تعديلاتك إلى أسلوب المكتب`); } catch(e){ toast(e?.msg || aiErr(e)); }
     UI.busy = null; learnRerender(); };
-  const ss = $("styleSave"); if (ss) ss.onclick = async () => { try { await S.db.doc("learn/style").update({guide:$("styleGuide").value, editedAt:new Date().toISOString()}); toast("حُفظ دليل الأسلوب"); } catch { toast("تعذّر الحفظ"); } };
-  const so = $("styleOn"); if (so) so.onchange = async () => { try { await S.db.doc("learn/style").update({enabled:so.checked}); } catch { toast("تعذّر الحفظ"); } };
+  const ss = $("styleSave"); if (ss) ss.onclick = async () => { try { await S.db.doc("learn/style").update({guide:$("styleGuide").value, editedAt:new Date().toISOString()}); toast("حُفظ دليل الأسلوب"); } catch { toast("تعذّر الحفظ ولم يُحفظ التغيير — تحقق من الاتصال ثم أعد المحاولة"); } };
+  const so = $("styleOn"); if (so) so.onchange = async () => { try { await S.db.doc("learn/style").update({enabled:so.checked}); } catch { toast("تعذّر الحفظ ولم يُحفظ التغيير — تحقق من الاتصال ثم أعد المحاولة"); } };
   const of = $("memoOdForm"); if (of) of.onsubmit = async (e) => { e.preventDefault(); UI.odOpen = true; UI.odQ = $("memoOdQ").value.trim(); UI.odBusy = "يبحث في ملفات المكتب…"; learnRerender();
     try { UI.odItems = await odSearch(UI.odQ); } catch { UI.odItems = []; toast("تعذّر البحث في ملفات المكتب"); } UI.odBusy = null; learnRerender(); };
   const og = $("memoOdGo"); if (og) og.onclick = async () => { const items = (UI.odItems||[]).filter(f=>/\.(pdf|docx)$/i.test(f.name)); const picks = [...document.querySelectorAll("[data-mod]:checked")].map(cb=>items[+cb.dataset.mod]); if (!picks.length) { toast("اختر مذكرة أو أكثر"); return; }
@@ -3396,7 +3430,7 @@ function bindLearn(){
     if (g("headColor") && !hex6(g("headColor"), null)) { toast("اكتب لون العناوين بستة أحرف مثل 1F3864"); f.elements.headColor.focus(); return; }
     const over = {}; if (g("font")) over.font = g("font").replace(/["<>&]/g, ""); if (g("size")) over.size = +g("size"); if (g("headColor")) over.headColor = hex6(g("headColor"), null); if (g("line")) over.line = +g("line"); if (g("bottom")) over.bottomMin = Math.round(+g("bottom")*567);
     // the whole record is written so a field left empty really clears its earlier value
-    try { await S.db.doc("learn/letterhead").set({...(S.learn.letterhead||{}), over, editedAt:new Date().toISOString()}); toast("حُفظت تفاصيل الخط والورقة"); } catch { toast("تعذّر الحفظ"); } };
+    try { await S.db.doc("learn/letterhead").set({...(S.learn.letterhead||{}), over, editedAt:new Date().toISOString()}); toast("حُفظت تفاصيل الخط والورقة"); } catch { toast("تعذّر الحفظ ولم يُحفظ التغيير — تحقق من الاتصال ثم أعد المحاولة"); } };
   const lt = $("lhTest"); if (lt) lt.onclick = async () => { try { const o = OFC(); const t = `صاحب الفضيلة/ رئيس الدائرة الموقر\nالسلام عليكم ورحمة الله وبركاته، وبعد:\nمذكرة تجريبية\nالموضوع: صفحة تجريبية على ورق ${o.name||"المكتب"}\nأولاً: الوقائع\n1/ هذه فقرة تجريبية لعرض الخط والحجم والهوامش وتباعد الأسطر كما سيخرجها الديوان في المذكرات واللوائح.\n2/ وهذه فقرة ثانية مرقمة.\nالطلبات:\nوعليه نطلب …\nوالله ولي التوفيق،،،\n${officeSign()}`; await downloadBytes(await buildLetterheadDocx(t, {}), "صفحة تجريبية.docx"); } catch(e){ toast(e?.msg||"تعذّر تجهيز الملف"); } };
   const ofm = $("officeForm"); if (ofm) ofm.onsubmit = (e) => { e.preventDefault(); saveOffice(e.target); };
   const ofl = $("ofcFromLh"); if (ofl) ofl.onclick = extractIdentity;
@@ -3411,7 +3445,7 @@ function bindLearn(){
   document.querySelectorAll("[data-ttry]").forEach(b=>b.onclick=()=>{ const t = tplList().find(x=>x.id===b.dataset.ttry); if (t) openTplTry(t); });
   document.querySelectorAll("[data-tdel]").forEach(b=>b.onclick=async()=>{ if (!b.dataset.armed) { b.dataset.armed="1"; b.textContent="تأكيد الحذف"; return; } const t = tplList().find(x=>x.id===b.dataset.tdel); try { await S.db.doc("learn/templates/items/"+b.dataset.tdel).delete(); if (t?.src) dropBlob(t.src); toast("حُذف النموذج"); } catch { toast("تعذّر الحذف"); } });
   // skills
-  document.querySelectorAll("[data-skon]").forEach(cb=>cb.onchange=async()=>{ try { await S.db.doc("learn/skills/items/"+cb.dataset.skon).update({active:cb.checked}); } catch { toast("تعذّر الحفظ"); } });
+  document.querySelectorAll("[data-skon]").forEach(cb=>cb.onchange=async()=>{ try { await S.db.doc("learn/skills/items/"+cb.dataset.skon).update({active:cb.checked}); } catch { toast("تعذّر الحفظ ولم يُحفظ التغيير — تحقق من الاتصال ثم أعد المحاولة"); } });
   document.querySelectorAll("[data-skedit]").forEach(b=>b.onclick=()=>openSkillEdit((S.learn.skills||[]).find(s=>s.id===b.dataset.skedit)));
   document.querySelectorAll("[data-skdel]").forEach(b=>b.onclick=async()=>{ if (!b.dataset.armed) { b.dataset.armed="1"; b.textContent="تأكيد الحذف"; return; } try { await S.db.doc("learn/skills/items/"+b.dataset.skdel).delete(); toast("حُذفت المهارة"); } catch { toast("تعذّر الحذف"); } });
   const sn = $("skNew"); if (sn) sn.onclick = () => openSkillEdit(null);
@@ -3801,7 +3835,7 @@ function openLawEdit(id){
     <p class="sub" style="margin:0">الملف الأصلي: ${esc(L.src?.name||"—")}</p>
     <div style="display:flex;gap:8px"><button class="btn primary" id="leSave">حفظ</button></div></div>`);
   dr.querySelector("#leSave").onclick = async () => { const name = dr.querySelector("#leName").value.trim(), kind = dr.querySelector("#leKind").value; if (!name) { toast("اكتب الاسم"); return; }
-    try { await S.db.doc("lib/"+id).update({name, kind, updatedAt:new Date().toISOString()}); closeDrawer(); toast("حُفظ"); } catch { toast("تعذّر الحفظ"); } };
+    try { await S.db.doc("lib/"+id).update({name, kind, updatedAt:new Date().toISOString()}); closeDrawer(); toast("حُفظ"); } catch { toast("تعذّر الحفظ ولم يُحفظ التغيير — تحقق من الاتصال ثم أعد المحاولة"); } };
 }
 function openLawViewer(id){
   const L = (S.lib?.laws||[]).find(l=>l.id===id); if (!L) return;
@@ -4339,7 +4373,7 @@ function bindNajizSync(){
   const hd = $("nzHide"); if (hd) hd.onclick = () => { const b = $("nzSrc"); if (b) b.hidden = true; };
   const dlb = $("nzDl"); if (dlb) dlb.onclick = async () => { try { const t = await nzReadTool(); await downloadBytes(new TextEncoder().encode(t), "diwan-najiz-tool.js"); } catch { toast("تعذّر تجهيز الملف"); } };
   const idf = $("nzIdForm"); if (idf) idf.onsubmit = async (e) => { e.preventDefault(); const v = fromHindi($("nzIdNo").value).replace(/\D/g, ""); if (v.length < 8) { toast("اكتب رقم الهوية كاملاً"); return; }
-    try { if (S.me?.owner || S.me?.legacy) await S.db.doc("office/profile").update({lawyerIdNo: v}); else await S.db.doc(`data/users/${S.uid}/najiz`).set({idNo: v, at: new Date().toISOString()}); S.nzMine = {idNo: v}; toast("حُفظ"); render(); } catch { toast("تعذّر الحفظ"); } };
+    try { if (S.me?.owner || S.me?.legacy) await S.db.doc("office/profile").update({lawyerIdNo: v}); else await S.db.doc(`data/users/${S.uid}/najiz`).set({idNo: v, at: new Date().toISOString()}); S.nzMine = {idNo: v}; toast("حُفظ"); render(); } catch { toast("تعذّر الحفظ ولم يُحفظ التغيير — تحقق من الاتصال ثم أعد المحاولة"); } };
   const inp = $("nzFiles"); if (inp) inp.onchange = async () => { const fs = [...inp.files]; inp.value = ""; if (!fs.length) return;
     UI.busy = "يقرأ الملفات…"; UI.error = null; nzRerender();
     try { const parsed = []; for (const f of fs) { let j; try { j = JSON.parse(await f.text()); } catch { throw {msg: `«${f.name}» ليس ملف ناجز صالحاً.`}; } if (!j || typeof j.cases !== "object") throw {msg: `«${f.name}» ليس من أداة الجمع.`}; parsed.push(j); }
@@ -4603,7 +4637,7 @@ async function memoPatch(m, patch, action, note){
   if (!S.db) { toast("قاعدة البيانات غير متاحة"); return false; }
   const at = new Date().toISOString(); const p = {...patch, updatedAt:at, updatedBy:S.uid||null};
   if (patch.status && patch.status!==m.status) p.history = [...(m.history||[]), {at, by:S.uid||null, from:m.status, to:patch.status, note:note||null}].slice(-40);
-  try { await S.db.doc("memos/"+m.id).update(p); await logAction(m.caseId, action); return true; } catch { toast("تعذّر الحفظ"); return false; }
+  try { await S.db.doc("memos/"+m.id).update(p); await logAction(m.caseId, action); return true; } catch { toast("تعذّر الحفظ ولم يُحفظ التغيير — تحقق من الاتصال ثم أعد المحاولة"); return false; }
 }
 async function memoDismiss(key){
   S.memoDismiss = {...(S.memoDismiss||{}), [key]: new Date().toISOString()};
@@ -4670,9 +4704,9 @@ function vMemos(){
   return header("المذكرات والمهام", "ما طلبته الدوائر من مذكرات ولوائح، وآخر يوم لتقديمها، ومن يكتبها، ومن يراجعها قبل أن تخرج", can("memos.edit") ? `<button class="btn primary" id="memoNew" ${S.canWrite?"":"disabled"}>+ مذكرة مطلوبة</button>` : "") + memoTabs() + `
   <div class="kpis">
     <button class="kpi ${st.late?"alert":""}" data-mf="late"><span class="v num">${st.late}</span><span class="l">متأخرة عن موعدها</span></button>
-    <button class="kpi ${st.soon?"warn":""}" data-mf="soon"><span class="v num">${st.soon}</span><span class="l">تُقدَّم خلال ١٤ يوماً</span></button>
+    <button class="kpi ${st.soon?"warn":""}" data-mf="soon"><span class="v num">${st.soon}</span><span class="l">تُقدَّم خلال 14 يوماً</span></button>
     <button class="kpi" data-mf="review"><span class="v num">${st.review}</span><span class="l">بانتظار المراجعة</span></button>
-    <button class="kpi" data-mf="filed"><span class="v num">${st.filed30.length?`${onTime}/${st.filed30.length}`:"—"}</span><span class="l">قُدّمت في موعدها (آخر ٣٠ يوماً)</span></button>
+    <button class="kpi" data-mf="filed"><span class="v num">${st.filed30.length?`${onTime}/${st.filed30.length}`:"—"}</span><span class="l">قُدّمت في موعدها (آخر 30 يوماً)</span></button>
   </div>
   ${hints.length?`<section class="panel" style="margin-bottom:14px"><header><h2>طلبات رصدها الديوان في ضبوط الجلسات</h2><span class="sub">راجعها ثم أضفها أو تجاهلها</span></header><div class="memos">${hints.slice(0,12).map(memoHintRow).join("")}${hints.length>12?`<p class="sub">و${hints.length-12} أخرى…</p>`:""}</div></section>`:""}
   <div class="chips" style="margin-bottom:12px">${FL.map(([k,l,fn])=>`<button class="chip" data-mf="${k}" aria-pressed="${f[0]===k}">${l} <span class="num muted">${all.filter(fn).length}</span></button>`).join("")}</div>
@@ -4884,7 +4918,7 @@ function vKpi(){
   const months = []; for (let i=11;i>=0;i--) { const k = addMonths(T.slice(0,7)+"-01", -i).slice(0,7); months.push({k, n: all.filter(c=>(c.createdAt||"").startsWith(k)).length, c: all.filter(c=>(c.closedAt||"").startsWith(k)).length}); }
   const mx = Math.max(1, ...months.map(m=>Math.max(m.n,m.c)));
   const tile = (v, l, cls="", sub="") => `<div class="kpi ${cls}"><span class="v num">${v}</span><span class="l">${l}</span>${sub?`<span class="sub">${sub}</span>`:""}</div>`;
-  const PER = [["3m","آخر ٣ أشهر"],["12m","آخر ١٢ شهراً"],["year","هذه السنة"],["all","منذ البداية"]];
+  const PER = [["3m","آخر 3 أشهر"],["12m","آخر 12 شهراً"],["year","هذه السنة"],["all","منذ البداية"]];
   return header("مؤشرات الأداء", "تُقاس مما يُسجَّل في الديوان منذ تفعيلها: التقدير الأولي عند بدء القضية، وتقييم صاحب المكتب عند انتهائها، ومواعيد المذكرات، والتحصيل") + `
   <div class="toolbar" style="gap:10px;flex-wrap:wrap"><div class="chips">${PER.map(([k,l])=>`<button class="chip" data-kper="${k}" aria-pressed="${P.k===k}">${l}</button>`).join("")}</div>
     <label class="f" style="margin:0;min-width:220px">المحامي<select class="inp" id="kpiWho"><option value="all">كل المكتب</option>${lawyers.map(u=>`<option value="${esc(u)}" ${who===u?"selected":""}>${esc(lawyerLabel(u))}</option>`).join("")}</select></label></div>
@@ -4898,7 +4932,7 @@ function vKpi(){
     ${tile(K.avgMonths!=null?K.avgMonths.toFixed(1):"—","متوسط عمر القضية بالأشهر","", "للقضايا المنتهية في الفترة")}
     ${tile(pct(K.completeRate),"اكتمال بيانات القضايا المفتوحة", K.completeRate!=null&&K.completeRate<0.9?"warn":"")}
     ${can("billing.view")?tile(sar(K.paid),"محصّل في الفترة (ريال)")+tile(sar(K.dueNow),"مستحق غير محصّل الآن", K.dueNow?"warn":""):""}
-    ${tile(K.hear7,"جلسة خلال ٧ أيام")}
+    ${tile(K.hear7,"جلسة خلال 7 أيام")}
     ${tile(K.avgCsat!=null?K.avgCsat.toFixed(1)+" / 5":"—","رضا الموكلين", K.avgCsat!=null&&K.avgCsat<4?"warn":"", K.csatN?`${K.csatN} تقييماً`:"يُسأل الموكل عند إقفال الملف")}
     ${tile(pct(K.onTargetRate),"الرد على الموكل في الهدف", K.onTargetRate!=null&&K.onTargetRate<0.8?"warn":"", K.answered?`${K.onTarget} من ${K.answered} · متوسط ${K.avgReplyH!=null?Math.round(K.avgReplyH):"—"} ساعة`:"لا رسائل واردة مسجلة")}
     ${tile(hm(K.minutes),"ساعات مسجلة في الفترة","", hourCost()?`تكلفتها ${sar(Math.round(K.minutes/60*hourCost()))} ريال`:"")}
@@ -4912,7 +4946,7 @@ function vKpi(){
         ${lawyers.map(u => { const cs = all.filter(c=>caseLawyers(c).includes(u)); const mm = memos.filter(m => m.assignee===u || (!m.assignee && caseLawyers(S.cases.get(m.caseId)||{}).includes(u))); const k = kpiCompute(cs, mm, P, X, u==="_owner" ? (S.me?.owner ? S.uid : null) : u);
           return `<tr><td><b>${esc(lawyerLabel(u))}</b></td><td class="num">${k.open}</td><td class="num">${k.closed}</td><td class="num">${pct(k.success)}${k.decided?`<div class="sub">${k.decided} قضية</div>`:""}</td><td class="num hide-sm">${pct(k.keptRate)}</td><td class="num">${k.filed?`${k.onTime}/${k.filed}`:"—"}</td><td class="num hide-sm ${k.lateNow?"crit":""}">${k.lateNow||"—"}</td><td>${k.avgRating!=null?`<span title="${k.avgRating}">${stars(k.avgRating)}</span>`:"—"}</td><td class="num hide-sm">${k.minutes?hm(k.minutes):"—"}</td><td class="num hide-sm">${k.avgCsat!=null?k.avgCsat.toFixed(1):"—"}</td></tr>`; }).join("")}</tbody></table></div>
         <p class="sub" style="margin:8px 0 0">القضية تُنسب إلى المسؤولين عنها في «بيانات القضية»؛ وغير المسندة تُحسب لصاحب المكتب.</p></section>
-      <section class="panel"><header><h2>الجديد والمنتهي شهرياً</h2><span class="sub">آخر ١٢ شهراً</span></header>
+      <section class="panel"><header><h2>الجديد والمنتهي شهرياً</h2><span class="sub">آخر 12 شهراً</span></header>
         <div class="bars">${months.map(m=>`<div class="bar-col" title="${m.k}: ${m.n} جديدة · ${m.c} منتهية"><div class="bar-pair"><span class="bar new" style="height:${Math.round(m.n/mx*100)}%"></span><span class="bar closed" style="height:${Math.round(m.c/mx*100)}%"></span></div><span class="bar-l num">${m.k.slice(5)}/${m.k.slice(2,4)}</span></div>`).join("")}</div>
         <div class="sub" style="display:flex;gap:14px;margin-top:6px"><span><i class="sw new"></i> جديدة</span><span><i class="sw closed"></i> منتهية</span></div></section>
     </div>
@@ -5002,11 +5036,11 @@ function portalBody(K, o={}){
   <div class="kpis five">
     <div class="kpi"><span class="v num">${P.suits.length}</span><span class="l">قضية منظورة</span></div>
     <div class="kpi"><span class="v num">${P.exec.length}</span><span class="l">طلب تنفيذ جارٍ</span></div>
-    <div class="kpi ${P.evs.length?"warn":""}"><span class="v num">${P.evs.length}</span><span class="l">جلسة خلال ٣٠ يوماً</span></div>
+    <div class="kpi ${P.evs.length?"warn":""}"><span class="v num">${P.evs.length}</span><span class="l">جلسة خلال 30 يوماً</span></div>
     <div class="kpi"><span class="v num">${P.judged.length}</span><span class="l">قضية صدر فيها حكم</span></div>
     <div class="kpi"><span class="v num">${P.closed.length}</span><span class="l">قضية منتهية</span></div>
   </div>
-  ${P.evs.length?`<section class="panel"><header><h2>الجلسات والمواعيد القادمة</h2><span class="sub">خلال ٣٠ يوماً</span></header>${P.evs.map(ev=>`<div class="ev"><span class="t num">${fmtDate.format(D(ev.start))} · ${whenTxt(ev)}</span><div style="min-width:0"><span class="role ${roleClass(ev.role)}">${esc(ev.role||"موعد")}</span> <span class="what"><span class="mono">${esc(ev.caseNo||"")}</span> · ${esc(ev.title)}</span></div></div>`).join("")}</section>`:""}
+  ${P.evs.length?`<section class="panel"><header><h2>الجلسات والمواعيد القادمة</h2><span class="sub">خلال 30 يوماً</span></header>${P.evs.map(ev=>`<div class="ev"><span class="t num">${fmtDate.format(D(ev.start))} · ${whenTxt(ev)}</span><div style="min-width:0"><span class="role ${roleClass(ev.role)}">${esc(ev.role||"موعد")}</span> <span class="what"><span class="mono">${esc(ev.caseNo||"")}</span> · ${esc(ev.title)}</span></div></div>`).join("")}</section>`:""}
   ${portalTasksSection(K, P.ids, {internal:inner, companyId:o.companyId||null})}
   ${portalRequestsSection(K, P, {internal:inner, standalone:!!o.standalone})}
   ${sect("القضايا المنظورة", P.suits, inner&&can("cases.edit")?`<button class="btn sm" data-pnew="case">+ قضية</button>`:"")}
@@ -5139,7 +5173,7 @@ function openConflictCheck(o={}){
     try { const id = "cf"+Date.now().toString(36); await S.db.doc("conflicts/"+id).set({id, ...rec});
       if (c) { if (await patchCase(c, {conflict:{...rec, id}}, `فحص تعارض المصالح: ${CF_RESULT[rec.result][0]}`)) { closeDrawer(); render(); toast("سُجّلت نتيجة الفحص في الملف"); } }
       else { await logAction(null, `فحص تعارض قبل التوكيل (${R.map(r=>r.name).join("، ")}): ${CF_RESULT[rec.result][0]}`); closeDrawer(); toast("سُجّل الفحص"); } }
-    catch { toast("تعذّر الحفظ"); } };
+    catch { toast("تعذّر الحفظ ولم يُحفظ التغيير — تحقق من الاتصال ثم أعد المحاولة"); } };
 }
 // inside the new-case form: the names are checked as they are typed, and a warning must be answered before the case is saved
 function cfBindNewCase(form){
@@ -5181,7 +5215,7 @@ const CLOSING_ITEMS = [
   ["inform", "إبلاغ الموكل بالنتيجة", c => (S.comms||[]).some(x => x.caseId===c.id && x.dir==="out" && (x.kind==="closing" || (c.closedAt && (x.at||"").slice(0,10) >= c.closedAt.slice(0,10)))) ? "ok" : null, c => `<button class="btn sm" type="button" data-comm="${esc(c.id)}" data-commkind="closing">تسجيل الإبلاغ</button>`],
   ["csat", "استبيان رضا الموكل", c => c.csat ? "ok" : null, c => `<button class="btn sm" type="button" data-csat="${esc(c.id)}">${c.csat?"تعديل":"تسجيل التقييم"}</button>`],
   ["docs", "إعادة المستندات الأصلية إلى الموكل", null, null],
-  ["retain", "تحديد مدة حفظ الملف", c => c.retainUntil ? "ok" : null, c => `<button class="btn sm" type="button" data-retain="${esc(c.id)}">${c.retainUntil?`حتى ${fmtD(c.retainUntil)} — تعديل`:"تحديد (١٠ سنوات افتراضاً)"}</button>`],
+  ["retain", "تحديد مدة حفظ الملف", c => c.retainUntil ? "ok" : null, c => `<button class="btn sm" type="button" data-retain="${esc(c.id)}">${c.retainUntil?`حتى ${fmtD(c.retainUntil)} — تعديل`:"تحديد (10 سنوات افتراضاً)"}</button>`],
   ["archive", "أرشفة الملف في ملفات المكتب", null, null],
 ];
 function checklistState(c, items, store){
@@ -5283,7 +5317,7 @@ function openTrustEntry(pre={}){
   dr.querySelector("#trForm").onsubmit = async (e) => { e.preventDefault(); const f = e.target.elements; const amount = +fromHindi(f.amount.value); if (!(amount > 0)) { toast("أدخل المبلغ"); return; }
     const client = c ? (c.client||"") : f.client.value.trim(); if (!client) { toast("اختر الموكل"); return; }
     const t = {id:"tr"+Date.now().toString(36)+Math.random().toString(36).slice(2,5), caseId:c?.id||null, client, clientKey:normName(client), type:f.type.value, amount, date:f.date.value, ref:f.ref.value.trim()||null, note:f.note.value.trim()||null, by:S.uid||null, at:new Date().toISOString()};
-    try { await S.db.doc("trust/"+t.id).set(t); await logAction(c?.id||null, `${TRUST_TYPES[t.type][1]==="in"?"قيّد وارداً":"قيّد صادراً"} في أموال الموكل ${client}: ${TRUST_TYPES[t.type][0]} ${sar(amount)} ريال`); closeDrawer(); render(); toast("سُجّلت الحركة"); } catch { toast("تعذّر الحفظ"); } };
+    try { await S.db.doc("trust/"+t.id).set(t); await logAction(c?.id||null, `${TRUST_TYPES[t.type][1]==="in"?"قيّد وارداً":"قيّد صادراً"} في أموال الموكل ${client}: ${TRUST_TYPES[t.type][0]} ${sar(amount)} ريال`); closeDrawer(); render(); toast("سُجّلت الحركة"); } catch { toast("تعذّر الحفظ ولم يُحفظ التغيير — تحقق من الاتصال ثم أعد المحاولة"); } };
 }
 function bindTrust(){
   const nw = $("trustNew"); if (nw) nw.onclick = () => openTrustEntry({});
@@ -5328,7 +5362,7 @@ function openTimeEntry(pre={}){
     let cid = c?.id || null; if (!c) { const q = (dr.querySelector("#tmQ")?.value||"").trim().split(" — ")[0].trim(); if (q) { const x = cands.find(y => (y.caseNo||y.id)===q) || cands.find(y => y.caseNo===q || y.id===q); if (!x) { toast("اختر القضية من القائمة أو اتركها فارغة"); return; } cid = x.id; } }
     const cc = cid ? S.cases.get(cid) : null;
     const t = {id:"tm"+Date.now().toString(36)+Math.random().toString(36).slice(2,5), caseId:cid, engagementId:cc?.engagementId||null, client:cc?.client||null, uid:S.uid||null, date:f.date.value, minutes, activity:f.activity.value, note:f.note.value.trim()||null, billable:f.billable.checked, at:new Date().toISOString()};
-    try { await S.db.doc("time/"+t.id).set(t); await logAction(cid, `سجّل ${hm(minutes)} ساعة: ${t.activity}${t.note?" — "+t.note:""}`); closeDrawer(); render(); toast("سُجّل الوقت"); } catch { toast("تعذّر الحفظ"); } };
+    try { await S.db.doc("time/"+t.id).set(t); await logAction(cid, `سجّل ${hm(minutes)} ساعة: ${t.activity}${t.note?" — "+t.note:""}`); closeDrawer(); render(); toast("سُجّل الوقت"); } catch { toast("تعذّر الحفظ ولم يُحفظ التغيير — تحقق من الاتصال ثم أعد المحاولة"); } };
 }
 function timeRows(list, o={}){
   if (!list.length) return `<div class="empty">لا وقت مسجل.</div>`;
@@ -5346,11 +5380,11 @@ function vTimeReport(){
   const UI = S.timeUI = S.timeUI || {p:"month"}; const T = todayKey(); const from = UI.p==="week" ? addDays(T, -((new Date(T+"T12:00:00+03:00").getUTCDay()+0)%7)) : UI.p==="month" ? T.slice(0,7)+"-01" : UI.p==="quarter" ? addMonths(T, -3) : "0000";
   const list = timeEntries({from}); const tot = timeSum(list);
   const byU = new Map(), byC = new Map(); for (const t of list) { byU.set(t.uid, (byU.get(t.uid)||0)+(+t.minutes||0)); const k = t.engagementId ? "E:"+t.engagementId : t.client ? "C:"+normName(t.client) : "-"; if (!byC.has(k)) byC.set(k, {k, name: t.engagementId ? (S.cases.get(t.engagementId)?.client||"عقد سنوي") : (t.client||"عمل عام للمكتب"), min:0, eng:t.engagementId||null}); byC.get(k).min += (+t.minutes||0); }
-  const hc = hourCost(); const PER = [["week","هذا الأسبوع"],["month","هذا الشهر"],["quarter","آخر ٣ أشهر"],["all","الكل"]];
+  const hc = hourCost(); const PER = [["week","هذا الأسبوع"],["month","هذا الشهر"],["quarter","آخر 3 أشهر"],["all","الكل"]];
   const workdays = (() => { let n = 0; for (let d = from < "2000" ? addMonths(T,-12) : from; d <= T; d = addDays(d, 1)) { const wd = new Date(d+"T12:00:00+03:00").getUTCDay(); if (wd !== 5 && wd !== 6) n++; } return n; })();
   const contractRevenue = (eid) => { const e = S.cases.get(eid); if (!e?.contract?.start) return null; const ps = contractPeriods(e.contract).filter(p => p.due >= from && p.due <= T); return ps.reduce((a,p)=>a+(p.amount||0), 0); };
   return `<div class="chips" style="margin-bottom:12px">${PER.map(([k,l])=>`<button class="chip" data-tper="${k}" aria-pressed="${UI.p===k}">${l}</button>`).join("")}</div>
-  <div class="kpis" style="grid-template-columns:repeat(3,minmax(0,1fr))"><div class="kpi"><span class="v num">${hm(tot)}</span><span class="l">ساعات مسجلة في الفترة</span></div><div class="kpi"><span class="v num">${hc?sar(Math.round(tot/60*hc)):"—"}</span><span class="l">تكلفتها بسعر الساعة الداخلي${hc?` (${sar(hc)} ريال)`:""}</span></div><div class="kpi"><span class="v num">${workdays?Math.round(tot/60/(workdays*8)*100/Math.max(1,byU.size))+"%":"—"}</span><span class="l">معدل الاستغلال التقريبي (من ٨ ساعات × أيام العمل)</span></div></div>
+  <div class="kpis" style="grid-template-columns:repeat(3,minmax(0,1fr))"><div class="kpi"><span class="v num">${hm(tot)}</span><span class="l">ساعات مسجلة في الفترة</span></div><div class="kpi"><span class="v num">${hc?sar(Math.round(tot/60*hc)):"—"}</span><span class="l">تكلفتها بسعر الساعة الداخلي${hc?` (${sar(hc)} ريال)`:""}</span></div><div class="kpi"><span class="v num">${workdays?Math.round(tot/60/(workdays*8)*100/Math.max(1,byU.size))+"%":"—"}</span><span class="l">معدل الاستغلال التقريبي (من 8 ساعات × أيام العمل)</span></div></div>
   <div class="cols"><section class="panel"><header><h2>بحسب العضو</h2></header>${byU.size?`<div class="table-wrap" style="border:0"><table><thead><tr><th>العضو</th><th>الساعات</th><th>الاستغلال</th></tr></thead><tbody>${[...byU.entries()].sort((a,b)=>b[1]-a[1]).map(([u,m])=>`<tr><td>${esc(memberName(u)||"")}</td><td class="num"><b>${hm(m)}</b></td><td class="num">${workdays?Math.round(m/60/(workdays*8)*100)+"%":"—"}</td></tr>`).join("")}</tbody></table></div>`:`<div class="empty">لا وقت مسجل في الفترة.</div>`}</section>
   <section class="panel"><header><h2>بحسب الموكل والعقد</h2><span class="sub">تكلفة الوقت مقابل ما يدفعه العقد في الفترة</span></header>${byC.size?`<div class="table-wrap" style="border:0"><table><thead><tr><th>الموكل / العقد</th><th>الساعات</th><th>التكلفة</th><th>إيراد العقد في الفترة</th><th>الفرق</th></tr></thead><tbody>${[...byC.values()].sort((a,b)=>b.min-a.min).map(x=>{ const cost = hc ? Math.round(x.min/60*hc) : null; const rev = x.eng ? contractRevenue(x.eng) : null; return `<tr>${x.eng?`<td><button class="btn ghost sm" style="padding:0" data-case="${esc(x.eng)}">${esc(x.name)}</button> <span class="pill">عقد سنوي</span></td>`:`<td>${esc(x.name)}</td>`}<td class="num"><b>${hm(x.min)}</b></td><td class="num">${cost!=null?sar(cost):"—"}</td><td class="num">${rev!=null?sar(rev):"—"}</td><td class="num">${cost!=null&&rev!=null?`<b style="${rev-cost<0?"color:var(--crit)":""}">${sar(rev-cost)}</b>`:"—"}</td></tr>`; }).join("")}</tbody></table></div>`:`<div class="empty">—</div>`}</section></div>
   <section class="panel" style="margin-top:14px"><header><h2>الحركات</h2>${can("time.edit")?`<button class="btn sm primary" id="timeNew" ${S.canWrite?"":"disabled"}>+ وقت</button>`:""}</header>${timeRows(list.slice(0,300), {caseCol:true, actions:true})}</section>`;
@@ -5404,7 +5438,7 @@ function openComm(pre={}){
       <div style="display:flex;gap:8px"><button class="btn primary" type="submit">حفظ</button></div></form>`);
   dr.querySelector("#cmForm").onsubmit = async (e) => { e.preventDefault(); const f = e.target.elements; const client = c ? (c.client||"") : f.client.value.trim(); if (!client) { toast("اختر الموكل"); return; }
     const x = {id:"cm"+Date.now().toString(36)+Math.random().toString(36).slice(2,5), caseId:c?.id||null, client, clientKey:normName(client), dir:f.dir.value, channel:f.channel.value, at:new Date(f.at.value).toISOString(), summary:f.summary.value.trim(), needsReply: f.dir.value==="in" && f.needsReply.checked, repliedAt:null, followUp:f.followUp.value||null, followDone:false, kind:pre.kind||null, by:S.uid||null, created:new Date().toISOString()};
-    try { await S.db.doc("comms/"+x.id).set(x); await logAction(c?.id||null, `${x.dir==="in"?"تواصل وارد":"تواصل صادر"} (${COMM_CH[x.channel]}): ${x.summary.slice(0,80)}`); closeDrawer(); render(); toast("سُجّل"); } catch { toast("تعذّر الحفظ"); } };
+    try { await S.db.doc("comms/"+x.id).set(x); await logAction(c?.id||null, `${x.dir==="in"?"تواصل وارد":"تواصل صادر"} (${COMM_CH[x.channel]}): ${x.summary.slice(0,80)}`); closeDrawer(); render(); toast("سُجّل"); } catch { toast("تعذّر الحفظ ولم يُحفظ التغيير — تحقق من الاتصال ثم أعد المحاولة"); } };
 }
 // the client's word on the service, asked when the file closes
 function openCsat(c){
@@ -5424,8 +5458,8 @@ function openCsat(c){
 function bindComms(){
   document.querySelectorAll("[data-comm]").forEach(b => b.onclick = () => openComm({caseId:b.dataset.comm, kind:b.dataset.commkind||null, dir:b.dataset.commkind==="closing"?"out":undefined}));
   const nw = $("commNew"); if (nw) nw.onclick = () => openComm({});
-  document.querySelectorAll("[data-commreply]").forEach(b => b.onclick = async () => { const x = (S.comms||[]).find(y=>y.id===b.dataset.commreply); if (!x) return; try { await S.db.doc("comms/"+x.id).update({repliedAt:new Date().toISOString(), repliedBy:S.uid||null}); await logAction(x.caseId||null, `ردّ على الموكل: ${x.summary.slice(0,60)}`); toast("سُجّل الرد"); } catch { toast("تعذّر الحفظ"); } });
-  document.querySelectorAll("[data-commfollow]").forEach(b => b.onclick = async () => { const x = (S.comms||[]).find(y=>y.id===b.dataset.commfollow); if (!x) return; try { await S.db.doc("comms/"+x.id).update({followDone:true, followDoneAt:new Date().toISOString()}); toast("تمت المتابعة"); } catch { toast("تعذّر الحفظ"); } });
+  document.querySelectorAll("[data-commreply]").forEach(b => b.onclick = async () => { const x = (S.comms||[]).find(y=>y.id===b.dataset.commreply); if (!x) return; try { await S.db.doc("comms/"+x.id).update({repliedAt:new Date().toISOString(), repliedBy:S.uid||null}); await logAction(x.caseId||null, `ردّ على الموكل: ${x.summary.slice(0,60)}`); toast("سُجّل الرد"); } catch { toast("تعذّر الحفظ ولم يُحفظ التغيير — تحقق من الاتصال ثم أعد المحاولة"); } });
+  document.querySelectorAll("[data-commfollow]").forEach(b => b.onclick = async () => { const x = (S.comms||[]).find(y=>y.id===b.dataset.commfollow); if (!x) return; try { await S.db.doc("comms/"+x.id).update({followDone:true, followDoneAt:new Date().toISOString()}); toast("تمت المتابعة"); } catch { toast("تعذّر الحفظ ولم يُحفظ التغيير — تحقق من الاتصال ثم أعد المحاولة"); } });
   document.querySelectorAll("[data-csat]").forEach(b => b.onclick = () => { const c = S.cases.get(b.dataset.csat); if (c) openCsat(c); });
 }
 // ---------- المهام: everything on a file that is not a memo — with an owner and a date — and ready-made work lists by kind of case,
@@ -5526,7 +5560,7 @@ async function applyTaskTemplate(c){
   const have = new Set(tasksOf(c).map(t=>t.title)); const add = items.filter(t=>!have.has(t)); if (!add.length) { toast("قائمة العمل مضافة من قبل"); return; }
   const who = (c.assignees||[])[0] || S.uid || null; let n = 0;
   try { for (const title of add) { const id = "tk"+Date.now().toString(36)+Math.random().toString(36).slice(2,5)+n; await S.db.doc("tasks/"+id).set({id, caseId:c.id, title, due:null, assignee:who, priority:"normal", note:null, done:false, template:key, createdAt:new Date().toISOString(), createdBy:S.uid||null}); n++; }
-    await logAction(c.id, `أضاف قائمة عمل «${key}» (${n} مهام)`); render(); toast(`أُضيفت ${n} مهام من قائمة «${key}»`); } catch { toast("تعذّر الحفظ"); }
+    await logAction(c.id, `أضاف قائمة عمل «${key}» (${n} مهام)`); render(); toast(`أُضيفت ${n} مهام من قائمة «${key}»`); } catch { toast("تعذّر الحفظ ولم يُحفظ التغيير — تحقق من الاتصال ثم أعد المحاولة"); }
 }
 function bindTasks(){
   const nw = $("taskNew"); if (nw) nw.onclick = () => openTaskForm(null, {});
@@ -5536,7 +5570,7 @@ function bindTasks(){
   document.querySelectorAll("[data-tasknewcl]").forEach(b => b.onclick = () => openTaskForm(null, {client:b.dataset.name||"", clientKey:b.dataset.tasknewcl}));
   document.querySelectorAll("[data-tasktpl]").forEach(b => b.onclick = () => { const c = S.cases.get(b.dataset.tasktpl); if (c) applyTaskTemplate(c); });
   document.querySelectorAll("[data-taskedit]").forEach(b => b.onclick = () => { const t = (S.tasks||[]).find(x=>x.id===b.dataset.taskedit); if (t) openTaskForm(t); });
-  document.querySelectorAll("[data-taskdone]").forEach(cb => cb.onchange = async () => { const t = (S.tasks||[]).find(x=>x.id===cb.dataset.taskdone); if (!t) return; try { await S.db.doc("tasks/"+t.id).update(cb.checked ? {done:true, doneAt:new Date().toISOString(), doneBy:S.uid||null} : {done:false, doneAt:null, doneBy:null}); if (cb.checked) await logAction(t.caseId||null, `أنجز مهمة: ${t.title}`); } catch { toast("تعذّر الحفظ"); cb.checked = !cb.checked; } });
+  document.querySelectorAll("[data-taskdone]").forEach(cb => cb.onchange = async () => { const t = (S.tasks||[]).find(x=>x.id===cb.dataset.taskdone); if (!t) return; try { await S.db.doc("tasks/"+t.id).update(cb.checked ? {done:true, doneAt:new Date().toISOString(), doneBy:S.uid||null} : {done:false, doneAt:null, doneBy:null}); if (cb.checked) await logAction(t.caseId||null, `أنجز مهمة: ${t.title}`); } catch { toast("تعذّر الحفظ ولم يُحفظ التغيير — تحقق من الاتصال ثم أعد المحاولة"); cb.checked = !cb.checked; } });
   document.querySelectorAll("[data-mtab]").forEach(b => b.addEventListener("click", () => { S.memoUI = {...(S.memoUI||{}), tab:b.dataset.mtab}; }));
 }
 
@@ -6495,7 +6529,7 @@ function nzWallHtml(){
     <p class="sub" style="margin:0 0 10px">يلزم تحديث كل حساب ناجز كل ${P.maxDays} ${P.maxDays===1?"يوم عمل":P.maxDays===2?"يومي عمل":"أيام عمل"}؛ هذه الحسابات تأخرت:</p>
     <div style="display:grid;gap:6px">${due.map(x => `<button class="btn primary" data-nzacct="${esc(x.acct)}">${icon("sync")}${esc(nzAcctName(x.acct))} — ${x.days == null ? "لم يُحدَّث بعد" : `منذ ${x.days} ${x.days===1?"يوم عمل":x.days===2?"يومي عمل":"أيام عمل"}`}</button>`).join("")}</div>
     <p class="sub" style="margin:10px 0 0">يفتح ناجز في نافذة؛ اضغط إشارة «تحديث الديوان» هناك وتصل البيانات هنا وحدها.</p>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn" data-nav="sync">صفحة ربط ناجز</button><button class="btn ghost" id="nzSnooze">لاحقاً (٤ ساعات)</button></div></div>`;
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn" data-nav="sync">صفحة ربط ناجز</button><button class="btn ghost" id="nzSnooze">لاحقاً (4 ساعات)</button></div></div>`;
 }
 function nzEnforce(){
   const old = $("nzWall"); const oldBg = $("nzWallBg");
@@ -6516,14 +6550,14 @@ function nzPolicyPanel(){
     <form id="nzPolicyForm" class="form">
       <div class="row"><label class="f">الحد الأقصى بين تحديثين (أيام عمل)<input class="inp num" type="number" name="maxDays" min="1" max="30" value="${P.maxDays}"></label></div>
       <label style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" name="auto" ${P.auto?"checked":""}> <span><b>اعتماد تلقائي</b> — ما يصل من نافذة ناجز أو الحافظة يُدمج فوراً بلا مراجعة الملخص (الملفات المرفوعة تبقى بمراجعة).</span></label>
-      <label style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" name="strict" ${P.strict?"checked":""}> <span><b>إلزامي</b> — من تأخر حسابه يُطالَب بالتحديث عند فتح الديوان قبل متابعة العمل (مع تأجيل ٤ ساعات مرة واحدة).</span></label>
+      <label style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" name="strict" ${P.strict?"checked":""}> <span><b>إلزامي</b> — من تأخر حسابه يُطالَب بالتحديث عند فتح الديوان قبل متابعة العمل (مع تأجيل 4 ساعات مرة واحدة).</span></label>
       <div><button class="btn primary" type="submit">حفظ السياسة</button></div></form>
     ${accts.length ? `<div class="table-wrap" style="margin-top:12px;border:0"><table><thead><tr><th>الحساب</th><th>القضايا</th><th>آخر تحديث</th><th>بواسطة</th><th>الحالة</th></tr></thead><tbody>${accts.map(row).join("")}</tbody></table></div>` : ""}</section>`;
 }
 function bindNzPolicy(){
   const f = $("nzPolicyForm"); if (f) f.onsubmit = async (e) => { e.preventDefault(); const g = f.elements;
     const pol = {auto: g.auto.checked, maxDays: Math.max(1, Math.min(30, +g.maxDays.value || 2)), strict: g.strict.checked};
-    try { await S.db.doc("office/profile").update({nzPolicy: pol}); } catch { try { await S.db.doc("office/profile").set({...(S.office?.profile||{}), nzPolicy: pol}); } catch { toast("تعذّر الحفظ"); return; } }
+    try { await S.db.doc("office/profile").update({nzPolicy: pol}); } catch { try { await S.db.doc("office/profile").set({...(S.office?.profile||{}), nzPolicy: pol}); } catch { toast("تعذّر الحفظ ولم يُحفظ التغيير — تحقق من الاتصال ثم أعد المحاولة"); return; } }
     await logAction(null, `حدّد سياسة التحديث من ناجز: كل ${pol.maxDays} يوم عمل${pol.auto?"، اعتماد تلقائي":""}${pol.strict?"، إلزامي":""}`); toast("حُفظت السياسة"); };
   document.querySelectorAll("#nzDue [data-nzacct]").forEach(b => b.onclick = () => { nzOpenNajiz(b.dataset.nzacct); S.view = "sync"; S.caseId = null; render(); });
 }
@@ -6753,7 +6787,7 @@ function openReqDecide(r, act){
     try { await S.db.doc("requests/"+r.id).update({status, decision}); await logAction(r.caseId||null, `${t}: ${r.title}${note?" — "+note:""}`); closeDrawer(); toast(act==="reject"?"رُفض الطلب وأُبلغ الممثل بالسبب":act==="accept"?"قُبل الطلب":act==="done"?"أُنجز الطلب":"أُعيد فتح الطلب");
       if (act==="accept" && r.type!=="action") { S.reqPending = r.id; const co = portalCompanies().find(x => (r.engagementId && x.eng===r.engagementId) || (!r.engagementId && keyEq(x.key, r.clientKey)));
         openCaseNew(r.type==="work" ? {client:co?.name||r.client||"", engagementId:r.engagementId||co?.eng||"", track:"work", caseType:"عمل غير قضائي", stage:"مطلوب", subject:r.title, title:r.title, notes:`طلب الممثل: ${r.title}${r.details?"\n"+r.details:""}`} : r.type==="exec" ? {client:co?.name||r.client||"", caseType:"تنفيذ", court:"محكمة التنفيذ بالرياض", stage:"تنفيذ", engagementId:r.engagementId||co?.eng||"", subject:r.title, notes:`طلب الممثل: ${r.title}${r.details?"\n"+r.details:""}`} : {client:co?.name||r.client||"", engagementId:r.engagementId||co?.eng||"", subject:r.title, notes:`طلب الممثل: ${r.title}${r.details?"\n"+r.details:""}`}); }
-      else render(); } catch { toast("تعذّر الحفظ"); } };
+      else render(); } catch { toast("تعذّر الحفظ ولم يُحفظ التغيير — تحقق من الاتصال ثم أعد المحاولة"); } };
 }
 function reqHomePanel(){
   if (isRep() || !can("cases.edit")) return "";
@@ -7418,8 +7452,8 @@ const lgMethodOptions = (sel) => Object.entries(LG_METHODS).map(([k,l])=>`<optio
 // the pay drawer of «المستحقات» gets the receipt's method and account
 const lgDocBtn = (b) => b.inv && b.src!=="legacy" ? `<button class="btn sm ghost" data-lginv="${esc(b.src)}|${esc(b.id)}|${esc(b.key)}">فاتورة Word</button>` : "";
 function ledgerPayFields(){ return `<div class="row"><label class="f">طريقة الدفع<select class="inp" name="lgMethod">${lgMethodOptions("transfer")}</select></label><label class="f">إلى حساب<select class="inp" name="lgAcc">${lgAccOptions(lgSet().accounts.find(a=>a.kind==="bank")?.id)}</select></label></div><p class="sub" style="margin:0">يُنشأ سند قبض مرقّم بالمبلغ تلقائياً.</p>`; }
-async function lgWrite(coll, doc, action, caseId){ try { await S.db.doc(`${coll}/${doc.id}`).set(doc); await logAction(caseId||null, action); return true; } catch { toast("تعذّر الحفظ"); return false; } }
-async function lgPatch(coll, id, patch, action, caseId){ try { await S.db.doc(`${coll}/${id}`).update(patch); await logAction(caseId||null, action); return true; } catch { toast("تعذّر الحفظ"); return false; } }
+async function lgWrite(coll, doc, action, caseId){ try { await S.db.doc(`${coll}/${doc.id}`).set(doc); await logAction(caseId||null, action); return true; } catch { toast("تعذّر الحفظ ولم يُحفظ التغيير — تحقق من الاتصال ثم أعد المحاولة"); return false; } }
+async function lgPatch(coll, id, patch, action, caseId){ try { await S.db.doc(`${coll}/${id}`).update(patch); await logAction(caseId||null, action); return true; } catch { toast("تعذّر الحفظ ولم يُحفظ التغيير — تحقق من الاتصال ثم أعد المحاولة"); return false; } }
 const lgId = (p) => p + Date.now().toString(36) + Math.random().toString(36).slice(2,5);
 async function ledgerAfterPay(b, patch, f){
   const amount = patch.paidAmount!=null ? +patch.paidAmount : b.total; if (!(amount > 0)) return;
@@ -7487,7 +7521,7 @@ function openLgSettings(){
     const accounts = [...dr.querySelectorAll(".lg-acc")].map(row => ({id:row.dataset.id, name:row.querySelector("[name=an]").value.trim(), kind:row.querySelector("[name=ak]").value, opening:r2(+fromHindi(row.querySelector("[name=ao]").value)||0), openingDate:f.start.value})).filter(a=>a.name);
     if (!accounts.length) { toast("أبقِ حساباً واحداً على الأقل"); return; }
     const doc = {...(S.ledger||{}), invPrefix:f.ip.value.trim().toUpperCase(), rcPrefix:f.rp.value.trim().toUpperCase(), vatPeriod:f.vp.value, startDate:f.start.value, accounts, vatReviewed:(S.ledger?.vatReviewed||{}), at:new Date().toISOString(), by:S.uid||null};
-    try { await S.db.doc("ledger/settings").set(doc); S.ledger = doc; await logAction(null, "حدّث إعدادات الحسابات"); closeDrawer(); render(); toast("حُفظت الإعدادات"); } catch { toast("تعذّر الحفظ"); } };
+    try { await S.db.doc("ledger/settings").set(doc); S.ledger = doc; await logAction(null, "حدّث إعدادات الحسابات"); closeDrawer(); render(); toast("حُفظت الإعدادات"); } catch { toast("تعذّر الحفظ ولم يُحفظ التغيير — تحقق من الاتصال ثم أعد المحاولة"); } };
 }
 // ----- documents on the office paper (Word)
 function lgTableXml(rows){
@@ -7562,7 +7596,7 @@ function bindLedger(){
   document.querySelectorAll("[data-lgacc]").forEach(b => b.onclick = () => { S.lgUI = {...(S.lgUI||{}), acc:b.dataset.lgacc}; render(); });
   document.querySelectorAll("[data-lgexpcase]").forEach(b => b.onclick = () => openLgExpense({caseId:b.dataset.lgexpcase}));
   on("lgVatOk", async () => { const p = (lgPeriods(8).find(x=>x.key===S.lgUI?.vat) || lgPeriods(8)[0]); const doc = {...lgSet(), vatReviewed:{...(lgSet().vatReviewed||{}), [p.key]:todayKey()}};
-    try { await S.db.doc("ledger/settings").set(doc); S.ledger = doc; await logAction(null, `راجع ملخص الضريبة لـ${p.label}`); render(); toast("سُجّلت المراجعة"); } catch { toast("تعذّر الحفظ"); } });
+    try { await S.db.doc("ledger/settings").set(doc); S.ledger = doc; await logAction(null, `راجع ملخص الضريبة لـ${p.label}`); render(); toast("سُجّلت المراجعة"); } catch { toast("تعذّر الحفظ ولم يُحفظ التغيير — تحقق من الاتصال ثم أعد المحاولة"); } });
   const arm = (b, label, fn) => { if (!b.dataset.armed) { b.dataset.armed = "1"; const t = b.textContent; b.textContent = label; setTimeout(() => { if (b.isConnected) { delete b.dataset.armed; b.textContent = t; } }, 4000); return; } fn(); };
   document.querySelectorAll("[data-lgexpdel]").forEach(b => b.onclick = () => arm(b, "تأكيد الحذف", async () => { const x = (S.expenses||[]).find(e=>e.id===b.dataset.lgexpdel); if (!x) return;
     if (await lgPatch("expenses", x.id, {deleted:true, deletedAt:new Date().toISOString(), deletedBy:S.uid||null}, `حذف مصروفاً (قابل للاستعادة): ${x.category} ${sar(x.amount)} ريال`, x.caseId)) toast("حُذف — يُستعاد من «المحذوفة»"); }));
@@ -7610,7 +7644,7 @@ function nzReqsPanel(){
 async function nzReqHide(codes){
   const cur = nzReqHidden(); const at = new Date().toISOString(); const next = {...cur}; for (const c of codes) next[String(c)] = {at, by:S.uid||null};
   try { await S.db.doc("meta/reqHidden").set({codes:next, at}); S.reqHidden = {codes:next, at}; await logAction(null, codes.length===1 ? `علّم صحيفة الدعوى ${codes[0]} بأنها قُيدت (أُخفيت من الرئيسية)` : `علّم ${codes.length} صحائف دعوى بأنها قُيدت (أُخفيت من الرئيسية)`); render(); toast(codes.length===1 ? "أُخفيت" : `أُخفيت ${codes.length}`); }
-  catch { toast("تعذّر الحفظ"); }
+  catch { toast("تعذّر الحفظ ولم يُحفظ التغيير — تحقق من الاتصال ثم أعد المحاولة"); }
 }
 function bindNzReqs(){
   if (S.view!=="home") return;
@@ -7904,7 +7938,7 @@ function openFilingNew(){
       filing:{state:"prep", steps:{}, at:now, by:S.uid||null}};
     try { await S.db.doc("cases/"+id).set(doc); await logAction(id, "فتح ملف رفع دعوى");
       if (eg) await patchCase(eg, {members:[...new Set([...(eg.members||[]), id])]}, `رُبط ملف رفع الدعوى ${doc.title} بالعقد`);
-      closeDrawer(); toast("فُتح ملف الدعوى"); openCase(id); } catch { toast("تعذّر الحفظ"); } };
+      closeDrawer(); toast("فُتح ملف الدعوى"); openCase(id); } catch { toast("تعذّر الحفظ ولم يُحفظ التغيير — تحقق من الاتصال ثم أعد المحاولة"); } };
 }
 function openFilingSubmit(c){
   const f = c.filing || {};
@@ -8073,7 +8107,7 @@ function bindWork(){
   const w = $("workWho"); if (w) w.onchange = () => { S.workUI = {...(S.workUI||{}), who: w.value===S.uid ? null : w.value}; render(); };
   document.querySelectorAll("[data-teamsel]").forEach(r => r.onclick = (e) => { if (e.target.closest("select,button:not(.ghost),input,a")) return; S.workUI = {...(S.workUI||{}), teamSel: r.dataset.teamsel===S.workUI?.teamSel ? null : r.dataset.teamsel}; render(); });
   document.querySelectorAll("[data-reassign]").forEach(sel => sel.onchange = async () => { const [k, id] = sel.dataset.reassign.split(":"); const to = sel.value || null; if (!to) return;
-    if (k==="task") { const t = (S.tasks||[]).find(x => x.id===id); if (!t) return; try { await S.db.doc("tasks/"+id).update({assignee:to, updatedAt:new Date().toISOString()}); await logAction(t.caseId, `أسند مهمة إلى ${memberName(to)}: ${t.title}`); toast("أُسندت إلى " + memberName(to)); } catch { toast("تعذّر الحفظ"); } }
+    if (k==="task") { const t = (S.tasks||[]).find(x => x.id===id); if (!t) return; try { await S.db.doc("tasks/"+id).update({assignee:to, updatedAt:new Date().toISOString()}); await logAction(t.caseId, `أسند مهمة إلى ${memberName(to)}: ${t.title}`); toast("أُسندت إلى " + memberName(to)); } catch { toast("تعذّر الحفظ ولم يُحفظ التغيير — تحقق من الاتصال ثم أعد المحاولة"); } }
     else { const m = (S.memos||[]).find(x => x.id===id); if (m && await memoPatch(m, {assignee:to}, `أسند المذكرة إلى ${memberName(to)}`)) toast("أُسندت إلى " + memberName(to)); } });
 }
 // the home page's «مهامي» is the same list: what is late, today and this week — tasks and memos together
@@ -8314,7 +8348,7 @@ async function leadPatch(l, patch, action){
     // the change may reach the page while its form is still open (no redraw then): redraw once the form has closed
     setTimeout(() => { if (!document.getElementById("drawer") && ["crm","home"].includes(S.view)) { const y = window.scrollY; render(); window.scrollTo({top:y}); } }, 60);
     return true; }
-  catch { toast("تعذّر الحفظ"); return false; }
+  catch { toast("تعذّر الحفظ ولم يُحفظ التغيير — تحقق من الاتصال ثم أعد المحاولة"); return false; }
 }
 async function quotePatch(l, no, patch, action){
   const quotes = (l.quotes||[]).map(q => q.no===no ? {...q, ...patch} : q);
@@ -8768,6 +8802,18 @@ document.addEventListener("click", (e) => {
 }, true);
 UX_PHONE?.addEventListener?.("change", () => { if (!uxPhone()) uxSheet(false); if (S.loaded) render(); });
 if (window.MutationObserver) { let q = false; new MutationObserver(() => { if (q) return; q = true; requestAnimationFrame(() => { q = false; const m = $("main"); if (m) uxKeyRows(m); }); }).observe(document.body, {childList:true, subtree:true}); }
+
+// ---------- the cloud site's toast (integrate_cloud.py step 4, cloud build only): it slides in, stays long enough to read what it says
+// (a longer message stays longer), waits while the pointer rests on it, and fades out instead of vanishing.
+toast = function(t){
+  const el = $("toast"); if (!el) return;
+  clearTimeout(toast.t); clearTimeout(toast.h);
+  el.textContent = t; el.classList.remove("out"); el.hidden = false;
+  const ms = Math.min(6500, 2800 + Math.max(0, String(t).length - 30) * 50);
+  const hide = () => { el.classList.add("out"); toast.h = setTimeout(() => { el.hidden = true; el.classList.remove("out"); }, 160); };
+  const arm = () => { clearTimeout(toast.t); toast.t = setTimeout(hide, ms); };
+  el.onmouseenter = () => clearTimeout(toast.t); el.onmouseleave = arm; arm();
+};
 
 // ---------- events
 // the home page's third column exists on wide screens only: its panels move there, and back when the window narrows
