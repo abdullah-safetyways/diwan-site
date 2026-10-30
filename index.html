@@ -144,6 +144,8 @@ tbody tr.clickable{cursor:pointer} tbody tr.clickable:hover td{background:var(--
 .sub{font-size:.8rem;color:var(--ink-3)}
 .empty{padding:28px;text-align:center;color:var(--ink-3)}
 .case-head{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:20px 22px;margin-bottom:14px;display:grid;gap:12px}
+.del-sm{display:none}
+@media (max-width:860px){.case-head [data-delcase]{display:none}.del-sm{display:inline-flex}}
 .case-head .no{font-family:var(--f-body);font-size:.95rem;color:var(--brass);letter-spacing:0;font-weight:600}
 .parties{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:12px;align-items:center}
 .party{background:var(--surface-2);border-radius:8px;padding:10px 14px;min-width:0}
@@ -704,7 +706,7 @@ function vHome(){
   const rev = reviewList().length;
   const memosSoon = memosAll().filter(m => memoOpen(m) && (!m.due || daysUntil(m.due) <= 14) && (!myBriefOnly() || memoMine(m))); const memosLate = memosSoon.filter(memoLate).length;
   const brief = myBriefOnly() ? S.myBrief : S.meta?.brief;
-  return header("صباح العمل", todayLine(), `<button class="btn primary" id="briefBtn">${icon("spark")}إحاطة اليوم</button>`) + onboardPanel() + nzDuePanel() + crmHomePanel() + reqHomePanel() + `
+  return header("صباح العمل", todayLine(), `<button class="btn primary" id="briefBtn">${icon("spark")}إحاطة اليوم</button>`) + nzDuePanel() + crmHomePanel() + reqHomePanel() + `
   <div class="kpis five">
     <button class="kpi" data-nav="cases"><span class="v num">${open.length}</span><span class="l">قضية مفتوحة</span>${execOpen?`<span class="sub">و${execOpen} طلب تنفيذ قائم</span>`:""}</button>
     <button class="kpi ${memosLate?"alert":memosSoon.length?"warn":""}" data-nav="memos"><span class="v num">${memosSoon.length}</span><span class="l">مذكرة تُقدَّم خلال 14 يوماً${memosLate?` (${memosLate} متأخرة)`:""}</span></button>
@@ -728,14 +730,14 @@ function vHome(){
       ${can("billing.view")?homeBillingPanel():""}
     </div>
     <aside class="grid" id="homeRail" style="align-content:start"></aside>
-  </div>`;
+  </div>${(() => { const o = onboardPanel(); return o ? `<div style="margin-top:16px">${o}</div>` : ""; })()}`;
 }
 
 function filteredCases(){
   const q = S.q.trim().toLowerCase();
   let list = allCases();
   if (S.trackF) list = list.filter(c => trackOf(c)===S.trackF);
-  if (S.filter==="open") list = list.filter(c=>OPEN.has(c.status) && !caseFinished(c)); else if (S.filter==="mine") list = list.filter(c=>(c.assignees||[]).includes(S.uid)); else if (S.filter!=="all") list = list.filter(c=>c.status===S.filter);
+  if (S.filter==="open") list = list.filter(c=>OPEN.has(c.status) && !caseFinished(c)); else if (S.filter==="execution") list = list.filter(c=>(c.status==="execution" || trackOf(c)==="exec") && !caseFinished(c)); else if (S.filter==="mine") list = list.filter(c=>(c.assignees||[]).includes(S.uid)); else if (S.filter!=="all") list = list.filter(c=>c.status===S.filter);
   if (q) list = list.filter(c => [c.caseNo,(c.otherCaseNos||[]).join(" "),c.title,c.client,c.court,c.circuit,c.subject,c.plaintiff,c.defendant,c.caseType,trackLabel(c),(c.odoo||{}).projectName].join(" ").toLowerCase().includes(q));
   return list.sort((a,b)=> (a.nextSession && isFuture(a.nextSession) ? a.nextSession : "9").localeCompare(b.nextSession && isFuture(b.nextSession) ? b.nextSession : "9") || (b.lastSession||"").localeCompare(a.lastSession||""));
 }
@@ -744,7 +746,7 @@ function vCases(){
   const execN = allCasesAll().filter(c => trackOf(c)==="exec" && c.status!=="closed").length;
   const counts = {}; for (const c of allCases()) counts[c.status]=(counts[c.status]||0)+1;
   const mineN = S.uid ? allCases().filter(c=>(c.assignees||[]).includes(S.uid)).length : 0;
-  const F = [...(mineN?[["mine","قضاياي",mineN]]:[]),["open","المفتوحة",allCases().filter(c=>OPEN.has(c.status) && !caseFinished(c)).length],["active","قيد المرافعة",counts.active||0],["judged","صدر حكم",counts.judged||0],["appeal","استئناف",counts.appeal||0],["supreme","عليا",counts.supreme||0],["execution","تنفيذ",counts.execution||0],["archive","غير محدّثة",counts.archive||0],["closed","منتهية",counts.closed||0],["all","الكل",allCases().length]];
+  const F = [...(mineN?[["mine","قضاياي",mineN]]:[]),["open","المفتوحة",allCases().filter(c=>OPEN.has(c.status) && !caseFinished(c)).length],["active","قيد المرافعة",counts.active||0],["judged","صدر حكم",counts.judged||0],["appeal","استئناف",counts.appeal||0],["supreme","عليا",counts.supreme||0],["execution","تنفيذ",execN + (counts.execution||0)],["archive","غير محدّثة",counts.archive||0],["closed","منتهية",allCasesAll().filter(c=>caseFinished(c)).length],["all","الكل",allCasesAll().length]];
   return header("القضايا", `${allCases().length} قضية · ${execN} طلب تنفيذ قائم · ${engagements().length} عقود سنوية · ${perCaseContracts().length} عقود بالمعاملة`, `${can("cases.edit")?`<button class="btn" id="cfOpen">${icon("shield")}فحص تعارض</button> `:""}<button class="btn primary" id="caseNew" ${S.canWrite?"":"disabled"}>+ قضية جديدة</button>`) + `
   <div class="toolbar"><label class="search">${icon("search")}<input id="q" type="search" placeholder="رقم القضية، الخصم، الموكل، المحكمة، النوع…" value="${esc(S.q)}" autocomplete="off" aria-label="بحث في القضايا"></label></div>
   <div class="chips" style="margin-bottom:14px">${F.map(([k,l,n])=>`<button class="chip" data-filter="${k}" aria-pressed="${S.filter===k}">${l} <span class="num muted">${n}</span></button>`).join("")}</div>
@@ -813,7 +815,7 @@ function vCase(){
       <span style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">${trackPill(c)}${c.caseType&&c.caseType!=="غير واضح"&&!(trackOf(c)==="work"&&c.caseType==="عمل غير قضائي")?`<span class="pill">${esc(c.caseType)}</span>`:""}<span class="pill ${stCls(c.status)}">${esc(trackStatusLabel(c))}</span>${sakPill(c)}${feeKindPill(c)}
       ${timerButton(c)}${trackConvertBtn(c)}<button class="btn sm" data-editcase ${ro}>تعديل البيانات</button>${c.deleted?"":`<button class="btn sm ghost" data-delcase ${ro} style="color:var(--crit)">حذف</button>`}</span></div>
     <h1 style="font-size:1.35rem">${esc(c.title)}</h1>
-    ${c.plaintiff||c.defendant?`<div class="parties"><div class="party ${ours==="المدعي"?"ours":""}"><small>المدعي${ours==="المدعي"?" — موكلنا":""}${srcBadge(c,"plaintiff")}</small><b>${esc(c.plaintiff||"—")}</b></div><span class="vs">ضد</span><div class="party ${ours==="المدعى عليه"?"ours":""}"><small>المدعى عليه${ours==="المدعى عليه"?" — موكلنا":""}${srcBadge(c,"defendant")}</small><b>${esc(c.defendant||"—")}</b></div></div>`:""}
+    ${c.plaintiff||c.defendant?`<div class="parties"><div class="party ${ours==="المدعي"?"ours":""}"><small>المدعي${ours==="المدعي"?" — موكلنا":""}${srcBadge(c,"plaintiff")}</small><b>${esc(c.plaintiff||"—")}</b>${ours==="المدعي"?partyClientLine(c, c.plaintiff):""}</div><span class="vs">ضد</span><div class="party ${ours==="المدعى عليه"?"ours":""}"><small>المدعى عليه${ours==="المدعى عليه"?" — موكلنا":""}${srcBadge(c,"defendant")}</small><b>${esc(c.defendant||"—")}</b>${ours==="المدعى عليه"?partyClientLine(c, c.defendant):""}</div></div>`:""}
     <div class="facts">${[["المرحلة",c.stage,"stage"],["الموضوع",c.subject,"subject"],[TRACK[trackOf(c)].forum,c.court,"court"],["الدائرة",c.circuit,"circuit"],["الموكل",c.client,"client"],["الموعد",c.trackDue&&!COURT_TRACKS.has(trackOf(c))&&c.trackDue>=todayKey()?fmtD(c.trackDue):null],["صفة الموكل",c.ourSide,"ourSide"],["الموعد القادم",c.nextSession&&isFuture(c.nextSession)?fmtDate.format(D(c.nextSession))+" ("+fmtHijri.format(D(c.nextSession))+")":null]].filter(x=>x[1]).map(([k,v,f])=>`<div><span>${k}:</span><b>${esc(v)}</b>${f?srcBadge(c,f):""}</div>`).join("")}</div>
     ${(c.related||[]).length||eng?`<div class="links">${eng?`<button class="link-chip" data-case="${esc(eng.id)}">${esc(eng.title||"عقد أتعاب سنوي")}</button>`:""}${(c.related||[]).map(r=>{const o=S.cases.get(r);return o&&!o.deleted&&visibleCase(o)?`<button class="link-chip" data-case="${esc(r)}">مرتبطة: ${esc(o.caseNo||"")} ${esc(o.title).slice(0,50)}</button>`:"";}).join("")}</div>`:""}
   </section>
@@ -848,10 +850,11 @@ function tabOverview(c){
       ${(c.reviewNotes||[]).length && !c.reviewDone?`<div class="notice warn"><b>يحتاج قرارك:</b> ${c.reviewNotes.map(esc).join("<br>")}</div>`:""}
       ${isFiling(c)?filingCard(c, true):""}${outcomeNotice(c)}
       ${OPEN.has(c.status)&&(c.createdAt||!intakeDone(c))?checklistPanel(c,"intake"):""}${c.status==="closed"?checklistPanel(c,"closing"):""}
+      ${showJudg && c.judgment?.deadline && isFuture(c.judgment.deadline) ? judgmentPanel(c) : ""}
       ${memoCardOverview(c)}
       ${next?`<div class="${roleClass(next.role)==="deadline"?"dl-card":"next-card"}"><span class="lbl">${roleClass(next.role)==="deadline"?"موعد نهائي":"الجلسة القادمة"} — ${esc(next.role||"")}</span><b>${fmtDay.format(D(next.start))} · ${whenTxt(next)} ${daysPill(next.start)}</b>${next.required?`<div>${esc(next.required)}</div>`:""}</div>`:""}
       ${c.exec?.kind === "request" ? execReqPanel(c) : c.moen && !c.najiz ? moenPanel(c) : najizPanel(c)}
-      ${showJudg?judgmentPanel(c):""}
+      ${showJudg && !(c.judgment?.deadline && isFuture(c.judgment.deadline)) ? judgmentPanel(c) : ""}
       ${docsPanel(c)}
       ${!can("ai.use") ? "" : a?`<section class="panel"><header><h2>الخطوة القادمة المقترحة</h2><button class="btn ghost" data-tab="ai">التحليل الكامل</button></header>${(a.nextSteps||[]).slice(0,2).map((s,i)=>stepHtml(s,i)).join("")}<p class="sub" style="margin:.5rem 0 0">حُلّلت في ${esc(fmtDate.format(D(a.generatedAt)))}</p></section>`
         :`<section class="panel"><header><h2>لا يوجد تحليل محفوظ بعد</h2></header><p class="muted" style="margin:0 0 10px">يقرأ المساعد بيانات ناجز والضبوط والأحكام ويقترح الخطوة القادمة باختصار.</p><button class="btn primary" data-tab="ai">${icon("spark")}حلّل القضية</button></section>`}
@@ -859,7 +862,7 @@ function tabOverview(c){
     <div class="grid" style="align-content:start">
       <section class="panel"><header><h2>بيانات القضية</h2><button class="btn sm" data-editcase ${ro}>تعديل</button></header>
         <dl class="kv">${kv.map(([k,v])=>`<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">${c.caseNo?`<button class="btn sm" type="button" id="copyNo">${icon("copy")}نسخ رقم القضية</button>`:""}<a class="btn sm" href="https://najiz.sa" target="_blank" rel="noopener">فتح ناجز</a></div>${xCaseBlock(c)}</section>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">${c.caseNo?`<button class="btn sm" type="button" id="copyNo">${icon("copy")}نسخ رقم القضية</button>`:""}<a class="btn sm" href="https://najiz.sa" target="_blank" rel="noopener">فتح ناجز</a>${c.deleted?"":`<button class="btn sm ghost del-sm" data-delcase ${ro} style="color:var(--crit);margin-inline-start:auto">حذف القضية</button>`}</div>${xCaseBlock(c)}</section>
       ${can("billing.view")?`<section class="panel"><header><h2>الأتعاب</h2><button class="btn sm ghost" data-tab="fees">${fz?.items?.length?"التفاصيل":"تحرير عقد بالمعاملة"}</button></header>
         ${fz?.items?.length?`<p style="margin:0"><span class="pill ${fz.signed?"ok":"warn"}">عقد بالمعاملة ${fz.signed?"موقَّع":"مسودة"}</span> ${esc(feeSummary(fz))}${fz.vat?" + الضريبة":""}${fz.src==="doc"?' <span class="pill">من العقد — للمراجعة</span>':""}</p>${dueNow.length?`<div class="notice warn" style="margin-top:8px">مستحق الآن: <b class="num">${sar(dueNow.reduce((x,b)=>x+(b.total||0),0))}</b> ريال — ${esc(dueNow.map(b=>b.label).join("، "))}</div>`:`<p class="sub" style="margin:6px 0 0">${fb.filter(b=>b.state==="paid").length} محصّلة · ${fb.filter(b=>b.state==="waiting"||b.state==="upcoming").length} قادمة</p>`}`
           : eng ? `<p class="sub" style="margin:0">ضمن ${esc(eng.title||"عقد سنوي")}.</p>` : c.feesNA ? `<p class="sub" style="margin:0">لا أتعاب مستقلة لهذه القضية.</p>` : `<p class="sub" style="margin:0">لم يُسجَّل لهذه القضية عقد أتعاب بالمعاملة ولا عقد سنوي.</p>`}</section>`:""}
@@ -871,6 +874,9 @@ function tabOverview(c){
   </div>`;
 }
 async function saveNotes(c){ const v = $("notesIn").value; if (v===(c.notes||"")) { toast("لا تغيير"); return; } if (await patchCase(c, {notes:v, editedAt:new Date().toISOString()}, "عدّل ملاحظات المحامي", {notes:["…","…"]})) toast("حُفظت الملاحظات"); }
+// the client is not the first name on that side (several defendants): say who the client is, under the name shown
+function partyClientLine(c, party){ const k = (s) => arStrip(String(s||"")).replace(/\s+/g, " ").trim(); if (!c.client || !party || k(party).includes(k(c.client))) return "";
+  return `<small style="display:block;margin-top:2px">موكلنا منهم: <b>${esc(c.client)}</b></small>`; }
 function judgmentPanel(c){
   const j = c.judgment || {}; const st = S.calc[c.id] || {};
   const law = st.law || lawFor(c.caseType); const kind = st.kind || (c.status==="appeal"?"cassation":"appeal"); const urgent = st.urgent ?? !!c.urgent;
@@ -878,9 +884,13 @@ function judgmentPanel(c){
   const received = st.received || j.receivedDate || "";
   const res = received ? computeDeadline(received, days) : null;
   const ro = S.canWrite ? "" : "disabled";
-  return `<section class="panel" id="judgPanel"><header><h2>الحكم وموعد الاعتراض</h2>${j.deadline?`<span class="pill crit">آخر موعد ${fmtDate.format(D(j.deadline))}</span>`:""}</header>
+  // the stored judgment is the one now under objection: the case moved up after it was given
+  const objected = !j.deadline && !st.received && (j.date || j.result) && ((c.status==="appeal" && !/استئناف/.test(j.court||"")) || (c.status==="supreme" && !/العليا/.test(j.court||"")));
+  const fold = (j.src==="najiz" && j.deadline) || objected;
+  return `<section class="panel" id="judgPanel"><header><h2>الحكم وموعد الاعتراض</h2>${j.deadline?`<span class="pill crit">آخر موعد ${fmtDate.format(D(j.deadline))}</span>`:objected?`<span class="pill">اعتُرض عليه</span>`:""}</header>
     ${j.result||j.date?`<div class="notice" style="margin-bottom:12px">${j.date?`<b>صدر:</b> ${fmtDate.format(D(j.date))} (${fmtHijri.format(D(j.date))}) · `:""}${j.result?esc(j.result.slice(0,300)):""}${j.src==="ai"?' <span class="src ai">مستنتج</span>':j.src==="najiz"?' <span class="src najiz">ناجز</span>':""}</div>`:""}
-    ${j.src==="najiz"&&j.deadline?`<details ${st.received?"open":""}><summary>إعادة حساب الموعد يدوياً</summary>`:""}<form class="calc" id="calcForm" style="margin-top:8px">
+    ${objected?`<div class="notice ok" style="margin-bottom:8px">اعتُرض على هذا الحكم، والقضية الآن ${c.status==="supreme"?"لدى المحكمة العليا":"لدى الاستئناف"}: لا موعد اعتراض جارٍ حتى يصدر الحكم الجديد.</div>`:""}
+    ${fold?`<details ${st.received?"open":""}><summary>${objected?"حساب موعد يدوياً":"إعادة حساب الموعد يدوياً"}</summary>`:""}<form class="calc" id="calcForm" style="margin-top:8px">
       <div class="row">
         <label class="f">تاريخ صدور الحكم<input class="inp" type="date" id="jDate" value="${esc(st.date ?? j.date ?? "")}" ${ro}></label>
         <label class="f">تاريخ تسلم صورة الصك<input class="inp" type="date" id="jRecv" value="${esc(received)}" ${ro}></label>
@@ -897,7 +907,7 @@ function judgmentPanel(c){
       <div class="sub">${esc(LAW[law].verified ? `السند: ${L.art} من ${LAW[law].label.split(" — ")[0]}؛ وتبدأ المدة من اليوم التالي لتسلم صورة الصك (م7 من اللائحة التنفيذية لطرق الاعتراض)، وتمتد إن صادف آخرها جمعة أو سبتاً أو عطلة رسمية (م22).` : "مدة هذا النظام لم تُوثّق في الديوان بعد: تحقق من نص النظام قبل الاعتماد، وعدّل عدد الأيام إن لزم.")}</div>
       ${res?`<div class="calc-out"><span class="lbl">${KIND_LBL[kind]} — آخر يوم</span><b class="big">${fmtDay.format(D(res.last))} ${fmtDate.format(D(res.last))}</b><span>${fmtHijri.format(D(res.last))} · ${daysPill(res.last)}</span>${res.extended.length?`<span class="sub">امتد لأن آخر المدة صادف ${esc(res.extended.join(" و"))}.</span>`:""}${res.eid?`<span class="sub" style="color:var(--crit)">قد يقع الموعد في إجازة العيد: تحقق من الإجازة الرسمية المعلنة.</span>`:""}</div>`:`<div class="sub">أدخل تاريخ تسلم الصك ليُحسب آخر موعد.</div>`}
       <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" type="submit" ${ro} ${res?"":"disabled"}>حفظ الحكم والموعد</button>${j.result||j.date?"":`<span class="sub" style="align-self:center">يُحفظ الحكم ويُضاف الموعد إلى الأجندة.</span>`}</div>
-    </form>${j.src==="najiz"&&j.deadline?"</details>":""}</section>`;
+    </form>${fold?"</details>":""}</section>`;
 }
 const SESS_ROLES = ["مرافعة","نطق بالحكم","ترافع إلكتروني","جلسة تحضيرية","كتابة مذكرة","أخر موعد للإستئناف","مراجعة","مؤتمر"];
 const SRC_SESS = {moen:'<span class="src najiz">معين</span>', najiz:'<span class="src najiz">ناجز</span>', manual:'<span class="src user">من الديوان</span>', odoo:'<span class="src odoo">أودو</span>'};
@@ -2936,7 +2946,7 @@ function bindJoin(){
 }
 // the case's responsible team members (for members who see only their assigned cases)
 function assigneeField(c){
-  const ms = staffMembers().filter(m=>m.active!==false); if (!ms.length) return "";
+  const ms = staffMembers().filter(m=>m.active!==false && m.scope!=="client" && m.role!=="client"); if (!ms.length) return "";
   const cur = new Set(c?.assignees||[]);
   return `<fieldset class="perm-grid"><legend class="lbl">المسؤولون عن القضية من الفريق</legend>${ms.map(m=>`<label><input type="checkbox" name="assignees" value="${esc(m.uid)}" ${cur.has(m.uid)?"checked":""}> ${esc(memberName(m.uid))} <span class="sub">${esc(ROLES[m.role]?.t||"")}</span></label>`).join("")}</fieldset>`;
 }
@@ -8056,9 +8066,12 @@ function quickParse(text){
   if (!out.due) for (const [w, n] of WD_AR) { const re = new RegExp(`\\s(?:يوم\\s+|في\\s+|قبل\\s+)?${w}(?:\\s+(?:القادم|الجاي))?\\s`); if (re.test(t)) { let d = (n - wd + 7) % 7; if (d===0) d = 7; out.due = addDays(T, d); cut(re); break; } }
   // the person: «لفهد»، «لـ فهد»، «@فهد»، «إلى فهد»، «لي»
   if (/\s(?:لي|لنفسي)\s/.test(t) && S.uid) { out.assignee = S.uid; cut(/\s(?:لي|لنفسي)\s/); }
-  else for (const m of qaMembers()) { const first = arStrip(m.name.split(" ")[0] || ""); if (!first || first.length < 2) continue;
-    const re = new RegExp(`\\s(?:ل|لـ\\s?|@|إلى\\s+|الى\\s+|للأستاذ\\s+|للمحامي\\s+)${first}(?:\\s+${arStrip(m.name.split(" ")[1]||"")})?\\s`);
-    if (re.test(arStrip(t))) { out.assignee = m.uid; t = arStrip(t).replace(re, " "); break; } }
+  else for (const m of qaMembers()) { let hit = null;
+    for (const w of qaNameWords(m)) { const re = new RegExp(`\\s(?:(?:ل|لـ\\s?|@|إلى\\s+|الى\\s+|للأستاذ\\s+|للمحامي\\s+|للمستشار\\s+)(?:عبد\\s?)?${w}${w.startsWith("ال") ? `|لل${w.slice(2)}` : ""})\\s`); if (re.test(arStrip(t))) { hit = re; break; } }
+    if (hit) { out.assignee = m.uid; t = arStrip(t).replace(hit, " "); break; } }
+  // a name the team does not have («لفهد» with no Fahd): kept in the line and shown, so the item is not handed to the wrong person
+  if (!out.assignee) { const m = arStrip(t).match(/\s(?:@|لـ\s?|إلى\s+|الى\s+|للأستاذ\s+|للمحامي\s+|للمستشار\s+|ل(?!ل|ا|ه|ك|م\s|ي\s|نا\s))([^\s\d]{3,})\s/);
+    if (m && !QA_NOT_NAMES.has(m[1])) out.unknown = m[1]; }
   // urgency
   if (/\s(?:عاجل|عاجلة|مستعجل|مستعجلة|ضروري)\s|!/.test(t)) { out.priority = "high"; cut(/\s(?:عاجل|عاجلة|مستعجل|مستعجلة|ضروري)\s|!/g); }
   // a memo, when the line names one and the case is known
@@ -8066,6 +8079,10 @@ function quickParse(text){
   out.title = t.replace(/\s+/g, " ").replace(/^[\s،,.:\-–—]+|[\s،,.:\-–—]+$/g, "").trim();
   return out;
 }
+const QA_NOT_NAMES = new Set(["صالح","دى","دي","جنة","لجنة","ذلك","هذا","هذه","تقديم","رفع","تسليم","حين","حضور","مراجعة","موكل","لموكل","عميل","خصم","طلب","عدم","حكم","قضية","دعوى","مدة","محكمة","دائرة","الموكل","تاريخ","جلسة","صالحه","صالحنا"]);
+const QA_TITLES = new Set(["المستشار","القانوني","المحامي","محامي","محام","الأستاذ","الاستاذ","أستاذ","استاذ","الدكتور","د","مستشار","قانوني","مدير","المدير","الشيخ","عبد"]);
+const qaNameWords = (m) => [...new Set([m.name, m.label].filter(Boolean).flatMap(n => arStrip(n).split(/[\s\/\-–—،,.()]+/)).filter(w => w.length >= 3 && !QA_TITLES.has(w)))].map(w => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+const qaExampleName = () => { const m = qaMembers()[0]; return m ? (qaNameWords(m)[0] || "") : ""; };
 function qaPreview(p){
   if (!p || !p.title) return "";
   const c = p.caseId ? S.cases.get(p.caseId) : null;
@@ -8073,11 +8090,13 @@ function qaPreview(p){
   return [p.kind==="memo" ? chip("judged", "مذكرة: " + esc(memoKind(p.memoKind).t)) : chip("", "مهمة"),
     c ? chip("active", esc((c.caseNo ? c.caseNo + " · " : "") + (c.title||"").slice(0,32))) : chip("", "بلا قضية"),
     p.due ? chip("warn", esc(fmtD(p.due))) : chip("", "بلا موعد"),
-    chip(p.assignee ? "ok" : "", esc(p.assignee ? memberName(p.assignee) : (S.uid ? "لي" : "غير مسندة"))),
+    p.unknown ? chip("crit", esc(`لا يوجد «${p.unknown}» في الفريق — ستُسند لك`)) : chip(p.assignee ? "ok" : "", esc(p.assignee ? memberName(p.assignee) : (S.uid ? "لي" : "غير مسندة"))),
     p.priority==="high" ? chip("crit", "عاجلة") : ""].join(" ");
 }
 async function quickSave(text){
   const p = quickParse(text); if (!p.title) { toast("اكتب المهمة"); return false; }
+  if (p.unknown && quickSave.warned !== text) { quickSave.warned = text; toast(`لا يوجد «${p.unknown}» في الفريق. اكتب اسماً من الفريق أو «لي»، أو اضغط Enter مرة أخرى لتُسند لك`); return false; }
+  quickSave.warned = null;
   if (!S.db || !S.canWrite) { toast("لا يمكن الحفظ في هذا العرض"); return false; }
   const assignee = p.assignee || S.uid || null; const now = new Date().toISOString();
   if (p.kind==="memo") { if (!can("memos.edit")) { toast("إضافة المذكرات ليست ضمن صلاحياتك"); return false; }
@@ -8104,7 +8123,7 @@ function bindQa(form){
 function railQa(){
   if (!S.loaded || !S.me?.allowed || S.me.role==="client" || S.me.scope==="client" || !(can("tasks.edit") || can("memos.edit"))) { $("qaRailBox") && ($("qaRailBox").innerHTML = ""); return; }
   const box = $("qaRailBox"); if (!box || box.firstChild) return;
-  box.innerHTML = qaBar("qaRail", "مثل: مذكرة الرد الأحد لفهد"); bindQa($("qaRail"));
+  box.innerHTML = qaBar("qaRail", `مثل: مذكرة الرد الأحد ${qaExampleName() ? "ل" + qaExampleName() : "لي"}`); bindQa($("qaRail"));
 }
 // one list of what is on a member: their open tasks and memos, by when
 function workItems(uid){
@@ -8122,7 +8141,7 @@ function vWork(){
   const UI = S.workUI = S.workUI || {who:null}; const who = canSeeTeam() && UI.who ? UI.who : S.uid;
   const items = workItems(who); const B = workBuckets(items);
   const members = canSeeTeam() ? qaMembers() : [];
-  return `${can("tasks.edit")||can("memos.edit") ? qaBar("qaWork", "أضف بسطر واحد: «تجهيز مستندات القضية 4870… غداً لي» أو «مذكرة جوابية 4870… الخميس لفهد عاجل»") : ""}
+  return `${can("tasks.edit")||can("memos.edit") ? qaBar("qaWork", `أضف بسطر واحد: «تجهيز مستندات القضية 4870… غداً لي» أو «مذكرة جوابية 4870… الخميس ${qaExampleName() ? "ل" + qaExampleName() : "لي"} عاجل»`) : ""}
   <div class="toolbar" style="margin:12px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap">${members.length ? `<label class="sub">عمل: <select class="inp" id="workWho" style="width:auto;display:inline-block">${[{uid:S.uid, name:"أنا"}, ...members.filter(m=>m.uid!==S.uid)].map(m=>`<option value="${esc(m.uid)}" ${m.uid===who?"selected":""}>${esc(m.name)}</option>`).join("")}</select></label>` : ""}
     <span class="sub">${items.length ? `${items.length} مفتوحة${B[0].list.length?` · <b style="color:var(--crit)">${B[0].list.length} متأخرة</b>`:""}` : ""}</span></div>
   ${items.length ? B.filter(b => b.list.length).map(b => `<section class="panel work-b"><header><h2>${b.l} <span class="pill ${b.cls}">${b.list.length}</span></h2></header>
@@ -8338,13 +8357,15 @@ function trackSections(list){
   const live = list.filter(c => !caseFinished(c) && trackOf(c)!=="exec");
   const execL = every.filter(c => !caseFinished(c) && trackOf(c)==="exec");
   const sec = (k, title, n, sub, body) => `<details class="tsec" data-tsec="${k}" ${tsecOpen(k)?"open":""}><summary><span class="tsec-t">${esc(title)}</span><span class="pill num">${n}</span><span class="sub tsec-s">${esc(sub)}</span><span class="chev">${icon("chev")}</span></summary>${body}</details>`;
-  const out = [...TRACKS.filter(t => t.k!=="exec"), TRACK.exec].map(t => { const L = t.k==="exec" ? execL : live.filter(c => trackOf(c)===t.k); if (!L.length) return "";
+  const execOnly = S.filter==="execution", closedOnly = S.filter==="closed";
+  const out = (closedOnly ? [] : [...TRACKS.filter(t => t.k!=="exec" && !execOnly), TRACK.exec]).map(t => { const L = t.k==="exec" ? execL : live.filter(c => trackOf(c)===t.k); if (!L.length) return "";
     return sec(t.k, t.l, L.length, t.hint, `<div class="table-wrap">${t.k==="courts" ? caseTable(L) : trackTable(L, t.k)}</div>`); }).join("");
   const doneBody = done.length ? `<div class="table-wrap"><table><thead><tr><th>الرقم</th><th>الملف</th><th class="hide-sm">المسار / الجهة</th><th>آخر جلسة</th><th class="hide-sm">لماذا هي هنا</th></tr></thead><tbody>${done.map(c => { const why = caseFinished(c); const ld = caseLastDate(c);
       return `<tr class="clickable" data-case="${esc(c.id)}"><td class="mono">${esc(c.caseNo||"—")}</td><td><div class="ttl">${esc(c.title)}</div><div class="sub">${esc(c.client||"")}</div></td>
       <td class="hide-sm"><div>${esc(trackLabel(c))}</div><div class="sub">${esc(c.court||"")}</div></td><td class="num">${ld?fmtD(ld):`<span class="muted small">لا جلسات</span>`}</td>
       <td class="hide-sm">${why==="closed"?`<span class="pill closed">منتهية</span>`:`<span class="pill archive">بلا جلسة منذ سنة</span><div class="sub">${esc(STATUS[c.status]||"")} في الديوان</div>`}</td></tr>`; }).join("")}</tbody></table></div>` : `<div class="empty">لا قضايا منتهية.</div>`;
-  return (out || `<div class="panel empty">لا قضايا مطابقة. جرّب كلمة أخرى أو امسح التصفية.</div>`) + sec("done", "المنتهية", done.length, "المنتهية في الديوان، وكل قضية أمام المحاكم أو ديوان المظالم لم تُعقد لها جلسة خلال السنة الماضية ولا جلسة قادمة لها", doneBody);
+  if (execOnly) return out || `<div class="panel empty">لا طلبات تنفيذ قائمة.</div>`;
+  return (out || (closedOnly ? "" : `<div class="panel empty">لا قضايا مطابقة. جرّب كلمة أخرى أو امسح التصفية.</div>`)) + sec("done", "المنتهية", done.length, "المنتهية في الديوان، وكل قضية أمام المحاكم أو ديوان المظالم لم تُعقد لها جلسة خلال السنة الماضية ولا جلسة قادمة لها", doneBody);
 }
 function bindTrackSections(){
   document.querySelectorAll("details.tsec").forEach(d => d.addEventListener("toggle", () => { S.tsecOpen = {...(S.tsecOpen||{}), [d.dataset.tsec]: d.open}; try { localStorage.setItem("dq.tsec", JSON.stringify(S.tsecOpen)); } catch {} }));
