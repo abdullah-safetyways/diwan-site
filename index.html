@@ -398,7 +398,7 @@ tr[aria-selected="true"] td{background:var(--accent-soft)}
     <main class="main" id="main" tabindex="-1">
       <div class="topline"><div><h1>ديوان القضايا</h1><div class="date" id="todayLbl"></div></div></div>
       <div class="panel"><div class="thinking"><span class="dot"></span>تحميل القضايا والجلسات من قاعدة بيانات المكتب…</div>
-      <p class="muted small" style="margin:.6rem 0 0">تظهر هنا قضايا المكتب من ناجز وجلساتها وأحكامها بعد اكتمال التحميل. إن لم يكتمل التحميل فافتح الصفحة من حسابك في Claude.</p></div>
+      <p class="muted small" style="margin:.6rem 0 0">تظهر هنا قضايا المكتب من ناجز وجلساتها وأحكامها بعد اكتمال التحميل. إن لم يكتمل التحميل فأعد تحميل الصفحة.</p></div>
     </main>
   </div>
 </div>
@@ -1134,7 +1134,7 @@ async function refreshDocs(c){
     delete S.busy[key];
     await saveDocs(c, {...d, files, scannedAt:new Date().toISOString()}, `حدّث مستندات المكتب (${added} جديد)`);
     toast(added ? `أُضيف ${added} مستند جديد` : "المستندات محدّثة، لا جديد");
-  } catch(e){ delete S.busy[key]; render(); toast(e?.code==="server_not_connected"?"أضف موصّل Microsoft 365 من إعدادات Claude":e?.code==="needs_reauth"?"أعد ربط Microsoft 365 من إعدادات Claude":"تعذّر الوصول إلى ملفات المكتب الآن"); }
+  } catch(e){ delete S.busy[key]; render(); toast(e?.code==="server_not_connected"?"تعذّر الوصول إلى ملفات المكتب الآن":e?.code==="needs_reauth"?"انتهت جلستك؛ اخرج وادخل من جديد":"تعذّر الوصول إلى ملفات المكتب الآن"); }
 }
 async function pickFolder(c, q){
   const box = $("folderPick"); if (!box) return;
@@ -1319,7 +1319,7 @@ function tabDrafts(c){
     ${!docMode?`<label class="f" style="margin-top:10px">المسودة (قابلة للتعديل — يتعلم الديوان من تعديلاتك عند الحفظ)<textarea class="inp" id="drOut" style="min-height:48vh">${esc(ks.out||"")}</textarea></label>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn" id="drCopy">${icon("copy")}نسخ</button><button class="btn" id="drSave" ${ro}>حفظ المسودة في الديوان</button><button class="btn" id="drWord">${icon("report")}تنزيل Word على ورق المكتب</button><button class="btn" id="drWordSave" ${ro}>${icon("folder")}حفظ Word في مجلد القضية</button></div>
     ${ks.lib?.length?`<details style="margin-top:8px"><summary>مواد المكتبة التي قرأها الديوان لهذه المسودة (${ks.lib.length})</summary><ul class="small" style="margin:6px 0 0;padding-inline-start:18px">${ks.lib.map(x=>`<li>${esc(x.ref)}${x.cited?" — استُشهد بها":""}</li>`).join("")}</ul></details>`:""}
-    <p class="sub" style="margin:8px 0 0">للتحقق من نصوص المواد غير الموجودة في المكتبة، اطلبها من Claude في المحادثة: <button class="btn ghost sm" id="drAsk" style="padding:0">نسخ الطلب</button></p>`:""}
+    <p class="sub" style="margin:8px 0 0">للتحقق من نصوص المواد غير الموجودة في المكتبة: <button class="btn ghost sm" id="drAsk" style="padding:0">نسخ قائمة المواد</button> ثم راجعها في موقع هيئة الخبراء أو أضف نصوصها إلى المكتبة.</p>`:""}
   </section>
   <section class="panel" style="align-self:start"><header><h2>المسودات المحفوظة</h2>${drafts.length?`<span class="sub">${drafts.length}</span>`:""}</header>${dLoading?`<div class="thinking"><span class="dot"></span>يحمّل المسودات…</div>`:""}${drafts.length?drafts.map(d=>`<div class="jrow"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><b>${esc(DRAFT_KINDS[d.kind]?.t||d.kind)}${d.route==="cassation"?" (نقض)":d.kind==="objection"?" (استئناف)":""}</b><span class="sub num">${fmtDate.format(D(d.at))}</span>${d.text?`<button class="btn sm" type="button" data-dopen="${esc(d.id)}">فتح</button>`:""}${d.file?.webUrl?`<a class="btn sm ghost" href="${esc(href(d.file.webUrl))}" target="_blank" rel="noopener">Word</a>`:""}${S.canWrite?`<button class="btn sm ghost" type="button" data-ddel="${esc(d.id)}" style="color:var(--crit)">حذف</button>`:""}</div>${d.applied?.length||d.skills?.length?`<div class="sub">طُبّق: ${esc((d.applied||d.skills).join("، "))}</div>`:""}${d.text?`<div class="sub">${esc((d.text||"").replace(/\s+/g," ").slice(0,120))}…</div>`:""}</div>`).join(""):dLoading?"":`<div class="empty">لا مسودات محفوظة.</div>`}</section></div>`;
 }
@@ -1461,7 +1461,7 @@ function bindDrafts(cur){
   const dws=$("drWordSave"); if (dws) dws.onclick=()=>draftWord(true);
   const fd=$("feeDocDl"); if (fd) fd.onclick=()=>draftWord(false);
   const fs=$("feeDocSave"); if (fs) fs.onclick=()=>draftWord(true);
-  const da=$("drAsk"); if (da) da.onclick=()=>{ const t = `أعد ${DRAFT_KINDS[st.kind].t} لقضية ${cur.caseNo||cur.title} في ديوان القضايا بمهارات المكتب وأسلوبه، وتحقق من كل مادة من أم القرى، وأخرجها Word على الورق الرسمي واحفظها في مجلد القضية.${(st.k[st.kind]?.ins||"").trim()?" توجيهي: "+st.k[st.kind].ins.trim():""}`; navigator.clipboard?.writeText(t).then(()=>toast("نُسخ الطلب؛ الصقه في محادثة Claude"),()=>toast(t)); };
+  const da=$("drAsk"); if (da) da.onclick=()=>{ const t = `أعد ${DRAFT_KINDS[st.kind].t} لقضية ${cur.caseNo||cur.title} في ديوان القضايا بمهارات المكتب وأسلوبه، وتحقق من كل مادة من أم القرى، وأخرجها Word على الورق الرسمي واحفظها في مجلد القضية.${(st.k[st.kind]?.ins||"").trim()?" توجيهي: "+st.k[st.kind].ins.trim():""}`; navigator.clipboard?.writeText(t).then(()=>toast("نُسخت قائمة المواد؛ راجعها في موقع هيئة الخبراء"),()=>toast(t)); };
   document.querySelectorAll("[data-ddel]").forEach(b=>b.onclick=async()=>{ const d = draftsOf(cur).find(x=>x.id===b.dataset.ddel); if (!d) return;
     if (!b.dataset.armed) { b.dataset.armed="1"; b.textContent="تأكيد الحذف"; setTimeout(()=>{ if (b.isConnected) { delete b.dataset.armed; b.textContent="حذف"; } }, 4000); return; }
     if (await deleteDraftDoc(cur, d)) { toast("حُذفت المسودة"); render(); } });
@@ -1750,7 +1750,7 @@ function vSync(){
       <div class="notice"><b>الديوان مستقل عن أودو</b><br>القضايا من ناجز، والعقود السنوية والأتعاب والفوترة تُدار هنا. ما نُقل سابقاً من أودو (فواتير ومهام قديمة) محفوظ أرشيفاً داخل الديوان، ولا يُرجع إلى أودو بعد الآن.</div>
       <div class="notice"><b>ملفات المكتب</b><br>مجلد كل قضية يبدأ برقمها؛ يُربط تلقائياً من صفحة القضية أو دفعة واحدة من لوحة «مجلدات المكتب».</div>
       <div class="notice"><b>اكتمال البيانات في القضايا المفتوحة (${op.length})</b><br>بلا محكمة: ${miss("court")} · بلا صفة موكل: ${miss("ourSide")} · بلا موكل: ${miss("client")}${staleCases().length?` · قديمة بلا حركة منذ أكثر من سنة: <b>${staleCases().length}</b>`:""}. <button class="btn ghost sm" data-nav="review">استكمال البيانات</button></div>
-      <p class="small" style="margin:0">يحدّث كل عضو قضاياه من حسابه في ناجز من لوحة «ربط ناجز»، ولمالك المكتب أيضاً أن يطلب من Claude: «حدّث ديوان القضايا من ناجز». يدخل ناجز من متصفحك بحساباته الثلاثة، ويضيف القضايا الجديدة ويحدّث الجلسات والضبوط والأحكام، ويحافظ على ما أكدته أنت وعلى تعديلاتك على الجلسات والملاحظات والتحليلات والمسودات والمستندات.</p>
+      <p class="small" style="margin:0">يحدّث كل عضو قضاياه من حسابه في ناجز من لوحة «ربط ناجز». يدخل ناجز من متصفحك بحساباته الثلاثة، ويضيف القضايا الجديدة ويحدّث الجلسات والضبوط والأحكام، ويحافظ على ما أكدته أنت وعلى تعديلاتك على الجلسات والملاحظات والتحليلات والمسودات والمستندات.</p>
     </div></section>` : ""}</div>
   <div class="grid" style="align-content:start">
   ${can("cases.edit") || can("billing.edit") ? `<section class="panel"><header><h2>إضافة إلى الديوان</h2></header><div style="display:flex;gap:8px;flex-wrap:wrap">${can("cases.edit")?`<button class="btn primary" id="caseNew2" ${S.canWrite?"":"disabled"}>+ قضية جديدة</button>`:""}${can("billing.edit")?`<button class="btn" id="ctNew2" ${S.canWrite?"":"disabled"}>+ عقد سنوي جديد</button>`:""}</div>
@@ -2847,8 +2847,8 @@ function vJoin(){
   const o = OFC(); const req = S.myJoin; const name = S.me?.name || "";
   return `<div class="topline"><div>${brandSvg("logo","join-logo")}<div class="date">ديوان القضايا</div></div></div>
   <section class="panel" style="max-width:640px"><h2 style="margin-bottom:8px">${name?`أهلاً ${esc(name)}`:"أهلاً بك"}</h2>
-    ${S.me?.unknown ? `<p>تعذّر التعرف على حسابك في هذا العرض، فلا تظهر بيانات المكتب. أعد تحميل الصفحة، أو افتح الديوان من حسابك في Claude.</p>`
-    : !S.me?.uid ? `<p>افتح الديوان من حسابك في Claude ليتعرف عليك، ثم اطلب الانضمام إلى فريق المكتب.</p>`
+    ${S.me?.unknown ? `<p>تعذّر التعرف على حسابك، فلا تظهر بيانات المكتب. أعد تحميل الصفحة، أو اخرج وادخل من جديد.</p>`
+    : !S.me?.uid ? `<p>حسابك لم يُعتمد بعد في فريق المكتب. اطلب الانضمام، ويعتمدك مالك المكتب من صفحة «الموظفون والصلاحيات».</p>`
     : req ? `<p>أُرسل طلب انضمامك إلى ${esc(o.lawyer?`${o.title} ${o.lawyer}`:"مالك المكتب")} في ${esc(fmtDate.format(D(req.at)))}. ستظهر لك القضايا فور اعتماد دورك وصلاحياتك.</p><button class="btn" id="joinCancel">سحب الطلب</button>`
     : `<p>لست مضافاً إلى فريق المكتب بعد. اكتب اسمك ووظيفتك وأرسل طلب الانضمام، ويحدد مالك المكتب دورك وصلاحياتك.</p>
       <form id="joinForm" class="grid" style="gap:8px"><label class="f">اسمك ووظيفتك، أو الشركة التي تمثّلها<input class="inp" id="joinNote" required placeholder="مثال: أحمد — محامٍ متدرب، أو: ممثل شركة كذا" value="${esc(name)}"></label><div><button class="btn primary" type="submit">إرسال طلب الانضمام</button></div></form>`}
@@ -2857,7 +2857,7 @@ function vJoin(){
 async function sendJoin(note){
   if (!S.db || !S.me?.uid) return;
   try { await S.db.doc("join/"+S.me.uid).set({uid:S.me.uid, note:String(note||"").slice(0,120), at:new Date().toISOString()}); toast("أُرسل طلب الانضمام"); }
-  catch { toast("تعذّر إرسال الطلب. تأكد أن الديوان مشارك معك بصلاحية «مساهم» أو أعلى."); }
+  catch { toast("تعذّر إرسال الطلب. أعد المحاولة أو أبلغ مالك المكتب."); }
 }
 // ---- the staff page (owner only)
 function vStaff(){
@@ -2879,13 +2879,13 @@ function vStaff(){
       <section class="panel"><header><h2>إضافة عضو</h2></header>
         <label class="search">${icon("search")}<input id="staffQ" placeholder="ابحث باسم الزميل أو بريده" autocomplete="off" value="${esc(UI.q||"")}"></label>
         <div id="staffHits">${staffHits()}</div>
-        <p class="sub" style="margin:8px 0 0">يظهر هنا الزملاء في مؤسستك على Claude. ومن هو خارجها يدخل بطلب انضمام (الخطوات أدناه).</p></section>
+        <p class="sub" style="margin:8px 0 0">يظهر هنا من له حساب دخول في الديوان. أنشئ الحساب أولاً من زر «الحسابات» أعلى الصفحة (الخطوات أدناه).</p></section>
       <section class="panel"><header><h2>كيف يدخل الموظف؟</h2></header><ol class="small" style="margin:0;padding-inline-start:20px;display:grid;gap:4px">
-        <li>شارك الديوان معه من زر «مشاركة» أعلى الصفحة: بصلاحية «مساهم» إن كان في مؤسستك على Claude، أو «محرر» إن كان من خارجها.</li>
-        <li>يفتح الرابط من حسابه فيرسل «طلب انضمام» يظهر لك هنا.</li>
+        <li>أنشئ له حساباً من زر «الحسابات» أعلى الصفحة، واختر سجله القديم إن كان في الفريق من قبل؛ تظهر لك كلمة مرور مؤقتة تسلّمها له.</li>
+        <li>يدخل بالبريد وكلمة المرور المؤقتة، فيختار كلمة مرور جديدة ويضبط تطبيق المصادقة في جواله.</li>
         <li>اعتمد دوره ونطاق القضايا التي يراها؛ ويمكنك تعديل الصلاحيات أو إيقافه في أي وقت.</li></ol>
-        <p class="sub" style="margin:8px 0 0">الصلاحيات تحدد ما يظهر له في الديوان. التحليل والصياغة تُحتسب من حسابه في Claude، ومستندات المكتب تُقرأ بحسابه في Microsoft 365.</p>
-        <div class="notice warn" style="margin-top:8px">للأمانة: الصلاحيات هنا تنظّم ما يراه الموظف ويفعله داخل الديوان، وليست حاجزاً تقنياً: من تشاركه الديوان يستطيع — بأدوات المطورين — قراءة بياناته كلها. شارك الديوان مع من تثق به فقط، وأوقف من يغادر المكتب وأزل مشاركته من زر «مشاركة».</div></section>
+        <p class="sub" style="margin:8px 0 0">الصلاحيات تحدد ما يظهر له في الديوان. المساعد يعمل بمفتاح المكتب، والمستندات من ملفات المكتب.</p>
+        <div class="notice warn" style="margin-top:8px">للأمانة: القاعدة نفسها تفصل ثلاث مراتب: المالك، وأعضاء المكتب، وممثلو الشركات الذين لا يصلهم إلا ما خُصص لهم. أما تفصيل الصلاحيات بين أعضاء المكتب فيحكمه الديوان في الصفحة، فأعطِ العضوية لمن تثق به، وأوقف من يغادر المكتب من هنا ومن «الحسابات».</div></section>
     </div>
   </div>`;
 }
@@ -4054,7 +4054,7 @@ async function exportBackup(onStep){
   if (S.assets?.list) { onStep?.("الملفات المرفوعة…");
     try { const {assets} = await S.assets.list(); for (const a of assets||[]) { try { const r = await fetch("/_blob/"+a.id); if (!r.ok) continue; const ext = /pdf/.test(a.contentType||"") ? "pdf" : /jpeg/.test(a.contentType||"") ? "jpg" : /png/.test(a.contentType||"") ? "png" : "txt";
       z.file(`${root}/الملفات المرفوعة/${a.id}.${ext}`, new Uint8Array(await r.arrayBuffer())); files++; } catch {} } } catch {} }
-  z.file(`${root}/اقرأني أولاً.txt`, `ديوان القضايا — نسخة احتياطية ${day}\n\nفيها كل سجلات قاعدة البيانات (${docs} سجلاً) بصيغة JSON في مجلد «قاعدة البيانات»، كل سجل في ملف باسم معرّفه داخل مجلد مجموعته، والملفات المرفوعة إلى الديوان (${files}).\nللاستعادة: افتح محادثة مع Claude وأرفق هذا الملف واطلب «استعد ديوان القضايا من هذه النسخة الاحتياطية».\nالملف يحوي بيانات موكلين سرية: احفظه في مكان آمن.\n`);
+  z.file(`${root}/اقرأني أولاً.txt`, `ديوان القضايا — نسخة احتياطية ${day}\n\nفيها كل سجلات قاعدة البيانات (${docs} سجلاً) بصيغة JSON في مجلد «قاعدة البيانات»، كل سجل في ملف باسم معرّفه داخل مجلد مجموعته، والملفات المرفوعة إلى الديوان (${files}).\nللاستعادة: يُسلَّم هذا الملف لمطوّر الديوان ليعيده إلى القاعدة بأداة الاستيراد.\nالملف يحوي بيانات موكلين سرية: احفظه في مكان آمن.\n`);
   onStep?.("يضغط الملف…");
   const blob = await z.generateAsync({type:"blob", compression:"DEFLATE", compressionOptions:{level:6}});
   const dl = await (window.claude?.use ? window.claude.use("downloads").catch(() => null) : null);
@@ -6715,13 +6715,13 @@ async function odLinkCase(c, {withFiles=true}={}){
 }
 S.odLink = S.odLink || null;
 async function odLinkAll(){
-  if (!S.mcp) { toast("أضف موصّل Microsoft 365 من إعدادات Claude"); return; }
+  if (!S.mcp) { toast("ملفات المكتب غير متاحة الآن"); return; }
   if (!S.db) { toast("قاعدة البيانات غير متاحة في هذا العرض"); return; }
   const todo = odLinkCandidates(); const st = S.odLink = {busy:true, done:0, total:todo.length, linked:[], none:[], ambiguous:[], failed:[]};
   odLinkRerender();
   for (const c of todo) {
     try { const x = await odLinkCase(c); if (x.r==="linked") { st.linked.push(c); if (x.ambiguous) st.ambiguous.push(c); } else if (x.r==="none") st.none.push(c); }
-    catch (e) { st.failed.push(c); if (e?.code==="server_not_connected" || e?.code==="needs_reauth") { st.error = e.code==="needs_reauth" ? "أعد ربط Microsoft 365 من إعدادات Claude" : "موصّل Microsoft 365 غير متصل"; break; } }
+    catch (e) { st.failed.push(c); if (e?.code==="server_not_connected" || e?.code==="needs_reauth") { st.error = e.code==="needs_reauth" ? "انتهت جلستك؛ اخرج وادخل من جديد" : "ملفات المكتب غير متصلة"; break; } }
     st.done++; odLinkRerender(); await new Promise(r=>setTimeout(r, 150));
   }
   st.busy = false; st.at = new Date().toISOString(); odLinkRerender();
@@ -7154,7 +7154,7 @@ async function xShare(c, F){
 }
 S.xBusy = S.xBusy || {};
 async function xRunCase(c, {quiet=false}={}){
-  if (!S.mcp) { if (!quiet) toast("أضف موصّل Microsoft 365 من إعدادات Claude"); return null; }
+  if (!S.mcp) { if (!quiet) toast("ملفات المكتب غير متاحة الآن"); return null; }
   if (!S.db) { if (!quiet) toast("قاعدة البيانات غير متاحة في هذا العرض"); return null; }
   const step = (t) => { S.xBusy[c.id] = t; if (!quiet && S.caseId === c.id) xCaseRerender(c.id); };
   step("يبحث في مجلد القضية عن عقد الأتعاب والوكالة…");
@@ -7163,7 +7163,7 @@ async function xRunCase(c, {quiet=false}={}){
     delete S.xBusy[c.id];
     if (!quiet) { render(); toast(!R.looked ? (R.folder ? "لا عقد أتعاب ولا وكالة في مجلد القضية" : "القضية غير مربوطة بمجلد في ملفات المكتب") : A.filled.length ? `أُكمل: ${A.filled.join("، ")}${shared?` (و${shared} قضية أخرى للموكل نفسه)`:""}` : A.diffs ? "وُجدت قيم تخالف المسجل؛ راجعها في بيانات القضية" : "لم يُعثر على بيانات جديدة"); }
     return {...A, R, shared};
-  } catch (e) { delete S.xBusy[c.id]; if (!quiet) { render(); toast(e?.code === "server_not_connected" ? "أضف موصّل Microsoft 365 من إعدادات Claude" : e?.code === "needs_reauth" ? "أعد ربط Microsoft 365 من إعدادات Claude" : "تعذّر قراءة مستندات القضية الآن"); } if (quiet) throw e; return null; }
+  } catch (e) { delete S.xBusy[c.id]; if (!quiet) { render(); toast(e?.code === "server_not_connected" ? "ملفات المكتب غير متاحة الآن" : e?.code === "needs_reauth" ? "انتهت جلستك؛ اخرج وادخل من جديد" : "تعذّر قراءة مستندات القضية الآن"); } if (quiet) throw e; return null; }
 }
 // ---- a scanned file the connector cannot read: the lawyer picks it from the device and the page reads its image
 async function xUploadImages(file){
@@ -7224,14 +7224,14 @@ const xCandidates = (all) => [...S.cases.values()].filter(c => isCase(c) && !c.d
   && (all || !c.extracted?.at || (Date.now() - D(c.extracted.at).getTime()) > 3*864e5));
 S.xRun = S.xRun || null;
 async function xRunAll(all){
-  if (!S.mcp) { toast("أضف موصّل Microsoft 365 من إعدادات Claude"); return; }
+  if (!S.mcp) { toast("ملفات المكتب غير متاحة الآن"); return; }
   if (!S.db) { toast("قاعدة البيانات غير متاحة في هذا العرض"); return; }
   const todo = xCandidates(all); const st = S.xRun = {busy:true, stop:false, done:0, total:todo.length, filled:{}, cases:[], diffs:[], scanned:[], none:[], failed:[], shared:0};
   xRerender();
   for (const c of todo) { if (st.stop) break;
     try { const r = await xRunCase(S.cases.get(c.id) || c, {quiet:true});
       if (r) { r.filled.forEach(k => st.filled[k] = (st.filled[k]||0) + 1); if (r.filled.length) st.cases.push(c.id); if (r.diffs) st.diffs.push(c.id); if ((r.patch?.extracted?.scanned||[]).length) st.scanned.push(c.id); if (!r.R.looked) st.none.push(c.id); st.shared += r.shared||0; } }
-    catch (e) { st.failed.push(c.id); if (e?.code === "server_not_connected" || e?.code === "needs_reauth") { st.error = e.code === "needs_reauth" ? "أعد ربط Microsoft 365 من إعدادات Claude" : "موصّل Microsoft 365 غير متصل"; break; } }
+    catch (e) { st.failed.push(c.id); if (e?.code === "server_not_connected" || e?.code === "needs_reauth") { st.error = e.code === "needs_reauth" ? "انتهت جلستك؛ اخرج وادخل من جديد" : "ملفات المكتب غير متصلة"; break; } }
     st.done++; xRerender(); await new Promise(r => setTimeout(r, 150)); }
   st.busy = false; st.at = new Date().toISOString(); xRerender();
   try { if (S.meta) await S.db.doc("meta/sync").update({xAt: st.at, xFilled: Object.values(st.filled).reduce((a,b)=>a+b,0)}); } catch {}
@@ -9441,7 +9441,7 @@ async function searchFiles(id, q){
   const st = S.files[id] = {...(S.files[id]||{}), q, loading:true, error:null}; rerenderFiles(id);
   if (!S.mcp) { st.loading=false; st.error="الوصول إلى ملفات المكتب غير متاح في هذا العرض."; rerenderFiles(id); return; }
   try { st.items = await odSearch(q); }
-  catch(e){ st.error = e?.code==="server_not_connected"?"أضف موصّل Microsoft 365 من إعدادات Claude ← الموصّلات.": e?.code==="needs_reauth"?"أعد ربط Microsoft 365 من إعدادات Claude ← الموصّلات.": e?.code==="not_in_manifest"?"لم يُسمح للديوان بالوصول إلى ملفات المكتب في هذا العرض.": "تعذّر البحث في ملفات المكتب الآن. أعد المحاولة."; }
+  catch(e){ st.error = e?.code==="server_not_connected"?"ملفات المكتب غير متاحة الآن.": e?.code==="needs_reauth"?"انتهت جلستك؛ اخرج وادخل من جديد.": e?.code==="not_in_manifest"?"لم يُسمح للديوان بالوصول إلى ملفات المكتب في هذا العرض.": "تعذّر البحث في ملفات المكتب الآن. أعد المحاولة."; }
   st.loading = false; rerenderFiles(id);
 }
 function rerenderFiles(id){ if (S.view==="case" && S.caseId===id && S.caseTab==="files") { const el=$("fileOut"); if (el){ el.innerHTML = fileList(S.cases.get(id), S.files[id]); afterRender(); } } }
@@ -9459,7 +9459,7 @@ const H = (location.hash||"").slice(1); if (NAV_ALL.some(n=>n[0]===H)) S.view = 
     S.me = {uid:S.uid, owner:!!own, name:me?.name||"", allowed:false, perms:new Set(), scope:"all"}; }
   else S.me = {uid:null, owner:false, legacy:true, name:"", allowed:true, perms:new Set(ALL_PERMS), scope:"all"};
   computeMe();
-  if (!db) { $("main").innerHTML = header("ديوان القضايا") + `<div class="panel notice">قاعدة بيانات المكتب غير متاحة في هذا العرض. افتح الديوان من حسابك في Claude لعرض القضايا.</div>`; $("railFoot").innerHTML = "<span>غير متصل</span>"; return; }
+  if (!db) { $("main").innerHTML = header("ديوان القضايا") + `<div class="panel notice">قاعدة بيانات المكتب غير متاحة الآن. أعد تحميل الصفحة.</div>`; $("railFoot").innerHTML = "<span>غير متصل</span>"; return; }
   S.db = db;
   const got = { cases:false, meta:false, agenda:false, fin:false, profile:false, staff:false };
   const done = () => { if (!(got.cases && got.meta && got.agenda && got.fin && got.profile && got.staff)) return;
