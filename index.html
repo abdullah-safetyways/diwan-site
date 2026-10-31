@@ -5045,8 +5045,7 @@ const portalKeyFromId = (id) => { const cos = portalCompanies(); const x = cos.f
 function portalScope(K){
   if (!K) return []; const e = K.eng ? S.cases.get(K.eng) : null; const names = new Set([K.key, ...(e ? [e.client, ...(e.aliases||[])] : [])].filter(Boolean).map(ckey)); const members = new Set(e?.members||[]);
   const base = [...S.cases.values()].filter(c => isCase(c) && !c.deleted && (members.has(c.id) || (K.eng && c.engagementId===K.eng) || (c.client && names.has(ckey(c.client)) && !(c.engagementId && !K.eng && S.cases.get(c.engagementId) && !S.cases.get(c.engagementId).deleted))));
-  const ids = new Set(base.map(c=>c.id));
-  for (const c of [...base]) for (const r of (c.related||[])) { const o = S.cases.get(r); if (o && isCase(o) && !o.deleted && !ids.has(o.id)) { ids.add(o.id); base.push(o); } }
+  // no step along «related»: a case of another client linked to one of the company's is not the company's (31/10)
   return base;
 }
 function portalSet(){ if (!S.portalSetCache) S.portalSetCache = new Set(portalScope(myPortalKey()).map(c=>c.id)); return S.portalSetCache; }
@@ -5079,7 +5078,9 @@ function portalBody(K, o={}){
   const P = portalData(K); const e = K.eng ? S.cases.get(K.eng) : null; const name = o.name || e?.client || P.cases[0]?.client || "";
   const inner = !!o.internal; const s = e ? contractState(e) : null; const ct = e?.contract || {};
   const money = o.standalone ? false : (can("billing.view") || can("portal.billing"));
-  const bills = money ? billingItems().filter(b => (b.src==="contract" && K.eng && b.id===K.eng) || (b.src==="case" && P.ids.has(b.id)) || (b.src==="legacy" && b.client && keyEq(normName(b.client), K.key))).filter(b => inner || b.state!=="paid") : [];
+  let bills = money ? billingItems().filter(b => (b.src==="contract" && K.eng && b.id===K.eng) || (b.src==="case" && P.ids.has(b.id)) || (b.src==="legacy" && b.client && keyEq(normName(b.client), K.key))).filter(b => inner || b.state!=="paid") : [];
+  // the representative sees what is unpaid and due, and the next invoice only (Abdullah, 31/10) — the office's own view keeps them all
+  if (!inner) { const T0 = todayKey(); const fut = bills.filter(b => b.due && b.due > T0).sort((a,b)=>a.due.localeCompare(b.due)); bills = [...bills.filter(b => !(b.due && b.due > T0)), ...fut.slice(0,1)]; }
   const sum = (st) => billSum(bills, st);
   const sect = (title, list, extra="") => `<section class="panel"><header><h2>${title} (${list.length})</h2>${extra}</header>${list.length?`<div class="pcs">${list.map(c=>portalCaseRow(c, {internal:inner, open:o.open})).join("")}</div>`:`<div class="empty">لا شيء هنا.</div>`}</section>`;
   return `${S.nzSaving && !o.standalone ? `<div class="notice warn" style="margin-bottom:12px">التحديث من ناجز ما زال يُحفظ (${S.nzSaving.done} من ${S.nzSaving.total}) — أرقام هذه الصفحة غير مكتملة حتى ينتهي، وتتحدّث وحدها بعده.</div>` : ""}<section class="case-head"><div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between"><span class="no">صفحة المتابعة</span><span class="sub">${S.meta?.najiz?.syncedAt?`آخر تحديث من ناجز ${esc(fmtDate.format(D(S.meta.najiz.syncedAt)))}`:""}${o.standalone?` · أُعدّت ${esc(fmtDate.format(new Date()))}`:""}</span></div>
@@ -6796,10 +6797,10 @@ const reqNew = () => reqAll().filter(r => r.status==="new");
 const isRep = () => S.me?.role==="client" || S.me?.scope==="client";
 function reqRow(r, inner){
   const [l, cls] = REQ_STATE[r.status] || REQ_STATE.new; const c = r.caseId ? S.cases.get(r.caseId) : null;
-  return `<div class="task" style="display:grid;gap:4px;padding:10px 0;border-bottom:1px dashed var(--line)" data-req="${esc(r.id)}">
+  return `<div class="task" style="display:grid;grid-template-columns:minmax(0,1fr);gap:4px;padding:10px 0;border-bottom:1px dashed var(--line)" data-req="${esc(r.id)}">
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><span class="pill">${esc(REQ_TYPES[r.type]||r.type)}</span><b>${esc(r.title||"")}</b><span class="pill ${cls}">${l}</span></div>
     ${r.details?`<div style="white-space:pre-wrap">${esc(r.details)}</div>`:""}
-    <div class="sub">${esc(fmtDate.format(D(r.at)))} · ${inner?`من ${esc(memberName(r.by))}`:"طلبك"}${c?` · <button class="link-chip" ${inner?`data-case="${esc(c.id)}"`:""}>${esc(c.caseNo||"")} ${esc((c.title||"").slice(0,50))}</button>`:""}${r.link?` · <a href="${esc(href(r.link))}" target="_blank" rel="noopener">رابط مرفق</a>`:""}</div>
+    <div class="sub">${esc(fmtDate.format(D(r.at)))} · ${inner?`من ${esc(memberName(r.by))}`:"طلبك"}${c?` · <button class="link-chip" ${inner?`data-case="${esc(c.id)}"`:""}>${esc(c.caseNo||"")} ${esc((c.title||"").slice(0,50))}</button>`:""}${r.link?` · <a href="${esc(href(r.link))}" target="_blank" rel="noopener">رابط مرفق</a>`:""}${(r.files||[]).length?` · مرفقات: ${r.files.map(x=>`<a href="${esc(x.webUrl||"#")}" target="_blank" rel="noopener">${esc(x.name||"ملف")}</a>`).join("، ")}`:""}</div>
     ${r.decision?`<div class="notice ${r.status==="rejected"?"err":""}" style="margin:0"><b>${r.status==="rejected"?"سبب الرفض":r.status==="done"?"ما تم":"رد المكتب"}:</b> ${esc(r.decision.note||"")}<span class="sub"> — ${esc(memberName(r.decision.by))} · ${esc(fmtDate.format(D(r.decision.at)))}</span></div>`:""}
     ${inner && can("cases.edit") && S.canWrite ? `<div style="display:flex;gap:6px;flex-wrap:wrap">${r.status==="new"?`<button class="btn sm primary" data-reqact="accept" data-id="${esc(r.id)}">${r.type==="action"?"قبول":"قبول وإنشاء الملف"}</button><button class="btn sm ghost" data-reqact="reject" data-id="${esc(r.id)}" style="color:var(--crit)">رفض</button>`:""}${r.status==="accepted"?`<button class="btn sm" data-reqact="done" data-id="${esc(r.id)}">تم إنجازه</button>`:""}${r.status!=="new"?`<button class="btn sm ghost" data-reqact="reopen" data-id="${esc(r.id)}">إعادة فتح</button>`:""}</div>`:""}
   </div>`;
@@ -6823,6 +6824,7 @@ function openReqForm(K, P, name){
       <label class="f">عنوان الطلب<input class="inp" name="title" required placeholder="مثل: رفع دعوى على شركة … بمطالبة …"></label>
       <label class="f">التفاصيل<textarea class="inp" name="details" style="min-height:120px" placeholder="الأطراف، المبلغ، المستندات المتوفرة، وما تريده من المكتب"></textarea></label>
       <label class="f">رابط مستند (اختياري)<input class="inp" name="link" type="url" placeholder="https://…"></label>
+      <label class="f">مرفقات (اختياري)<input class="inp" name="files" type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.heic,.txt"></label><p class="sub" style="margin:-4px 0 8px">تصل المرفقات إلى المكتب وحده.</p>
       <div style="display:flex;gap:8px"><button class="btn primary" type="submit">إرسال الطلب</button></div>
     </form>`);
   const f = dr.querySelector("#reqForm"); const row = dr.querySelector("#reqCaseRow");
@@ -6831,7 +6833,13 @@ function openReqForm(K, P, name){
     const type = f.elements.type.value; const caseId = type==="action" ? (f.elements.caseId.value||null) : null;
     if (type==="action" && !caseId) { toast("اختر القضية"); return; }
     const id = "rq"+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
-    const doc = {id, type, caseId, title:f.elements.title.value.trim(), details:f.elements.details.value.trim()||null, link:f.elements.link.value.trim()||null, engagementId:K.eng||null, clientKey:K.key||null, client:name||null, by:S.uid||null, at:new Date().toISOString(), status:"new", decision:null};
+    const doc = {id, type, caseId, title:f.elements.title.value.trim(), details:f.elements.details.value.trim()||null, link:f.elements.link.value.trim()||null, engagementId:K.eng||null, clientKey:K.key||null, client:name||null, by:S.uid||null, at:new Date().toISOString(), status:"new", decision:null, files:[]};
+    const picked = [...(f.elements.files?.files || [])]; const FL = window.diwanCloudFiles; const sbtn = f.querySelector("button[type=submit]");
+    if (picked.length && !FL) { toast("رفع المرفقات غير متاح الآن"); return; }
+    if (picked.some(x => x.size > 50e6)) { toast("كل مرفق حتى 50 ميغابايت"); return; }
+    if (sbtn) { sbtn.disabled = true; sbtn.textContent = picked.length ? "يرفع المرفقات…" : "يرسل…"; }
+    for (const x of picked) { try { const row = await FL.uploadFile(`Law Firm/طلبات الممثلين/${name||"شركة"}/${id}`, x, x.name, {extract:false, internal:true}); doc.files.push({id:row.id, name:row.name, size:row.size, path:row.path, webUrl:row.webUrl}); }
+      catch (e) { if (sbtn) { sbtn.disabled = false; sbtn.textContent = "إرسال الطلب"; } toast("تعذّر رفع «" + x.name + "»؛ لم يُرسل الطلب"); return; } }
     try { await S.db.doc("requests/"+id).set(doc); await logAction(caseId, `طلب من ممثل ${name||"الشركة"}: ${REQ_TYPES[type]} — ${doc.title}`); closeDrawer(); toast("أُرسل طلبك إلى المكتب"); render(); } catch { toast("تعذّر إرسال الطلب"); } };
 }
 function openReqDecide(r, act){

@@ -112,7 +112,9 @@
   F.ensureFolder = async (path) => {
     path = String(path).split("/").map(cleanName).join("/");
     if (folderCache.has(path)) return folderCache.get(path);
-    const {data, error} = await sb.rpc("files_ensure_folder", {p: path}); if (error) throw tErr(error);
+    // a representative's folder is made for him by the database (his request folder only); the office makes any folder
+    const who = window.diwanCloud?.whoami?.(); const fn = who && who.client && !who.staff ? "portal_request_folder" : "files_ensure_folder";
+    const {data, error} = await sb.rpc(fn, {p: path}); if (error) throw tErr(error);
     folderCache.set(path, data); return data;
   };
   // one file into a folder; «rename» keeps both on a clash (name (2).ext), «replace» overwrites, «skip» returns the existing row

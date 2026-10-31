@@ -35,7 +35,7 @@
   function emit(path){ const par = parentOf(path); for (const s of [...subs]) if ((s.kind === "doc" && s.path === path) || (s.kind === "coll" && s.path === par)) { try { s.f(); } catch {} } }
 
   const PORTAL = () => !!(WHO && WHO.client && !WHO.staff);
-  const portalPath = (p) => parentOf(p) === "cases" || parentOf(p) === "tasks" || p === "office/profile";
+  const portalPath = (p) => parentOf(p) === "cases" || parentOf(p) === "tasks" || p === "office/profile" || p === "finance/all";
   let portalBusy = null;
   function portalLoad(){ if (portalBusy) return portalBusy; portalBusy = (async () => { try {
       const {data, error} = await sb.rpc("portal_docs"); if (error) throw err(error);
