@@ -8297,6 +8297,13 @@ async function trackAfterCreate(id, doc){
   trackDueTask(id, doc.title || doc.subject || "", doc.trackDue, null, doc);
   const p = pid && S.cases.get(pid); if (!p) return;
   patchCase(p, {related:[...new Set([...(p.related||[]), id])]}, `حُوِّل إلى ${TRACK[doc.track||"courts"]?.l||""}: ${doc.title||""}`).catch(() => {});
+  trackCarryDocs(pid, id);
+}
+// the papers of the file it came from go with it (the same documents, linked, not copied)
+async function trackCarryDocs(pid, id){
+  const F = typeof cloudFiles === "function" ? cloudFiles() : null; if (!F?.carryCase) return;
+  try { const n = await F.carryCase(pid, id, typeof docKind === "function" ? docKind : undefined); if (n) { await logAction(id, `نُقلت مستندات الملف السابق إلى هذا الملف (${n})`); toast(`انتقلت مستندات الملف السابق مع الملف (${n})`); } }
+  catch { toast("فُتح الملف الجديد لكن لم تنتقل مستندات الملف السابق — أعد المحاولة من «المستندات»"); }
 }
 // «حوّل إلى…»: the next step of the same matter opens as its own file, carrying the client and the parties, linked both ways
 function trackConvertBtn(c){ return can("cases.edit") && !c.deleted ? `<button class="btn sm" data-convert="${esc(c.id)}" ${S.canWrite?"":"disabled"}>حوّل إلى…</button>` : ""; }

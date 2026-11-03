@@ -157,6 +157,14 @@
     const {error} = await sb.from("file_links").upsert({file_id: row.id, case_id: caseId}, {onConflict: "file_id,case_id", ignoreDuplicates: true}); if (error) throw tErr(error);
     return addToCase(caseId, [entryOf(row, kindOf)]);
   };
+  // «حوّل إلى…»: the new file of the same matter shows the papers of the one it came from (links, no copies; the internal flag stays as it is)
+  F.carryCase = async (fromId, toId, kindOf) => {
+    const from = C.cache.get("cases/" + fromId); const rows = await F.caseFiles([fromId]).catch(() => []);
+    const entries = [...(from?.documents?.files || []).map(f => ({...f})), ...rows.map(r => entryOf(r, kindOf))];
+    const ids = [...new Set(entries.map(e => idOf(e.uri)).filter(Boolean))];
+    for (let i = 0; i < ids.length; i += 100) { const {error} = await sb.from("file_links").upsert(ids.slice(i, i + 100).map(file_id => ({file_id, case_id: toId})), {onConflict: "file_id,case_id", ignoreDuplicates: true}); if (error) throw tErr(error); }
+    const seen = new Set(); return addToCase(toId, entries.filter(e => e.uri && !seen.has(e.uri) && seen.add(e.uri)));
+  };
   F.unlinkFile = async (fileId, caseId) => {
     await sb.from("file_links").delete().eq("file_id", fileId).eq("case_id", caseId);
     const c = C.cache.get("cases/" + caseId); if (!c) return;
