@@ -8296,8 +8296,23 @@ async function trackAfterCreate(id, doc){
   const pid = doc.parentId; S.trackFrom = null;
   trackDueTask(id, doc.title || doc.subject || "", doc.trackDue, null, doc);
   const p = pid && S.cases.get(pid); if (!p) return;
-  patchCase(p, {related:[...new Set([...(p.related||[]), id])]}, `حُوِّل إلى ${TRACK[doc.track||"courts"]?.l||""}: ${doc.title||""}`).catch(() => {});
-  trackCarryDocs(pid, id);
+  await trackCarryDocs(pid, id);
+  await trackCarryFees(p, id);
+  // the file it came from leaves the lists: in the deleted items (restorable), its history kept, pointing to where the matter went
+  const to = `${TRACK[doc.track||"courts"]?.l||""}: ${doc.caseNo ? doc.caseNo+" — " : ""}${doc.title||""}`;
+  await patchCase(p, {related:[...new Set([...(p.related||[]), id])], convertedTo:id, deleted:true, deletedAt:new Date().toISOString(), deletedBy:S.uid||null, deleteReason:`حُوِّل إلى ${to}`}, `حُوِّل إلى ${to} — نُقلت مستنداته وأتعابه ومهامه المفتوحة إليه، وانتقل هذا الملف إلى المحذوفات`);
+}
+// its fees go with it: the fee contract, the invoices, the receipts paid against it and the open tasks (nothing is counted twice)
+async function trackCarryFees(p, id){
+  const n = S.cases.get(id) || {id}; const hasFees = p.fees?.items?.length || (p.invoices||[]).length;
+  if (hasFees && !(n.fees?.items?.length)) {
+    await patchCase(n, {fees:p.fees||null, feesNA:!!p.feesNA, invoices:[...(n.invoices||[]), ...(p.invoices||[])]}, `نُقلت إليه أتعاب الملف السابق ${p.caseNo||p.title||""}`);
+    await patchCase(p, {fees:null, invoices:[], feesMovedTo:id}, `نُقلت أتعابه إلى الملف ${n.caseNo||n.title||id}`);
+  }
+  for (const r of (S.receipts||[]).filter(r => r.caseId===p.id || (r.bill?.src==="case" && r.bill?.id===p.id)))
+    try { await S.db.doc("receipts/"+r.id).update({caseId:id, ...(r.bill?.src==="case" && r.bill.id===p.id ? {bill:{...r.bill, id}} : {})}); } catch {}
+  for (const t of (S.tasks||[]).filter(t => t.caseId===p.id && !t.done))
+    try { await S.db.doc("tasks/"+t.id).update({caseId:id}); } catch {}
 }
 // the papers of the file it came from go with it (the same documents, linked, not copied)
 async function trackCarryDocs(pid, id){
@@ -8311,7 +8326,7 @@ function openTrackConvert(c){
   const k = trackOf(c);
   const next = {work:["settle","courts","exec","admin","committee","precourt"], settle:["courts","exec"], precourt:["courts"], committee:["admin","exec"], arb:["exec","courts"], courts:["exec","settle"], admin:["exec"], exec:["courts"]}[k] || TRACKS.map(t=>t.k);
   const all = [...next, ...TRACKS.map(t=>t.k).filter(x=>!next.includes(x) && x!==k)];
-  const dr = openDrawer(`<header><div><span class="lbl">حوّل إلى…</span><h2 style="margin-top:4px">${esc(c.title)}</h2><div class="sub">تُفتح المرحلة التالية ملفاً جديداً بالموكل والأطراف نفسها، ويبقى هذا الملف كما هو ومربوطاً بها؛ ولكل ملف أتعابه ومواعيده.</div></div><button class="btn sm" data-close>إغلاق</button></header>
+  const dr = openDrawer(`<header><div><span class="lbl">حوّل إلى…</span><h2 style="margin-top:4px">${esc(c.title)}</h2><div class="sub">تُفتح المرحلة التالية ملفاً جديداً تنتقل إليه بيانات الموكل والأطراف والمستندات والأتعاب وسندات القبض والمهام المفتوحة، وينتقل هذا الملف إلى المحذوفات بسجله كاملاً (يُسترجع منها عند الحاجة).</div></div><button class="btn sm" data-close>إغلاق</button></header>
     <div class="body"><div class="draft-kinds">${all.map((t,i)=>`<button type="button" class="dk" data-convto="${t}"${i===next.length?` style="margin-top:0"`:""}><b>${esc(TRACK[t].l)}</b><span>${esc(TRACK[t].hint)}</span></button>`).join("")}</div></div>`);
   dr.querySelectorAll("[data-convto]").forEach(b => b.onclick = () => {
     const t = b.dataset.convto; closeDrawer();
