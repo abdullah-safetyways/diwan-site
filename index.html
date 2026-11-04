@@ -390,7 +390,7 @@ tr[aria-selected="true"] td{background:var(--accent-soft)}
     <div class="brand" id="brandBox"><b>ديوان القضايا</b><span id="brandSub"></span></div>
     <form class="gsearch" id="gForm" role="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="gQ" type="search" placeholder="بحث شامل…" aria-label="بحث شامل في القضايا والجلسات والمستندات"></form>
     <nav id="nav" class="grid" style="gap:4px"></nav>
-    <section class="qa-rail" aria-labelledby="qaRailH"><h2 id="qaRailH">المساعد الذكي</h2><div id="qaRailBox"></div></section>
+
     <div class="rail-foot" id="railFoot"><span>جارٍ الاتصال بقاعدة البيانات…</span></div>
   </aside>
   <div style="min-width:0">
@@ -659,7 +659,7 @@ function render(){
   const v = S.view;
   const cv = v==="case" ? S.cases.get(S.caseId) : null;
   const blocked = (!["case","client","search"].includes(v) && !viewAllowed(v)) || (["case","client","search"].includes(v) && !can("cases.view")) || (cv && (!visibleCase(cv) || (cv.kind==="engagement" && !can("billing.view"))));
-  const html = blocked ? vNoPerm() : v==="home"?vHome(): v==="cases"?vCases(): v==="case"?vCase(): v==="review"?vReview(): v==="filing"?vFiling(): v==="crm"?vCrm(): v==="agenda"?vAgenda(): v==="retainers"?vRetainers(): v==="finance"?vFinance(): v==="clients"?vClients(): v==="client"?vClient(): v==="search"?vSearch(): v==="library"?vLibrary(): v==="learn"?vLearn(): v==="staff"?vStaff(): v==="memos"?vMemos(): v==="kpi"?vKpi(): v==="portal"?vPortal(): vSync();
+  const html = blocked ? vNoPerm() : v==="home"?vHome(): v==="cases"?vCases(): v==="case"?vCase(): v==="review"?vReview(): v==="filing"?(S.view="memos", S.memoUI={...(S.memoUI||{}), tab:"filing"}, vMemos()): v==="crm"?vCrm(): v==="agenda"?vAgenda(): v==="retainers"?vRetainers(): v==="finance"?vFinance(): v==="clients"?vClients(): v==="client"?vClient(): v==="search"?vSearch(): v==="library"?vLibrary(): v==="learn"?vLearn(): v==="staff"?vStaff(): v==="memos"?vMemos(): v==="kpi"?vKpi(): v==="portal"?vPortal(): vSync();
   $("main").innerHTML = html;
   afterRender();
 }
@@ -2807,7 +2807,7 @@ function viewAllowed(v){
   const p = VIEW_PERM[v]; return !p || can(p);
 }
 const NAV_ALL = [["home","الرئيسية","home"],["cases","القضايا","cases"],["filing","رفع الدعوى","doc"],["crm","إدارة العملاء","people"],["clients","الموكلون","people"],["portal","متابعة الشركات","portal"],["review","استكمال البيانات","review"],["memos","المذكرات والمهام","memo"],["agenda","الأجندة","agenda"],["retainers","عقود الأتعاب","retainer"],["finance","الفوترة","money"],["kpi","مؤشرات الأداء","kpi"],["library","المكتبة القانونية","book"],["learn","التعلم من المحامي","learn"],["staff","الموظفون والصلاحيات","shield"],["sync","المزامنة والإضافة","sync"]];
-const navItems = () => NAV_ALL.filter(([k]) => viewAllowed(k));
+const navItems = () => NAV_ALL.filter(([k]) => k!=="filing" && viewAllowed(k));
 // controls hidden from members without the permission (the screens stay readable)
 const PERM_UI = [
   ["cases.edit", "#caseNew,#caseNew2,[data-editcase],#notesSave,form[data-rev] [type=submit]"],
@@ -4743,10 +4743,11 @@ function memoStats(list){
   return {late: open.filter(memoLate).length, soon: open.filter(m => m.due && m.due >= T && daysUntil(m.due) <= 14).length, review: open.filter(m => m.status==="review").length,
     filed30: list.filter(m => m.status==="filed" && m.filedAt && daysUntil(m.filedAt) >= -30), open};
 }
-function memoTabs(){ const t = S.memoUI?.tab || "work"; const wl = workItems(S.uid).filter(i=>i.due&&i.due<todayKey()).length; return `<div class="tabs" role="tablist" style="margin-bottom:12px"><button class="tab" role="tab" data-mtab="work" aria-selected="${t==="work"}">عملي${wl?` <span class="pill crit">${wl}</span>`:""}</button>${canSeeTeam()?`<button class="tab" role="tab" data-mtab="team" aria-selected="${t==="team"}">الفريق</button>`:""}<button class="tab" role="tab" data-mtab="memos" aria-selected="${t==="memos"}">المذكرات المطلوبة</button><button class="tab" role="tab" data-mtab="tasks" aria-selected="${t==="tasks"}">المهام${tasksAll().filter(x=>!x.done&&taskMine(x)).length?` (${tasksAll().filter(x=>!x.done&&taskMine(x)).length})`:""}</button></div>`; }
+function memoTabs(){ const t = S.memoUI?.tab || "work"; const wl = workItems(S.uid).filter(i=>i.due&&i.due<todayKey()).length; return `<div class="tabs" role="tablist" style="margin-bottom:12px"><button class="tab" role="tab" data-mtab="work" aria-selected="${t==="work"}">عملي${wl?` <span class="pill crit">${wl}</span>`:""}</button>${canSeeTeam()?`<button class="tab" role="tab" data-mtab="team" aria-selected="${t==="team"}">الفريق</button>`:""}<button class="tab" role="tab" data-mtab="memos" aria-selected="${t==="memos"}">المذكرات المطلوبة</button><button class="tab" role="tab" data-mtab="tasks" aria-selected="${t==="tasks"}">المهام${tasksAll().filter(x=>!x.done&&taskMine(x)).length?` (${tasksAll().filter(x=>!x.done&&taskMine(x)).length})`:""}</button>${viewAllowed("filing")?`<button class="tab" role="tab" data-mtab="filing" aria-selected="${t==="filing"}">رفع الدعاوى${filingCases().length?` (${filingCases().length})`:""}</button>`:""}</div>`; }
 function vMemos(){
   const UI = S.memoUI = S.memoUI || {f:"open"}; const all = memosAll(); const st = memoStats(all); const T = todayKey();
   if (UI.tab==="tasks") return header("المذكرات والمهام", "ما على المكتب أن يكتبه ويقدّمه، وما على كل عضو أن ينجزه") + memoTabs() + vTasks();
+  if (UI.tab==="filing" && viewAllowed("filing")) return vFiling();
   if ((UI.tab||"work")==="work") return header("المذكرات والمهام", "ما عليك اليوم وهذا الأسبوع — المهام والمذكرات معاً") + memoTabs() + vWork();
   if (UI.tab==="team" && canSeeTeam()) return header("المذكرات والمهام", "توزيع العمل على الفريق ومتابعته") + memoTabs() + vTeam();
   memoHintsWarm(); const hints = memoHints();
@@ -5565,7 +5566,7 @@ function vTasks(){
   const FL = [["mine","مهامي",t=>!t.done&&taskMine(t)],["today","اليوم",t=>!t.done&&t.due&&t.due<=T],["week","هذا الأسبوع",t=>!t.done&&t.due&&daysUntil(t.due)<=7],["late","متأخرة",t=>taskLate(t)],["open","كل المفتوحة",t=>!t.done],["done","المنجزة",t=>t.done]];
   const f = FL.find(x=>x[0]===UI.f) || FL[0]; const list = all.filter(f[2]).sort((a,b)=> f[0]==="done" ? (b.doneAt||"").localeCompare(a.doneAt||"") : (a.due||"9").localeCompare(b.due||"9"));
   return `<div class="chips" style="margin-bottom:12px">${FL.map(([k,l,fn])=>`<button class="chip" data-tf="${k}" aria-pressed="${f[0]===k}">${l} <span class="num muted">${all.filter(fn).length}</span></button>`).join("")}${can("tasks.edit")?`<button class="btn sm primary" id="taskNew" style="margin-inline-start:auto" ${S.canWrite?"":"disabled"}>+ مهمة</button>`:""}</div>
-  <section class="panel">${list.length?`<div class="tasks">${list.slice(0,200).map(t=>taskRow(t)).join("")}</div>`:`<div class="empty">لا مهام هنا. اكتب المهمة في «المساعد الذكي» في الشريط الجانبي أو من تبويب «المذكرات والمهام» في القضية.</div>`}</section>`;
+  <section class="panel">${list.length?`<div class="tasks">${list.slice(0,200).map(t=>taskRow(t)).join("")}</div>`:`<div class="empty">لا مهام هنا. اكتب المهمة في «المساعد» (الزر العائم أسفل الصفحة) أو من تبويب «المذكرات والمهام» في القضية.</div>`}</section>`;
 }
 function homeTasksPanel(){
   const list = tasksAll().filter(t => !t.done && taskMine(t) && (!t.due || daysUntil(t.due) <= 7)).sort((a,b)=>(a.due||"9").localeCompare(b.due||"9"));
@@ -6457,7 +6458,7 @@ function brand(){ const el = $("brandBox"); if (el) el.innerHTML = `${brandSvg("
 // ---------- the rail: the day's work flat at the top, the rest in groups that open on demand — and open by themselves on their own pages.
 // A group with one visible page shows that page directly; a collapsed group carries the sum of its pages' counts.
 const NAV_GROUPS = [
-  {key:"work", items:["home","cases","filing","crm","agenda","memos","review"]},
+  {key:"work", items:["home","cases","crm","agenda","memos","review"]},
   {key:"clients", label:"الموكلون والشركات", icon:"people", items:["clients","portal"]},
   {key:"money", label:"الأتعاب والمالية", icon:"money", items:["retainers","finance"]},
   {key:"office", label:"إدارة المكتب", icon:"shield", items:["kpi","staff","sync"]},
@@ -7976,7 +7977,7 @@ function filingCard(c, inCase){
 }
 function vFiling(){
   const L = filingCases(); const prep = L.filter(c => (c.filing||{}).state!=="submitted"), sub = L.filter(c => (c.filing||{}).state==="submitted");
-  return header("رفع الدعوى", "الدعاوى قبل قيدها في المحكمة — رقم القضية يُضاف حين يصدر من ناجز", can("cases.edit") ? `<button class="btn primary" id="filingNew" ${S.canWrite?"":"disabled"}>+ دعوى جديدة</button>` : "") + `
+  return header("المذكرات والمهام", "رفع الدعاوى: الدعاوى قبل قيدها في المحكمة — رقم القضية يُضاف حين يصدر من ناجز", can("cases.edit") ? `<button class="btn primary" id="filingNew" ${S.canWrite?"":"disabled"}>+ دعوى جديدة</button>` : "") + memoTabs() + `
   <div class="cols">
     <div class="grid" style="align-content:start"><h2 class="sec">قيد الإعداد <span class="num muted">${prep.length}</span></h2>${prep.map(c => filingCard(c)).join("") || `<div class="empty">لا دعاوى قيد الإعداد. «+ دعوى جديدة» تفتح ملفاً بلا رقم قضية.</div>`}</div>
     <div class="grid" style="align-content:start"><h2 class="sec">قُدّمت — بانتظار رقم القضية <span class="num muted">${sub.length}</span></h2>${sub.map(c => filingCard(c)).join("") || `<div class="empty">لا دعاوى مقدّمة تنتظر رقمها.</div>`}</div>
@@ -8031,6 +8032,7 @@ function openFilingCaseNo(c){
     if (await patchCase(c, {caseNo:no, stage:"قيد المرافعة", filing}, `أُضيف رقم القضية ${no} لملف رفع الدعوى`, {"رقم القضية":["—", no]})) { closeDrawer(); toast("حُفظ رقم القضية"); } };
 }
 function bindFiling(){
+  const ft = document.querySelector('.tab[data-mtab="filing"][aria-selected="true"]'); if (ft) ft.scrollIntoView({inline:"nearest", block:"nearest"});
   const nb = $("filingNew"); if (nb) nb.onclick = openFilingNew;
   document.querySelectorAll("[data-fstep]").forEach(b => b.onclick = async () => { const [id, k] = b.dataset.fstep.split(":"); const c = S.cases.get(id); if (!c) return;
     const f = c.filing || {state:"prep"}; const cur = filingSteps(c)[k]; const steps = {...(f.steps||{})};
