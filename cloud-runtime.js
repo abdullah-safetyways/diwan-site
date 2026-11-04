@@ -156,6 +156,17 @@
   window.fetch = async (u, o) => { const m = /\/_blob\/([0-9a-f]{32})/.exec(String(u)); if (m) { await whenReady(); const {data, error} = await sb.storage.from(BUCKET).download(m[1]);
       return error || !data ? new Response("", {status: 404}) : new Response(data, {status: 200, headers: {"content-type": data.type || "application/octet-stream"}}); } return realFetch(u, o); };
 
+  // a link to an uploaded file (a task's attachment: href «/_blob/<id>») opens the file itself, through a link valid for five minutes —
+  // the browser alone would ask the site for «/_blob/…», which does not exist there
+  document.addEventListener("click", async (e) => {
+    const a = e.target.closest && e.target.closest('a[href*="/_blob/"]'); if (!a) return; const m = /\/_blob\/([0-9a-f]{32})/.exec(a.getAttribute("href") || ""); if (!m) return;
+    e.preventDefault(); const w = window.open("", "_blank"); if (w) { try { w.document.title = "يفتح الملف…"; w.document.body.textContent = "يفتح الملف…"; } catch {} }
+    try { await whenReady(); const name = a.getAttribute("title") || a.textContent.trim() || "ملف"; const view = /\.(pdf|txt|jpe?g|png|gif|webp)$/i.test(name);
+      const {data, error} = await sb.storage.from(BUCKET).createSignedUrl(m[1], 300, view ? undefined : {download: name}); if (error || !data?.signedUrl) throw error || new Error("no url");
+      if (w) w.location.replace(data.signedUrl); else location.href = data.signedUrl; }
+    catch { if (w) w.close(); if (typeof toast === "function") toast("تعذّر فتح الملف الآن. أعد المحاولة."); }
+  }, true);
+
   // ---------------------------------------------------------------- the assistant («sample»): the «sample» function on the server holds the office's key
   const FN = (name) => CFG.url.replace(/\/$/, "") + "/functions/v1/" + name;
   const authHeaders = () => ({"content-type": "application/json", authorization: "Bearer " + SESSION.access_token, apikey: CFG.key});

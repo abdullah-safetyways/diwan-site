@@ -2269,7 +2269,7 @@ function openCaseNew(pre){
       fees: fz.items.length ? fz : null, source:"manual", fieldSources:src, editedFields:[...Object.keys(src), ...(v.title?["title"]:[])], needsReview:[], reviewNotes:[], related:S.trackFrom && S.cases.get(S.trackFrom) ? [S.trackFrom] : [], parentId:S.trackFrom && S.cases.get(S.trackFrom) ? S.trackFrom : null, sessionCount:0, nextSession:null, lastSession:null, importedAt:new Date().toISOString(),
       createdAt:new Date().toISOString(), createdBy:S.uid||null, conflict:cf.conflict };
     try { await S.db.doc("cases/"+id).set(doc); await logAction(id, "أضاف القضية يدوياً"); trackAfterCreate(id, doc); crmAfterCreate(id, "case");
-      if (S.reqPending) { try { await S.db.doc("requests/"+S.reqPending).update({caseId:id}); } catch {} S.reqPending = null; }
+      if (S.reqPending) { const rq = (S.reqs||[]).find(x => x.id===S.reqPending); try { await S.db.doc("requests/"+S.reqPending).update({caseId:id}); } catch {} S.reqPending = null; if (rq) await reqToCase(rq, id); }
       if (v.engagementId) { const n = S.cases.get(v.engagementId); if (n) await patchCase(n, {members:[...new Set([...(n.members||[]), id])]}, `رُبطت القضية ${v.caseNo||doc.title} بالعقد`); }
       delete S.feeDraft["new"]; closeDrawer(); toast("أُضيفت القضية"); openCase(id); if (S.asAfterNew) asAfterNewCase(id); } catch { toast("تعذّرت الإضافة"); } };
   if (pre) { const f = dr.querySelector("#caseNewForm"); for (const [k,val] of Object.entries(pre)) { const el = f.elements[k]; if (el && val!=null) el.value = val; } f.elements.client?.dispatchEvent(new Event("change")); const d = f.querySelector("details"); if (d && (pre.caseType==="تنفيذ")) d.open = true; }
@@ -6799,7 +6799,7 @@ const isRep = () => S.me?.role==="client" || S.me?.scope==="client";
 function reqRow(r, inner){
   const [l, cls] = REQ_STATE[r.status] || REQ_STATE.new; const c = r.caseId ? S.cases.get(r.caseId) : null;
   return `<div class="task" style="display:grid;grid-template-columns:minmax(0,1fr);gap:4px;padding:10px 0;border-bottom:1px dashed var(--line)" data-req="${esc(r.id)}">
-    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><span class="pill">${esc(REQ_TYPES[r.type]||r.type)}</span><b>${esc(r.title||"")}</b><span class="pill ${cls}">${l}</span></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><span class="pill">${esc(REQ_TYPES[r.type]||r.type)}</span><b>${esc(r.title||"")}</b><span class="pill ${cls}">${l}</span>${r.lead && !isRep() ? `<span class="sub">المسؤول: ${esc(memberName(r.lead))}</span>` : ""}</div>
     ${r.details?`<div style="white-space:pre-wrap">${esc(r.details)}</div>`:""}
     <div class="sub">${esc(fmtDate.format(D(r.at)))} · ${inner?`من ${esc(memberName(r.by))}`:"طلبك"}${c?` · <button class="link-chip" ${inner?`data-case="${esc(c.id)}"`:""}>${esc(c.caseNo||"")} ${esc((c.title||"").slice(0,50))}</button>`:""}${r.link?` · <a href="${esc(href(r.link))}" target="_blank" rel="noopener">رابط مرفق</a>`:""}${(r.files||[]).length?` · مرفقات: ${r.files.map(x=>`<a href="${esc(x.webUrl||"#")}" target="_blank" rel="noopener">${esc(x.name||"ملف")}</a>`).join("، ")}`:""}</div>
     ${r.decision?`<div class="notice ${r.status==="rejected"?"err":""}" style="margin:0"><b>${r.status==="rejected"?"سبب الرفض":r.status==="done"?"ما تم":"رد المكتب"}:</b> ${esc(r.decision.note||"")}<span class="sub"> — ${esc(memberName(r.decision.by))} · ${esc(fmtDate.format(D(r.decision.at)))}</span></div>`:""}
@@ -6843,17 +6843,27 @@ function openReqForm(K, P, name){
       catch (e) { if (sbtn) { sbtn.disabled = false; sbtn.textContent = "إرسال الطلب"; } toast("تعذّر رفع «" + x.name + "»؛ لم يُرسل الطلب"); return; } }
     try { await S.db.doc("requests/"+id).set(doc); await logAction(caseId, `طلب من ممثل ${name||"الشركة"}: ${REQ_TYPES[type]} — ${doc.title}`); closeDrawer(); toast("أُرسل طلبك إلى المكتب"); render(); } catch { toast("تعذّر إرسال الطلب"); } };
 }
+// the file opened from a request: its responsible lawyer, and the papers the representative attached (linked, not copied)
+async function reqToCase(rq, id){
+  const lead = rq.lead || null; const c = S.cases.get(id) || {id};
+  if (lead) await patchCase(c, {lead, assignees:[...new Set([lead, ...(c.assignees||[])])]}, `المحامي المسؤول (من الطلب): ${memberName(lead)}`);
+  const F = typeof cloudFiles === "function" ? cloudFiles() : null; const fs = (rq.files||[]).filter(f => f.id); if (!F || !fs.length) return;
+  let n = 0; for (const f of fs) { try { await F.linkFile({id:f.id, name:f.name, size:f.size||null, path:f.path, modified_at:null}, id, docKind); n++; } catch {} }
+  if (n) { await logAction(id, `أُضيفت مرفقات طلب الممثل إلى الملف (${n})`); toast(`انتقلت مرفقات الطلب إلى الملف (${n})`); }
+}
 function openReqDecide(r, act){
   const t = {accept:"قبول الطلب", reject:"رفض الطلب", done:"إنجاز الطلب", reopen:"إعادة فتح الطلب"}[act];
   const dr = openDrawer(`<header><div><span class="lbl">${t}</span><h2 style="margin-top:4px">${esc(r.title||"")}</h2><div class="sub">${esc(REQ_TYPES[r.type]||"")} · ${esc(r.client||"")}</div></div><button class="btn sm" data-close>إغلاق</button></header>
     <form class="body" id="reqDecide">${r.details?`<div class="notice" style="white-space:pre-wrap">${esc(r.details)}</div>`:""}
       <label class="f">${act==="reject"?"سبب الرفض (يراه الممثل)":act==="done"?"ما تم (يراه الممثل)":"رد المكتب (يراه الممثل، اختياري)"}<textarea class="inp" name="note" style="min-height:90px" ${act==="reject"?"required":""}></textarea></label>
+      ${act==="accept" ? `<label class="f">المحامي المسؤول عن الطلب${filingLeadSelect(r.lead||"", `name="lead" ${filingLawyers().length?"required":""}`)}</label>` : ""}
       ${act==="accept" && r.type!=="action" ? `<p class="sub">بعد القبول يُفتح نموذج ${r.type==="exec"?"طلب التنفيذ":"القضية"} معبأً من الطلب؛ وما يُنشأ يُربط بالطلب.</p>` : ""}
       <div style="display:flex;gap:8px"><button class="btn primary" type="submit">${t}</button></div></form>`);
   dr.querySelector("#reqDecide").onsubmit = async (e) => { e.preventDefault(); const note = e.target.elements.note.value.trim();
     const status = act==="accept" ? "accepted" : act==="reject" ? "rejected" : act==="done" ? "done" : "new";
     const decision = act==="reopen" ? null : {by:S.uid||null, at:new Date().toISOString(), note:note||null};
-    try { await S.db.doc("requests/"+r.id).update({status, decision}); await logAction(r.caseId||null, `${t}: ${r.title}${note?" — "+note:""}`); closeDrawer(); toast(act==="reject"?"رُفض الطلب وأُبلغ الممثل بالسبب":act==="accept"?"قُبل الطلب":act==="done"?"أُنجز الطلب":"أُعيد فتح الطلب");
+    const lead = e.target.elements.lead?.value || null; if (lead) r = {...r, lead};
+    try { await S.db.doc("requests/"+r.id).update({status, decision, ...(lead ? {lead} : {})}); await logAction(r.caseId||null, `${t}: ${r.title}${note?" — "+note:""}`); closeDrawer(); toast(act==="reject"?"رُفض الطلب وأُبلغ الممثل بالسبب":act==="accept"?"قُبل الطلب":act==="done"?"أُنجز الطلب":"أُعيد فتح الطلب");
       if (act==="accept" && r.type!=="action") { const co = portalCompanies().find(x => (r.engagementId && x.eng===r.engagementId) || (!r.engagementId && keyEq(x.key, r.clientKey)));
         openCaseNew(r.type==="work" ? {client:co?.name||r.client||"", engagementId:r.engagementId||co?.eng||"", track:"work", caseType:"عمل غير قضائي", stage:"مطلوب", subject:r.title, title:r.title, notes:`طلب الممثل: ${r.title}${r.details?"\n"+r.details:""}`} : r.type==="exec" ? {client:co?.name||r.client||"", track:"exec", caseType:"تنفيذ", court:"محكمة التنفيذ بالرياض", stage:"تنفيذ", engagementId:r.engagementId||co?.eng||"", subject:r.title, notes:`طلب الممثل: ${r.title}${r.details?"\n"+r.details:""}`} : {client:co?.name||r.client||"", engagementId:r.engagementId||co?.eng||"", subject:r.title, notes:`طلب الممثل: ${r.title}${r.details?"\n"+r.details:""}`}); S.reqPending = r.id; }
       else render(); } catch { toast("تعذّر الحفظ ولم يُحفظ التغيير — تحقق من الاتصال ثم أعد المحاولة"); } };
@@ -7961,6 +7971,24 @@ function filingSteps(c){
 const filingDone = (c) => { const m = filingSteps(c); return FILING_STEPS.filter(([k]) => m[k]).length; };
 function filingLabel(c){ const f = c.filing || {};
   return f.state==="submitted" ? `رفع دعوى — قُدّمت في ناجز${f.reqNo?` (طلب ${esc(f.reqNo)})`:""}` : "رفع دعوى — قيد الإعداد"; }
+// who may be responsible for a lawsuit: the office's lawyers (and the owner, when it is the owner who opens it)
+function filingLawyers(){
+  const ms = (typeof staffMembers === "function" ? staffMembers() : []).filter(m => m.active!==false && m.scope!=="client" && m.role!=="client").map(m => m.uid);
+  if (S.me?.owner && S.uid && !ms.includes(S.uid)) ms.unshift(S.uid);
+  return ms;
+}
+const filingLead = (c) => c.lead || (c.assignees||[])[0] || null;
+function filingLeadSelect(cur, attrs){ const L = filingLawyers(); if (cur && !L.includes(cur)) L.push(cur);
+  return `<select class="inp" ${attrs}><option value="">— اختر المحامي المسؤول —</option>${L.map(u => `<option value="${esc(u)}" ${u===cur?"selected":""}>${esc(memberName(u))}</option>`).join("")}</select>`; }
+function filingDocsRow(c, ro){
+  const fs = (c.documents?.files||[]).slice(0, 6); const n = (c.documents?.files||[]).length; const up = S.cloudUp?.[c.id];
+  const canUp = typeof cloudFiles === "function" && cloudFiles() && !ro;
+  return `<div class="fdocs" style="margin-top:10px;display:grid;gap:6px">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><span class="lbl" style="margin:0">المستندات ${n?`<span class="num muted">${n}</span>`:""}</span>
+      ${canUp?`<label class="btn sm ghost" style="cursor:pointer">${icon("doc")}إرفاق مستندات<input type="file" multiple hidden data-fupload="${esc(c.id)}"></label>`:""}${up?`<span class="sub">${esc(up)}</span>`:""}</div>
+    ${fs.length?`<div class="task-files">${fs.map(f => `<a class="link-chip" href="${esc(f.webUrl||"#")}" target="_blank" rel="noopener" title="${esc(f.name||"")}">${icon("doc")}${esc(String(f.name||"مستند").slice(0,40))}</a>`).join("")}${n>fs.length?`<button type="button" class="btn sm ghost" data-case="${esc(c.id)}" data-tab="docs">و${n-fs.length} غيرها</button>`:""}</div>`:`<div class="sub">لا مستندات بعد: لائحة الدعوى والمستندات المؤيدة والوكالة تُرفق هنا وتُحفظ في مجلد الدعوى.</div>`}
+  </div>`;
+}
 function filingCard(c, inCase){
   const f = c.filing || {}; const m = filingSteps(c); const n = filingDone(c); const ro = S.canWrite && can("cases.edit") ? "" : "disabled";
   const opp = c.ourSide==="المدعى عليه" ? c.plaintiff : c.defendant;
@@ -7969,6 +7997,8 @@ function filingCard(c, inCase){
       <span class="pill ${f.state==="submitted"?"warn":""}">${f.state==="submitted"?`قُدّمت${f.submittedAt?" "+fmtDate.format(D(f.submittedAt)):""}`:`${n} من ${FILING_STEPS.length}`}</span></header>
     <div class="fsteps">${FILING_STEPS.map(([k,l,h]) => `<button type="button" class="fstep${m[k]?" done":""}" data-fstep="${esc(c.id)}:${k}" ${ro} title="${esc(h)}${m[k]==="auto"?" — ظاهر في الملف":""}"><span class="ck">${m[k]?"✓":""}</span><span>${l}</span></button>`).join("")}</div>
     ${f.state==="submitted"?`<p class="sub" style="margin:8px 0 0">بانتظار رقم القضية: يُربط بهذا الملف وحده عند أول تحديث من ناجز (${f.reqNo?"برقم الطلب":"بأسماء الطرفين"})، أو أدخله الآن.</p>`:""}
+    <label class="f" style="margin-top:10px">المحامي المسؤول${filingLeadSelect(filingLead(c), `data-flead="${esc(c.id)}" ${ro}`)}</label>
+    ${filingDocsRow(c, ro)}
     <div class="acts" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
       ${f.state!=="submitted"?`<button type="button" class="btn sm primary" data-fsubmit="${esc(c.id)}" ${ro}>قُدّمت في ناجز</button>`:`<button type="button" class="btn sm" data-fsubmit="${esc(c.id)}" ${ro}>تعديل رقم الطلب</button>`}
       <button type="button" class="btn sm ${f.state==="submitted"?"primary":""}" data-fcaseno="${esc(c.id)}" ${ro}>إدخال رقم القضية</button>
@@ -7990,6 +8020,8 @@ function openFilingNew(){
       <div class="row"><label class="f">الخصم<input class="inp" name="opp"></label><label class="f">جوال الموكل<input class="inp num" name="clientPhone" inputmode="tel" placeholder="05xxxxxxxx"></label></div>
       <div class="row"><label class="f">المحكمة المختصة<input class="inp" name="court" placeholder="المحكمة العامة بالرياض"></label><label class="f">نوع القضية<select class="inp" name="caseType">${TYPES.map(x=>`<option ${x==="غير واضح"?"selected":""}>${x}</option>`).join("")}</select></label></div>
       <label class="f">موضوع الدعوى وطلباتها<textarea class="inp" name="subject" style="min-height:70px" placeholder="مثل: مطالبة بمبلغ مستحق عن عقد توريد"></textarea></label>
+      <label class="f">المحامي المسؤول${filingLeadSelect(S.me?.owner ? "" : (S.uid||""), `name="lead" ${filingLawyers().length?"required":""}`)}</label>
+      ${typeof cloudFiles === "function" && cloudFiles() ? `<label class="f">المستندات (اختياري)<input class="inp" type="file" name="files" multiple><span class="sub">لائحة الدعوى والمستندات المؤيدة والوكالة؛ تُحفظ في مجلد الدعوى.</span></label>` : ""}
       <div style="display:flex;gap:8px"><button class="btn primary" type="submit">فتح ملف الدعوى</button></div></form>`);
   dr.querySelector("#filingForm").onsubmit = async (e) => { e.preventDefault(); if (!S.db) { toast("قاعدة البيانات غير متاحة"); return; }
     const f = e.target.elements; const client = f.client.value.trim(), opp = f.opp.value.trim(), side = f.ourSide.value;
@@ -8002,12 +8034,14 @@ function openFilingNew(){
     const doc = {id, kind:"case", caseNo:null, title: plaintiff && defendant ? `${plaintiff} ضد ${defendant}` : client, plaintiff, defendant, client, ourSide:side,
       clientPhone: fromHindi(f.clientPhone.value.trim()) || null, court: f.court.value.trim() || null, caseType: f.caseType.value, subject: subject.split("\n")[0].slice(0,120) || null,
       status:"active", stage:"قبل القيد", sessions:[], tasks:[], invoices:[], odoo:null, notes: subject, engagementId: eg?.id || null,
-      assignees: S.me?.uid && !S.me.owner ? [S.me.uid] : [], source:"manual", fieldSources:{client:"user", ourSide:"user"}, editedFields:["client","ourSide"],
+      lead: f.lead?.value || null, assignees: [...new Set([...(f.lead?.value ? [f.lead.value] : []), ...(S.me?.uid && !S.me.owner ? [S.me.uid] : [])])], source:"manual", fieldSources:{client:"user", ourSide:"user"}, editedFields:["client","ourSide"],
       needsReview:[], reviewNotes:[], related:[], sessionCount:0, nextSession:null, lastSession:null, importedAt:now, createdAt:now, createdBy:S.uid||null,
       filing:{state:"prep", steps:{}, at:now, by:S.uid||null}};
     try { await S.db.doc("cases/"+id).set(doc); await logAction(id, "فتح ملف رفع دعوى");
       if (eg) await patchCase(eg, {members:[...new Set([...(eg.members||[]), id])]}, `رُبط ملف رفع الدعوى ${doc.title} بالعقد`);
-      closeDrawer(); toast("فُتح ملف الدعوى"); openCase(id); } catch { toast("تعذّر الحفظ ولم يُحفظ التغيير — تحقق من الاتصال ثم أعد المحاولة"); } };
+      if (doc.lead) await logAction(id, `المحامي المسؤول: ${memberName(doc.lead)}`);
+      const files = [...(f.files?.files || [])]; closeDrawer(); toast("فُتح ملف الدعوى"); openCase(id);
+      if (files.length) { await new Promise(r => setTimeout(r, 400)); const c = S.cases.get(id) || doc; await cloudUpload(c, files); } } catch { toast("تعذّر الحفظ ولم يُحفظ التغيير — تحقق من الاتصال ثم أعد المحاولة"); } };
 }
 function openFilingSubmit(c){
   const f = c.filing || {};
@@ -8033,6 +8067,10 @@ function openFilingCaseNo(c){
 }
 function bindFiling(){
   const ft = document.querySelector('.tab[data-mtab="filing"][aria-selected="true"]'); if (ft) ft.scrollIntoView({inline:"nearest", block:"nearest"});
+  document.querySelectorAll("[data-flead]").forEach(sel => sel.onchange = async () => { const c = S.cases.get(sel.dataset.flead); if (!c) return; const u = sel.value || null;
+    if (await patchCase(c, {lead:u, assignees:[...new Set([...(u?[u]:[]), ...(c.assignees||[]).filter(x => x!==c.lead)])]}, u ? `المحامي المسؤول: ${memberName(u)}` : "أُلغي تعيين المحامي المسؤول")) toast(u ? `المسؤول عن الدعوى: ${memberName(u)}` : "بلا محامٍ مسؤول"); });
+  document.querySelectorAll("[data-fupload]").forEach(inp => inp.onchange = async () => { const c = S.cases.get(inp.dataset.fupload); const files = [...(inp.files||[])]; inp.value = ""; if (!c || !files.length) return;
+    await cloudUpload(c, files); render(); });
   const nb = $("filingNew"); if (nb) nb.onclick = openFilingNew;
   document.querySelectorAll("[data-fstep]").forEach(b => b.onclick = async () => { const [id, k] = b.dataset.fstep.split(":"); const c = S.cases.get(id); if (!c) return;
     const f = c.filing || {state:"prep"}; const cur = filingSteps(c)[k]; const steps = {...(f.steps||{})};
