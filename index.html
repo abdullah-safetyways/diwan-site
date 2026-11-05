@@ -1469,9 +1469,9 @@ function bindDrafts(cur){
 }
 // ---------- Word files on the office's own letterhead, in its own font and page (learned in «التعلم من المحامي»)
 const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
-const SRI = {"https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js": "sha512-XMVd28F1oH/O71fzwBnV7HucLxVwtxf26XV8P4wPk26EDxuGZ91N8bsOttmnomcCD3CS5ZMRL50H0GgOHvegtg=="};
+const SRI = {"jszip.min.js": "sha512-XMVd28F1oH/O71fzwBnV7HucLxVwtxf26XV8P4wPk26EDxuGZ91N8bsOttmnomcCD3CS5ZMRL50H0GgOHvegtg=="};
 const loadScript = (src) => new Promise((res, rej) => { const s = document.createElement("script"); s.src = src; if (SRI[src]) { s.integrity = SRI[src]; s.crossOrigin = "anonymous"; } s.onload = () => res(); s.onerror = () => rej(new Error("تعذّر تحميل "+src)); document.head.appendChild(s); });
-async function needZip(){ if (!window.JSZip) await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"); if (!window.JSZip) throw new Error("JSZip"); return window.JSZip; }
+async function needZip(){ if (!window.JSZip) await loadScript("jszip.min.js"); if (!window.JSZip) throw new Error("JSZip"); return window.JSZip; }
 function bytesToB64(bytes){ let s = ""; const CH = 0x8000; for (let i=0;i<bytes.length;i+=CH) s += String.fromCharCode.apply(null, bytes.subarray(i, i+CH)); return btoa(s); }
 const xesc = (t) => String(t??"").replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g,"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 // the active paper: font, size (half-points), heading colour, line spacing — set from the learned letterhead before each build
@@ -1586,12 +1586,16 @@ async function buildFeeAgreementDocx(d, bytes){
   const paras = () => kids(body, "p"); const find = (pred) => paras().find(p => pred(ptext(p)));
   const title = d.client_title || "سعادة الأستاذ"; const city = d.city || "الرياض";
   let p = find(t => t.startsWith("إنه في يـوم") || t.startsWith("إنه في يوم")); if (!p) throw new Error("لم يُعثر على سطر التاريخ في النموذج");
-  setText(p, `إنه في يـوم ${d.day_name} بتاريخ ${d.hijri_date} الموافق ${d.greg_date}، بعون الله وتوفيقه في مدينة ${city}، تم الاتفاق والتراضي بين كلاً من:`);
+  setText(p, `إنه في يـوم ${d.day_name} بتاريخ ${String(d.hijri_date||"").replace(/هـ$/,"")}هـ الموافق ${String(d.greg_date||"").replace(/م$/,"")}م، بعون الله وتوفيقه في مدينة ${city}، تم الاتفاق والتراضي بين كلاً من:`);
   const fem = /الأستاذة/.test(title) || d.gender==="f"; const org = /السادة/.test(title);
   p = find(t => t.startsWith("ثانياً:") && t.includes("الطــــرف الثاني")); if (!p) throw new Error("لم يُعثر على فقرة الطرف الثاني");
   setText(p, `ثانياً: ${title} / ${d.client_name} ـ ${org?"سجل رقم":"هوية رقم"} (${d.client_id||".........."})، هاتف رقم (${d.client_phone||".........."})، ${fem?"وعنوانها":"وعنوانه"} مدينة ${d.client_city||city}؛ ${fem?"ويشار إليها":"ويشار إليه"} لاحقاً لأغراض هذا العقد بـ (الطــــرف الثاني).`);
   p = find(t => t.startsWith("أولاً") && t.includes("محل هذا العقد")); if (!p) throw new Error("لم يُعثر على بند محل العقد");
-  setText(p, `أولاً: محل هذا العقد هو قيام الطرف الأول ${d.scope}`);
+  // the office's form carries its standard scope after the blanks («، والترافع فيها أمام المحكمة الابتدائية، ثم …»): it is kept, and the
+  // subject written for this case comes before it
+  { const orig = ptext(p); const tail = (orig.match(/،\s*والترافع[\s\S]*$/) || [""])[0]; let sc = String(d.scope||"").trim();
+    if (tail) sc = sc.replace(/،?\s*وفقاً للإجراءات النظامية في ذلك\.?\s*$/, "");
+    setText(p, `أولاً: محل هذا العقد هو قيام الطرف الأول ${sc}${tail}`); }
   const feePs = paras().filter(q => /^(1\/|2\/|3\/|٣\/)/.test(ptext(q)) && ptext(q).includes("ريال سعودي")); if (!feePs.length) throw new Error("لم يُعثر على بند الأتعاب");
   const model = feePs[0];
   d.fees.forEach((fee, i) => { let target = feePs[i]; if (!target) { target = model.cloneNode(true); feePs[feePs.length-1].after(target); feePs.push(target); } setText(target, `${i+1}/ ${fee}`); });
@@ -2070,7 +2074,7 @@ function vEngagement(e){
   return `<button class="btn back" data-nav="retainers">${icon("back")}عقود الأتعاب</button>
   ${e.deleted?`<div class="notice warn" style="margin-bottom:12px">هذا العقد في المحذوفات${e.convertedTo?` — حُوّل إلى عقد أتعاب بالمعاملة على <button class="btn ghost sm" style="padding:0" data-case="${esc(e.convertedTo)}" data-tab="fees">قضيته</button>`:""}. <button class="btn sm" data-restore="${esc(e.id)}">استعادة</button></div>`:""}
   ${s.k==="noterms"&&!e.deleted&&e.status!=="closed"?`<div class="notice warn" style="margin-bottom:12px">عقد منقول من النظام السابق بلا شروط. إن كان <b>عقداً سنوياً</b> (يغطي قضايا الشركة بمدة ودورية فوترة) فاضغط «تعديل العقد» وسجّل شروطه؛ وإن كان <b>عقد أتعاب لقضية واحدة</b> فاضغط «هذا عقد بالمعاملة» ليُنقل إلى قضيته.</div>`:""}
-  <section class="case-head"><div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between"><span class="no">عقد أتعاب سنوي</span><span style="display:flex;gap:6px;flex-wrap:wrap"><span class="pill ${s.cls}">${s.l}</span><button class="btn sm" data-portal="E:${esc(e.id)}">صفحة المتابعة</button><button class="btn sm" id="ctEdit" ${ro}>تعديل العقد</button>${s.k==="noterms"&&!e.deleted&&can("billing.edit")?`<button class="btn sm" id="ctConvert" ${ro}>هذا عقد بالمعاملة</button>`:""}<button class="btn sm ghost" id="ctDel" style="color:var(--crit)" ${ro}>حذف</button></span></div>
+  <section class="case-head"><div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between"><span class="no">عقد أتعاب سنوي</span><span style="display:flex;gap:6px;flex-wrap:wrap"><span class="pill ${s.cls}">${s.l}</span><button class="btn sm" data-portal="E:${esc(e.id)}">صفحة المتابعة</button><button class="btn sm" id="ctEdit" ${ro}>تعديل العقد</button><button class="btn sm" data-ctdoc="${esc(e.id)}">إصدار العقد (Word)</button>${s.k==="noterms"&&!e.deleted&&can("billing.edit")?`<button class="btn sm" id="ctConvert" ${ro}>هذا عقد بالمعاملة</button>`:""}<button class="btn sm ghost" id="ctDel" style="color:var(--crit)" ${ro}>حذف</button></span></div>
   <h1 style="font-size:1.35rem">${esc(e.client||e.title)}</h1>
   <div class="facts">${[["البداية",ct.start?fmtDH(ct.start):null],["النهاية",s.end?fmtDH(s.end):null],["المدة",ct.months?`${ct.months} ${+ct.months<=10?"أشهر":"شهراً"}${ct.autoRenew?" — يتجدد تلقائياً":""}`:null],["الفوترة",ct.billing?`${FREQ[ct.billing]?.l} ${ct.billAt==="end"?"(في نهاية كل فترة)":"(في بداية كل فترة)"}`:null],["قيمة الدفعة",ct.amount!=null&&ct.billing?`${sar(ct.amount)} ريال${ct.vat?` + الضريبة = ${sar(withVat(ct.amount,true))}`:""}`:null],["إجمالي المدة",ct.start?`${sar(withVat(contractTotal(ct),ct.vat))} ريال`:null],["جوال العميل",e.clientPhone]].filter(x=>x[1]).map(([k,v])=>`<div><span>${k}:</span><b>${esc(v)}</b></div>`).join("") || `<div class="sub">لم تُسجل شروط هذا العقد بعد.</div>`}</div>
   ${ct.scope?`<p style="margin:0;white-space:pre-wrap">${esc(ct.scope)}</p>`:""}
@@ -2331,7 +2335,7 @@ async function loadBlob(ref){
   let out;
   if (ref.file) {
     // only the templates shipped with the page: a record any member can write must never name a script to load
-    const ok = {"tpl/fee.js":"__TPL_FEE", "tpl/letterhead.js":"__TPL_LETTERHEAD", "tpl/quote_case.js":"__TPL_QUOTE_CASE", "tpl/quote_annual.js":"__TPL_QUOTE_ANNUAL"};
+    const ok = {"tpl/fee.js":"__TPL_FEE", "tpl/letterhead.js":"__TPL_LETTERHEAD", "tpl/quote_case.js":"__TPL_QUOTE_CASE", "tpl/quote_annual.js":"__TPL_QUOTE_ANNUAL", "tpl/fee_annual.js":"__TPL_FEE_ANNUAL"};
     if (ok[ref.file] !== ref.global) throw {msg:"مرجع نموذج غير معتمد"};
     if (!window[ref.global]) await loadScript(ref.file); out = b64ToBytes(window[ref.global]); }
   else if (ref.asset) { if (!/^[0-9a-f]{32}$/i.test(String(ref.asset))) throw {msg:"مرجع ملف غير صالح"}; const res = await fetch("/_blob/"+ref.asset); if (!res.ok) throw {msg:"تعذّر تحميل الملف المحفوظ ("+res.status+")"}; out = ref.enc==="b64" ? b64ToBytes(await res.text()) : new Uint8Array(await res.arrayBuffer()); }
@@ -3173,6 +3177,7 @@ async function analyzeTemplate(name, bytes){
   const JSZip = await needZip(); const z = await JSZip.loadAsync(bytes); const xml = await z.file("word/document.xml")?.async("string"); if (!xml) throw {msg:"ليس ملف Word صالحاً."};
   const paras = docxXmlParas(xml).map(s=>s.replace(/\s+$/,"")); const text = paras.filter(p=>p.trim()).join("\n");
   if (text.length < 80) throw {msg:"النموذج بلا نص كافٍ."};
+  { const det = feeTplDetect(paras, name); if (det) return det; }
   const numbered = paras.map((p,i)=>p.trim()?`[${i+1}] ${p}`:"").filter(Boolean).join("\n");
   const r = await S.sample(`أنت تحلل نموذجاً من نماذج مكتب محاماة سعودي (ملف Word اسمه «${name}») ليستعمله الديوان لاحقاً.
 نص النموذج، كل فقرة في سطر برقمها بين معقوفين:
@@ -3345,7 +3350,7 @@ function learnTpl(){
       ${ts.length?ts.map(t=>`<div class="jrow"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><b>${esc(t.name)}</b><span class="pill">${esc(TPL_KINDS[t.kind]||t.kind)}</span><span class="pill ${t.mode==="fill"?"ok":""}">${t.mode==="fill"?((t.fields||[]).length?`تعبئة (${arN(t.fields.length,"حقل واحد","حقلان","حقول","حقلاً")})`:"تعبئة"):"مرجع صياغة"}</span>${t.builtin?`<span class="pill">معتمد</span>`:""}</div>
         <div class="sub">${(t.uses||[]).length?"يُستعمل في: "+esc(t.uses.map(u=>LEARN_KINDS[u]||"أخرى").join("، ")):""}${t.file?" · "+esc(t.file):""}${t.at?" · "+fmtDate.format(D(t.at)):""}</div>
         ${t.mode==="fill"&&t.fields?.length?`<div class="sub">الحقول: ${esc(t.fields.map(f=>f.label).join("، "))}</div>`:""}${t.structure?.length?`<div class="sub">البنية: ${esc(t.structure.join(" ← "))}</div>`:""}
-        <div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap">${t.src && t.engine!=="fee5"?`<button class="btn sm" data-ttry="${esc(t.id)}">تجربة وتنزيل</button>`:t.engine==="fee5"?`<span class="sub">يُجرَّب من تبويب «الصياغة» في أي قضية ← «عقد أتعاب»</span>`:""}<button class="btn sm" data-tedit="${esc(t.id)}">تعديل</button>${t.builtin?"":`<button class="btn sm ghost" data-tdel="${esc(t.id)}" style="color:var(--crit)">حذف</button>`}</div></div>`).join("")
+        <div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap">${t.src && !["fee5","annual5"].includes(t.engine)?`<button class="btn sm" data-ttry="${esc(t.id)}">تجربة وتنزيل</button>`:t.engine==="fee5"?`<span class="sub">يُصدر من تبويب «الصياغة» في أي قضية ← «عقد أتعاب»</span>`:t.engine==="annual5"?`<span class="sub">يُصدر من صفحة العقد السنوي ← «إصدار العقد (Word)»</span>`:""}${t.src?`<button class="btn sm" data-tdl="${esc(t.id)}">تنزيل Word للتعديل</button>`:""}${t.builtin && t.kind==="fee" && tplList().some(x => !x.builtin && x.engine===t.engine) ? `<span class="pill">مستبدل بنموذجك المرفوع</span>` : ""}<button class="btn sm" data-tedit="${esc(t.id)}">تعديل</button>${t.builtin?"":`<button class="btn sm ghost" data-tdel="${esc(t.id)}" style="color:var(--crit)">حذف</button>`}</div></div>`).join("")
       :`<div class="empty">لا نماذج بعد.</div>`}
     </section>
     <section class="panel" style="align-self:start"><header><h2>رفع نموذج</h2></header>
@@ -9207,6 +9212,87 @@ window.diwanInvalidate = (p) => { let m = /^cases\/([^/]+)\/drafts\//.exec(p);
   if (m) { DRAFTS.delete(m[1]); if (S.caseId===m[1] && !document.activeElement?.matches?.("input,textarea,select")) render(); return; }
   m = /^cases\/([^/]+)\/min\//.exec(p); if (m) { MINS.delete(m[1]); return; }
   m = /^logs\/(.+)$/.exec(p); if (m && S.logs) { delete S.logs[m[1]]; if (S.caseId===m[1] && !document.activeElement?.matches?.("input,textarea,select")) render(); } };
+// ---------- عقود الأتعاب من نماذج المكتب (5/11): العقد السنوي يُصدر من نموذج المكتب السنوي، وكل نموذج يُنزَّل بصيغة Word ليُعدَّل،
+// والنموذج المعدَّل يُرفع فيعرفه الديوان من بنيته (عقد قضية أو عقد سنوي) دون قراءة بالذكاء الاصطناعي، ويحل محل المدمج.
+const FEE_DOTS = /\(\s*\.{3,}\s*\)|\.{6,}/;
+// which of the office's own contract forms a Word file is, from the paragraphs the Diwan fills
+function feeTplDetect(paras, name){
+  const P = paras.map(s => String(s||"").trim()).filter(Boolean); const has = (f) => P.some(f);
+  const date = has(t => /^إنه في ي[ـ]*وم/.test(t)), party = has(t => t.startsWith("ثانياً:") && /الط[ـ]*رف الثاني/.test(t)), sig = has(t => t.includes("حرر هذا العقد من نسختين"));
+  if (!date || !party || !sig) return null;
+  const annual = has(t => /خدمات قانونية سنوية/.test(t)) && has(t => /^أولاً: حددت أتعاب الطرف الأول/.test(t));
+  const perCase = has(t => t.startsWith("أولاً") && t.includes("محل هذا العقد")) && has(t => /^(1|١)\//.test(t) && t.includes("ريال"));
+  const nm = String(name||"").replace(/\.docx$/i, "");
+  if (annual) return {name: nm || "عقد أتعاب سنوي", kind:"fee", mode:"fill", engine:"annual5", feeType:"annual", uses:["fee"], fields:[], structure:[], notes:"نموذج المكتب للعقد السنوي: يُصدر من صفحة العقد السنوي ← «إصدار العقد (Word)»."};
+  if (perCase) return {name: nm || "عقد أتعاب قضية", kind:"fee", mode:"fill", engine:"fee5", feeType:"case", uses:["fee"], fields:[], structure:[], notes:"نموذج المكتب لعقد القضية: يُصدر من تبويب «الصياغة» في القضية ← «عقد أتعاب»."};
+  return null;
+}
+// the annual form in use: the office's own upload first, else the one shipped with the Diwan
+const feeAnnualTpl = () => { const L = tplList().filter(t => t.kind==="fee" && t.src && t.engine==="annual5"); return L.find(t => !t.builtin) || L[0] || null; };
+// fills the dotted blanks of a paragraph, in order; a value left empty keeps its blank
+function feeFillDots(text, values){ let i = 0; return text.replace(new RegExp(FEE_DOTS.source, "g"), (m) => { const v = values[i++]; if (v == null || v === "") return m; return m.startsWith("(") ? `(${v})` : String(v); }); }
+async function buildAnnualFeeDocx(d, bytes){
+  const JSZip = await needZip(); const zip = await JSZip.loadAsync(bytes);
+  const xml = await zip.file("word/document.xml").async("string"); const doc = new DOMParser().parseFromString(xml, "application/xml");
+  const body = doc.getElementsByTagNameNS(W_NS, "body")[0];
+  const kids = (el, name) => [...el.childNodes].filter(n => n.namespaceURI===W_NS && n.localName===name);
+  const ptext = (p) => [...p.getElementsByTagNameNS(W_NS,"t")].map(t=>t.textContent).join("");
+  const setText = (p, s) => { const rs = kids(p, "r"); if (!rs.length) return; rs.forEach((r,i) => { [...r.childNodes].forEach(ch => { if (!(ch.namespaceURI===W_NS && ch.localName==="rPr")) r.removeChild(ch); });
+      if (i===0) { const t = doc.createElementNS(W_NS, "w:t"); t.setAttributeNS("http://www.w3.org/XML/1998/namespace", "xml:space", "preserve"); t.textContent = s; r.appendChild(t); } }); };
+  const paras = () => [...body.getElementsByTagNameNS(W_NS, "p")]; const find = (f) => paras().find(p => f(ptext(p).trim()));
+  const edit = (pred, fn, what) => { const p = find(pred); if (!p) throw {msg:`لم يُعثر في النموذج على ${what}`}; const t = ptext(p).trim(); const n = fn(t); if (n !== t) setText(p, n); };
+  edit(t => /^إنه في ي[ـ]*وم/.test(t), t => feeFillDots(t, [d.day_name, d.hijri_date, d.greg_date]), "سطر التاريخ");
+  const co = String(d.company||"").replace(/^\s*شركة\s+/, "");
+  edit(t => t.startsWith("ثانياً:") && /الط[ـ]*رف الثاني/.test(t), t => feeFillDots(t, [co, d.cr, d.address, d.email, d.rep, d.rep_id, d.rep_phone]), "فقرة الطرف الثاني");
+  const svc = [["استشارة", d.n_consult], ["جلسات", d.n_sessions], ["مراجعات", d.n_visits], ["اجتماع", d.n_meetings], ["كتابات", d.n_writings]];
+  for (const [w, n] of svc) if (n) { const p = find(t => /^[١-٩0-9]\s*-/.test(t) && t.includes(w) && FEE_DOTS.test(t)); if (p) setText(p, feeFillDots(ptext(p).trim(), [n])); }
+  if (d.end_date) edit(t => t.startsWith("أولاً: تكون مدة هذا العقد"), t => feeFillDots(t, [d.end_date.replace(/م$/, "")]).replace(/(\d|[٠-٩])م?\s+ويتجدد/, "$1م ويتجدد"), "بند مدة العقد");
+  edit(t => /^أولاً: حددت أتعاب الطرف الأول/.test(t), t => feeFillDots(t, [d.total_num, d.total_words, d.cycle, d.per_num, d.per_words]), "بند الأتعاب");
+  if (d.percent) { const p = find(t => /\(\s*\.{3,}\s*٪\s*\)/.test(t)); if (p) setText(p, ptext(p).trim().replace(/\(\s*\.{3,}\s*٪\s*\)/, `(${d.percent}٪)`)); }
+  const tbl = kids(body, "tbl").at(-1);
+  if (tbl) { const tr = kids(tbl, "tr")[0]; const cell = tr && kids(tr, "tc")[1];
+    if (cell) { const filled = kids(cell, "p").filter(q => ptext(q).trim()); if (filled.length >= 2) { setText(filled[0], "الطرف الثاني"); setText(filled.at(-1), `${d.company}${d.rep?` — يمثلها: ${d.rep}`:""}`); } } }
+  zip.file("word/document.xml", new XMLSerializer().serializeToString(doc));
+  return zip.generateAsync({type:"uint8array", compression:"DEFLATE"});
+}
+// the annual contract's form: what the record already knows is filled, the rest is asked once and kept with the contract
+function openAnnualDoc(e){
+  const t = feeAnnualTpl(); if (!t) { toast("لا نموذج للعقد السنوي: ارفعه من «التعلم من المحامي» ← «نماذج المكتب»"); return; }
+  const ct = e.contract || {}; const k = ct.doc || {}; const per = ct.amount!=null ? withVat(+ct.amount, ct.vat) : null; const total = ct.start ? withVat(contractTotal(ct), ct.vat) : null;
+  const end = ct.start && ct.months ? (() => { const x = new Date(ct.start+"T12:00:00Z"); x.setUTCMonth(x.getUTCMonth() + (+ct.months)); x.setUTCDate(x.getUTCDate()-1); return dkey(x); })() : "";
+  const v = {company: k.company || e.client || "", cr: k.cr || "", address: k.address || "", email: k.email || "", rep: k.rep || "", rep_id: k.rep_id || "", rep_phone: k.rep_phone || e.clientPhone || "",
+    n_consult: k.n_consult || "", n_sessions: k.n_sessions || "", n_visits: k.n_visits || "", n_meetings: k.n_meetings || "", n_writings: k.n_writings || "", percent: k.percent || ""};
+  const inp = (n, l, o={}) => `<label class="f">${l}<input class="inp ${o.num?"num":""}" name="${n}" value="${esc(v[n])}" ${o.ph?`placeholder="${esc(o.ph)}"`:""} ${o.req?"required":""}></label>`;
+  const dr = openDrawer(`<header><div><span class="lbl">إصدار العقد (Word)</span><h2 style="margin-top:4px">${esc(e.client||e.title)}</h2><div class="sub">من نموذج «${esc(t.name)}»${t.builtin?" (المدمج)":" (المرفوع من المكتب)"}؛ المبالغ والمدة من شروط العقد في الديوان.</div></div><button class="btn sm" data-close>إغلاق</button></header>
+    <form class="body" id="annDoc">
+      <div class="notice">${[["الإجمالي", total!=null?`${sar(total)} ريال`:"—"], ["الدفعات", ct.billing?FREQ[ct.billing]?.l:"—"], ["كل دفعة", per!=null?`${sar(per)} ريال`:"—"], ["تنتهي", end?fmtD(end):"—"]].map(([a,b])=>`<b>${a}:</b> ${esc(b)}`).join(" · ")}${ct.vat?" — شاملة الضريبة":""}</div>
+      <div class="row">${inp("company","اسم الشركة",{req:true})}${inp("cr","السجل التجاري",{num:true})}</div>
+      <div class="row">${inp("address","عنوان الشركة",{ph:"الرياض، حي …"})}${inp("email","البريد الإلكتروني")}</div>
+      <div class="row">${inp("rep","ممثل الشركة",{ph:"الاسم الكامل"})}${inp("rep_id","هوية الممثل",{num:true})}${inp("rep_phone","جوال الممثل",{num:true})}</div>
+      <fieldset class="perm-grid"><legend class="lbl">الحد الأقصى الشهري للخدمات</legend><div class="row">${inp("n_consult","استشارات",{num:true})}${inp("n_sessions","جلسات",{num:true})}${inp("n_visits","مراجعات",{num:true})}${inp("n_meetings","اجتماعات",{num:true})}${inp("n_writings","كتابات",{num:true})}</div></fieldset>
+      ${inp("percent","نسبة الأتعاب الإضافية من المحكوم به (٪)",{num:true})}
+      ${!ct.start||per==null||!ct.billing?`<div class="notice warn">شروط العقد ناقصة (البداية أو الدورية أو مبلغ الدفعة)؛ ستبقى خانات الأتعاب نقاطاً. أكملها من «تعديل العقد».</div>`:""}
+      <div style="display:flex;gap:8px"><button class="btn primary" type="submit">إصدار وتنزيل</button></div></form>`);
+  dr.querySelector("#annDoc").onsubmit = async (ev) => { ev.preventDefault(); const f = ev.target.elements; const g = (n) => String(f[n]?.value||"").trim();
+    const vals = Object.fromEntries(Object.keys(v).map(n => [n, g(n)])); const btn = ev.target.querySelector("button[type=submit]"); btn.disabled = true;
+    try { const now = new Date(); const H = (x) => toHindi(String(x));
+      const bytes = await buildAnnualFeeDocx({...Object.fromEntries(Object.entries(vals).map(([a,b]) => [a, /^(cr|rep_id|rep_phone|n_|percent)/.test(a) && b ? H(fromHindi(b)) : b])),
+        day_name:new Intl.DateTimeFormat("ar-SA",{weekday:"long",timeZone:TZ}).format(now), hijri_date:toHindi(hijriNum(now.toISOString())), greg_date:toHindi(gregNum(dkey(now))),
+        end_date: end ? toHindi(gregNum(end)) : "", cycle: ct.billing ? ({monthly:"شهرية", quarterly:"ربع سنوية", semiannual:"نصف سنوية", annual:"سنوية", once:"دفعة واحدة"})[ct.billing] : "",
+        total_num: total!=null ? toHindi(fmtMoney.format(Math.round(total))).replace(/[,٬]/g,"٫") : "", total_words: total!=null ? tafqeet(total) : "",
+        per_num: per!=null ? toHindi(fmtMoney.format(Math.round(per))).replace(/[,٬]/g,"٫") : "", per_words: per!=null ? tafqeet(per) : ""}, await loadBlob(t.src));
+      await downloadBytes(bytes, safeName(`عقد أتعاب سنوي - ${vals.company}.docx`));
+      if (S.canWrite) await patchCase(e, {contract:{...ct, doc:vals}}, "أصدر عقد الأتعاب السنوي (Word)");
+      closeDrawer(); toast("صدر العقد"); }
+    catch (x) { toast(x?.msg || "تعذّر إصدار العقد"); btn.disabled = false; } };
+}
+document.addEventListener("click", async (ev) => {
+  const a = ev.target.closest?.("[data-ctdoc]"); if (a) { const e = S.cases.get(a.dataset.ctdoc); if (e) openAnnualDoc(e); return; }
+  const d = ev.target.closest?.("[data-tdl]"); if (d) { const t = tplList().find(x => x.id===d.dataset.tdl); if (!t?.src) return; d.disabled = true;
+    try { const bytes = await loadBlob(t.src); await downloadBytes(bytes, safeName(`${t.name || "نموذج"}.docx`)); toast("نُزّل النموذج: عدّله في Word ثم ارفعه من «اختيار نموذج (Word)» ليحل محله"); }
+    catch (x) { toast(x?.msg || "تعذّر تنزيل النموذج"); } d.disabled = false; }
+});
+
 // ---------- events
 // the home page's third column exists on wide screens only: its panels move there, and back when the window narrows
 const WIDE = window.matchMedia ? window.matchMedia("(min-width:1500px)") : null;

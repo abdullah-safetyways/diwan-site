@@ -290,7 +290,7 @@
   // private bucket for office members and set where the page looks first (window.__TPL_*), so its own <script src="tpl/…"> never runs.
   // The file is one line, window.__TPL_X="<base64>"; it is parsed, not run.
   async function loadTemplates(){
-    await Promise.all([["tpl/fee.js", "__TPL_FEE"], ["tpl/letterhead.js", "__TPL_LETTERHEAD"], ["tpl/quote_case.js", "__TPL_QUOTE_CASE"], ["tpl/quote_annual.js", "__TPL_QUOTE_ANNUAL"]].map(async ([file, g]) => {
+    await Promise.all([["tpl/fee.js", "__TPL_FEE"], ["tpl/letterhead.js", "__TPL_LETTERHEAD"], ["tpl/quote_case.js", "__TPL_QUOTE_CASE"], ["tpl/quote_annual.js", "__TPL_QUOTE_ANNUAL"], ["tpl/fee_annual.js", "__TPL_FEE_ANNUAL"]].map(async ([file, g]) => {
       try { const {data} = await sb.storage.from("private").download(file); if (!data) return;
         const m = /^\s*window\.(__TPL_[A-Z_]+)\s*=\s*"([A-Za-z0-9+/=]*)"\s*;?\s*$/.exec(await data.text());
         if (m && m[1] === g) window[g] = m[2]; } catch {}
