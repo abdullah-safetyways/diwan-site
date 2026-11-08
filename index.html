@@ -849,7 +849,7 @@ function tabOverview(c){
   return `<div class="cols">
     <div class="grid" style="align-content:start">
       ${(c.reviewNotes||[]).length && !c.reviewDone?`<div class="notice warn"><b>يحتاج قرارك:</b> ${c.reviewNotes.map(esc).join("<br>")}</div>`:""}
-      ${isFiling(c)?filingCard(c, true):""}${outcomeNotice(c)}
+      ${isFiling(c)?filingCard(c, true):(!c.caseNo && !c.deleted && (!c.kind || c.kind==="case") && OPEN.has(c.status) && ["courts","admin"].includes(trackOf(c)) && can("cases.edit") ? `<div class="notice" style="display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:12px"><span>هذا الملف بلا رقم قضية. إن كانت الدعوى لم تُرفع بعد في ناجز فاجعله ملف «رفع دعوى» لتظهر خطواتها هنا وفي «رفع الدعاوى».</span><button class="btn sm primary" data-fmark="${esc(c.id)}" ${S.canWrite?"":"disabled"}>تحتاج رفع دعوى في ناجز</button></div>` : "")}${outcomeNotice(c)}
       ${OPEN.has(c.status)&&(c.createdAt||!intakeDone(c))?checklistPanel(c,"intake"):""}${c.status==="closed"?checklistPanel(c,"closing"):""}
       ${showJudg && c.judgment?.deadline && isFuture(c.judgment.deadline) ? judgmentPanel(c) : ""}
       ${memoCardOverview(c)}
@@ -8073,6 +8073,8 @@ function openFilingCaseNo(c){
     if (await patchCase(c, {caseNo:no, stage:"قيد المرافعة", filing}, `أُضيف رقم القضية ${no} لملف رفع الدعوى`, {"رقم القضية":["—", no]})) { closeDrawer(); toast("حُفظ رقم القضية"); } };
 }
 function bindFiling(){
+  document.querySelectorAll("[data-fmark]").forEach(b => b.onclick = async () => { const c = S.cases.get(b.dataset.fmark); if (!c) return; b.disabled = true;
+    if (await patchCase(c, {filing:{state:"prep", steps:{}, at:new Date().toISOString(), by:S.uid||null}, stage:"قبل القيد"}, "صار ملف رفع دعوى: تحتاج رفعاً في ناجز")) toast("صار ملف رفع دعوى: تظهر خطواته هنا وفي «رفع الدعاوى»"); else b.disabled = false; });
   const ft = document.querySelector('.tab[data-mtab="filing"][aria-selected="true"]'); if (ft) ft.scrollIntoView({inline:"nearest", block:"nearest"});
   document.querySelectorAll("[data-flead]").forEach(sel => sel.onchange = async () => { const c = S.cases.get(sel.dataset.flead); if (!c) return; const u = sel.value || null;
     if (await patchCase(c, {lead:u, assignees:[...new Set([...(u?[u]:[]), ...(c.assignees||[]).filter(x => x!==c.lead)])]}, u ? `المحامي المسؤول: ${memberName(u)}` : "أُلغي تعيين المحامي المسؤول")) toast(u ? `المسؤول عن الدعوى: ${memberName(u)}` : "بلا محامٍ مسؤول"); });
