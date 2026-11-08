@@ -718,7 +718,7 @@ function vHome(){
   <div class="cols home3">
     <section class="panel"><header><h2>الأسبوعان القادمان</h2><button class="btn ghost" data-nav="agenda">كل الأجندة</button></header>${agendaBlocks(next14)}</section>
     <div class="grid" style="align-content:start">
-      ${(()=>{ const L = allCases().map(c=>({c, a:sakAwait(c)})).filter(x=>x.a).sort((x,y)=>x.a.day.localeCompare(y.a.day)); return L.length?`<section class="panel" id="sakWait"><header><h2>نُطق فيها بالحكم — بانتظار صدور الصك</h2><span class="sub">من ضبط آخر جلسة؛ تختفي حين يظهر الحكم في ناجز</span></header>${L.map(({c,a})=>`<div class="ev" data-case="${esc(c.id)}" data-tab="sessions"><span class="t">${c.caseNo?`<span class="mono small">${esc(c.caseNo)}</span>`:"ملف"}</span><div style="min-width:0"><span class="what">${esc(c.title)}</span><div class="sub">نُطق بالحكم في جلسة ${fmtDate.format(D(a.day))}${a.days===0?" · اليوم":a.days===1?" · منذ يوم":a.days===2?" · منذ يومين":` · منذ ${a.days} ${a.days<=10?"أيام":"يوماً"}`} — حدّث من ناجز بعد صدور الصك</div></div></div>`).join("")}</section>`:""; })()}
+      ${(()=>{ const L = allCases().map(c=>({c, a:sakAwait(c)})).filter(x=>x.a).sort((x,y)=>x.a.day.localeCompare(y.a.day)); return (L.length || can("cases.edit"))?`<section class="panel" id="sakWait"><header><h2>نُطق فيها بالحكم — بانتظار صدور الصك</h2><span class="sub">من ضبط آخر جلسة أو بإضافة المكتب؛ تختفي حين يظهر الحكم في ناجز</span>${can("cases.edit")?`<button class="btn sm" data-sakadd ${S.canWrite?"":"disabled"}>+ إضافة</button>`:""}</header>${L.length?"":`<div class="empty">لا قضايا بانتظار صدور الصك.</div>`}${L.map(({c,a})=>`<div class="ev" data-case="${esc(c.id)}" data-tab="sessions"><span class="t">${c.caseNo?`<span class="mono small">${esc(c.caseNo)}</span>`:"ملف"}</span><div style="min-width:0"><span class="what">${esc(c.title)}</span><div class="sub">نُطق بالحكم في جلسة ${fmtDate.format(D(a.day))}${a.days===0?" · اليوم":a.days===1?" · منذ يوم":a.days===2?" · منذ يومين":` · منذ ${a.days} ${a.days<=10?"أيام":"يوماً"}`} — حدّث من ناجز بعد صدور الصك${a.manual?" · أضافه المكتب":""}</div>${can("cases.edit")?`<button type="button" class="btn sm ghost" data-sakdel="${esc(c.id)}" data-day="${esc(a.day)}" style="color:var(--crit);padding-inline:0;margin-top:2px" ${S.canWrite?"":"disabled"}>حذف من القائمة</button>`:""}</div></div>`).join("")}</section>`:""; })()}
       ${awaitingDeed.length?`<section class="panel"><header><h2>أحكام بانتظار تسلم الصك</h2><span class="sub">سجّل تاريخ التسلم ليُحسب موعد الاعتراض</span></header>${awaitingDeed.map(c=>`<div class="ev" data-case="${esc(c.id)}" data-tab="overview"><span class="t">${c.caseNo?`<span class="mono small">${esc(c.caseNo)}</span>`:"ملف"}</span><div style="min-width:0"><span class="what">${esc(c.title)}</span><div class="sub">${c.judgment?.date?"صدر "+fmtDate.format(D(c.judgment.date)):"تاريخ الحكم غير مسجل"}${c.judgment?.result?" · "+esc(c.judgment.result).slice(0,90):""}</div></div></div>`).join("")}</section>`:""}
       ${homeMemosPanel()}
       ${homeCommsPanel()}
@@ -1230,12 +1230,15 @@ const sakSaid = (m) => { for (const x of m.matchAll(new RegExp(SAK_SAID.source, 
 // the judgment the last held hearing pronounced, while Najiz has no deed for it yet (enforcement files decide, they do not judge)
 function sakAwait(c){
   if (!c || (c.kind && c.kind!=="case") || c.deleted || !OPEN.has(c.status) || c.status==="judged" || c.status==="execution" || isExec(c)) return null;
+  const sw = c.sakWait || {}; const judgedSince = (d) => (c.najiz?.judgments||[]).some(j => (j.date||"") >= addDays(d, -1)) || (c.judgment?.date && c.judgment.date >= d);
+  if (sw.add?.day && sw.off !== sw.add.day && !judgedSince(sw.add.day)) return {day:sw.add.day, sid:null, days:Math.max(0, -daysUntil(sw.add.day)), manual:true};
   const now = new Date().toISOString();
   const held = (c.sessions||[]).filter(s => s.start && (s.start <= now || /منعقدة|منتهية/.test(s.najizStatus||"")) && (s.minutes||"").trim()).sort((a,b)=>a.start.localeCompare(b.start)).at(-1);
   if (!held) return null;
   const m = String(held.minutes); if (!sakSaid(m) || SAK_LATER.test(m)) return null;
   const day = dkey(D(held.start));
   if ((c.najiz?.judgments||[]).some(j => (j.date||"") >= addDays(day, -1)) || (c.judgment?.date && c.judgment.date >= day)) return null;
+  if (sw.off === day) return null;
   return {day, sid:held.id||null, days: Math.max(0, -daysUntil(day))};
 }
 function sakPill(c){ const a = sakAwait(c); return a ? ` <button type="button" class="pill warn" data-tab="sessions" style="border:0;cursor:pointer" title="من ضبط جلسة ${esc(fmtDate.format(D(a.day)))}">نُطق بالحكم — بانتظار الصك</button>` : ""; }
@@ -9296,6 +9299,32 @@ document.addEventListener("click", async (ev) => {
     try { const bytes = await loadBlob(t.src); await downloadBytes(bytes, safeName(`${t.name || "نموذج"}.docx`)); toast("نُزّل النموذج: عدّله في Word ثم ارفعه من «اختيار نموذج (Word)» ليحل محله"); }
     catch (x) { toast(x?.msg || "تعذّر تنزيل النموذج"); } d.disabled = false; }
 });
+
+// ---------- «نُطق فيها بالحكم — بانتظار صدور الصك»: إضافة قضية يدوياً، وحذفها من القائمة (8/11). The list is read from the last
+// hearing's minutes; the office adds what the minutes did not say (c.sakWait.add) and removes what does not belong (c.sakWait.off = that day).
+// A judgment from Najiz takes a case off by itself, added or not.
+function openSakAdd(){
+  const cands = allCases().filter(c => !c.deleted && OPEN.has(c.status) && c.status!=="judged" && c.status!=="execution" && !isExec(c) && !sakAwait(c))
+    .sort((a,b) => (b.lastSession||"").localeCompare(a.lastSession||""));
+  const label = (c) => `${c.caseNo||c.id} — ${(c.title||"").slice(0,70)}`;
+  const dr = openDrawer(`<header><div><span class="lbl">بانتظار صدور الصك</span><h2 style="margin-top:4px">إضافة قضية نُطق فيها بالحكم</h2><div class="sub">تبقى في القائمة حتى يظهر الحكم في ناجز أو تحذفها.</div></div><button class="btn sm" data-close>إغلاق</button></header>
+    <form class="body" id="sakAddForm">
+      <label class="f">القضية<input class="inp" name="q" list="sakCands" placeholder="رقم القضية أو اسم الموكل" autocomplete="off" required><datalist id="sakCands">${cands.slice(0,600).map(c => `<option value="${esc(label(c))}">`).join("")}</datalist></label>
+      <label class="f">تاريخ جلسة النطق بالحكم<input class="inp" type="date" name="day" value="${esc(todayKey())}" max="${esc(todayKey())}" required></label>
+      <div style="display:flex;gap:8px"><button class="btn primary" type="submit">إضافة</button></div></form>`);
+  dr.querySelector("#sakAddForm").onsubmit = async (e) => { e.preventDefault(); const f = e.target.elements; const q = f.q.value.trim(), day = f.day.value;
+    const c = cands.find(x => label(x)===q) || cands.find(x => x.caseNo && q.startsWith(String(x.caseNo))) || cands.find(x => x.id===q);
+    if (!c) { toast("اختر القضية من القائمة"); return; } if (!day) { toast("أدخل تاريخ الجلسة"); return; }
+    if (await patchCase(c, {sakWait:{...(c.sakWait||{}), add:{day, at:new Date().toISOString(), by:S.uid||null}, off:null}}, `أُضيفت إلى «بانتظار صدور الصك» (نُطق بالحكم في جلسة ${fmtD(day)})`)) { closeDrawer(); toast("أُضيفت إلى قائمة بانتظار صدور الصك"); render(); } };
+}
+// the rows open the case: these buttons act first and stop there
+document.addEventListener("click", async (e) => {
+  const add = e.target.closest?.("[data-sakadd]"); if (add) { e.preventDefault(); e.stopPropagation(); openSakAdd(); return; }
+  const del = e.target.closest?.("[data-sakdel]"); if (!del) return; e.preventDefault(); e.stopPropagation();
+  if (!del.dataset.armed) { del.dataset.armed = "1"; del.textContent = "تأكيد الحذف"; return; }
+  const c = S.cases.get(del.dataset.sakdel); if (!c) return; del.disabled = true; const day = del.dataset.day;
+  if (await patchCase(c, {sakWait:{...(c.sakWait||{}), add:null, off:day}}, `حُذفت من «بانتظار صدور الصك» (جلسة ${fmtD(day)})`)) { toast("حُذفت من القائمة"); render(); } else del.disabled = false;
+}, true);
 
 // ---------- events
 // the home page's third column exists on wide screens only: its panels move there, and back when the window narrows
