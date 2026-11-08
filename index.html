@@ -2261,7 +2261,7 @@ function openCaseNew(pre){
     if (S.cases.has(id) && S.cases.get(id).deleted) { toast("هذه القضية في المحذوفات؛ استعدها بدل إنشائها من جديد"); closeDrawer(); openCase(id); return; }
     const dupNo = v.caseNo ? [...S.cases.values()].find(x => !x.deleted && x.id!==id && (String(x.caseNo||"")===String(v.caseNo) || (x.otherCaseNos||[]).map(String).includes(String(v.caseNo)))) : null;
     if (dupNo) { toast(`رقم القضية مسجل مسبقاً: ${dupNo.title||dupNo.id}`); closeDrawer(); openCase(dupNo.kind==="merged" && dupNo.mergedInto ? dupNo.mergedInto : dupNo.id); return; }
-    if (!v.caseNo && v.plaintiff && v.defendant && !e.target.dataset.dupOk) { const same = allCases().find(x => x.plaintiff && x.defendant && keyEq(x.plaintiff, v.plaintiff) && keyEq(x.defendant, v.defendant));
+    if (!v.caseNo && v.plaintiff && v.defendant && !e.target.dataset.dupOk) { const same = allCases().find(x => x.id!==S.trackFrom && !(S.cases.get(S.trackFrom)?.related||[]).includes(x.id) && x.plaintiff && x.defendant && keyEq(x.plaintiff, v.plaintiff) && keyEq(x.defendant, v.defendant));
       if (same) { e.target.dataset.dupOk = "1"; toast(`توجد قضية بالأطراف نفسها: ${same.caseNo||""} ${same.title}. اضغط «إضافة» مرة أخرى إن كانت قضية أخرى فعلاً`); return; } }
     if (!v.engagementId && v.client) { const eg = engagementFor(v.client); if (eg) v.engagementId = eg.id; }
     const tracked = ["plaintiff","defendant","subject","court","circuit","client","ourSide","caseType","status","stage","caseNo"]; const src = Object.fromEntries(tracked.filter(k=>v[k]).map(k=>[k,"user"]));
@@ -2272,6 +2272,7 @@ function openCaseNew(pre){
       assignees: [...new Set([...(v.assignees||[]), ...(S.me?.uid && !S.me.owner ? [S.me.uid] : [])])],
       fees: fz.items.length ? fz : null, source:"manual", fieldSources:src, editedFields:[...Object.keys(src), ...(v.title?["title"]:[])], needsReview:[], reviewNotes:[], related:S.trackFrom && S.cases.get(S.trackFrom) ? [S.trackFrom] : [], parentId:S.trackFrom && S.cases.get(S.trackFrom) ? S.trackFrom : null, sessionCount:0, nextSession:null, lastSession:null, importedAt:new Date().toISOString(),
       createdAt:new Date().toISOString(), createdBy:S.uid||null, conflict:cf.conflict };
+    if (!doc.caseNo && ["courts","admin"].includes(trackOf(doc)) && OPEN.has(doc.status||"active") && !doc.filing) { doc.filing = {state:"prep", steps:{}, at:doc.createdAt, by:S.uid||null, from:doc.parentId||null}; if (!doc.stage || doc.stage==="قيد المرافعة") doc.stage = "قبل القيد"; }
     try { await S.db.doc("cases/"+id).set(doc); await logAction(id, "أضاف القضية يدوياً"); trackAfterCreate(id, doc); crmAfterCreate(id, "case");
       if (S.reqPending) { const rq = (S.reqs||[]).find(x => x.id===S.reqPending); try { await S.db.doc("requests/"+S.reqPending).update({caseId:id}); } catch {} S.reqPending = null; if (rq) await reqToCase(rq, id); }
       if (v.engagementId) { const n = S.cases.get(v.engagementId); if (n) await patchCase(n, {members:[...new Set([...(n.members||[]), id])]}, `رُبطت القضية ${v.caseNo||doc.title} بالعقد`); }
@@ -7998,7 +7999,8 @@ function filingCard(c, inCase){
   const f = c.filing || {}; const m = filingSteps(c); const n = filingDone(c); const ro = S.canWrite && can("cases.edit") ? "" : "disabled";
   const opp = c.ourSide==="المدعى عليه" ? c.plaintiff : c.defendant;
   return `<section class="panel filing" data-filing="${esc(c.id)}"><header><div style="min-width:0">${inCase?`<h2>رفع الدعوى</h2>`:`<button type="button" class="btn ghost sm" data-case="${esc(c.id)}" style="padding-inline:0;text-align:start"><b>${esc(c.title||c.client||"دعوى بلا عنوان")}</b></button>`}
-      <div class="sub">${esc([c.client && `الموكل: ${c.client}`, opp && `الخصم: ${opp}`, c.court, c.subject].filter(Boolean).join(" · "))}</div></div>
+      <div class="sub">${esc([c.client && `الموكل: ${c.client}`, opp && `الخصم: ${opp}`, c.court, c.subject].filter(Boolean).join(" · "))}</div>
+      ${(() => { const p = c.parentId && S.cases.get(c.parentId); return p ? `<div class="sub">المرحلة السابقة: <button type="button" class="btn ghost sm" style="padding:0" data-case="${esc(p.id)}">${esc((p.caseNo ? p.caseNo + " — " : "") + (p.title||"").slice(0,60))}</button>${p.deleted?" (في المحذوفات بعد التحويل)":""}</div>` : ""; })()}</div>
       <span class="pill ${f.state==="submitted"?"warn":""}">${f.state==="submitted"?`قُدّمت${f.submittedAt?" "+fmtDate.format(D(f.submittedAt)):""}`:`${n} من ${FILING_STEPS.length}`}</span></header>
     <div class="fsteps">${FILING_STEPS.map(([k,l,h]) => `<button type="button" class="fstep${m[k]?" done":""}" data-fstep="${esc(c.id)}:${k}" ${ro} title="${esc(h)}${m[k]==="auto"?" — ظاهر في الملف":""}"><span class="ck">${m[k]?"✓":""}</span><span>${l}</span></button>`).join("")}</div>
     ${f.state==="submitted"?`<p class="sub" style="margin:8px 0 0">بانتظار رقم القضية: يُربط بهذا الملف وحده عند أول تحديث من ناجز (${f.reqNo?"برقم الطلب":"بأسماء الطرفين"})، أو أدخله الآن.</p>`:""}
