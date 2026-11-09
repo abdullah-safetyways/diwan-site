@@ -4722,6 +4722,8 @@ function memoRow(m, o={}){
     if (m.status==="requested") acts.push(`<button class="btn sm primary" data-mact="start" data-mid="${id}">بدء الكتابة</button>`);
     if (["writing","changes"].includes(m.status)) acts.push(`<button class="btn sm primary" data-mact="review" data-mid="${id}">إرسال للمراجعة</button>`);
     if (m.status==="approved") acts.push(`<button class="btn sm primary" data-mact="filed" data-mid="${id}">تم التقديم</button>`);
+    if (crDue.memo(m) && can("memos.edit")) acts.push(`<button class="btn sm primary" data-crep="memo:${id}">إبلاغ الموكل</button>`);
+    else if (m.informed) acts.push(`<span class="pill ok">أُبلغ الموكل · ${esc(COMM_CH[m.informed.channel]||"")}</span>`);
   }
   if (m.status==="review" && canReviewMemo(m)) acts.push(`<button class="btn sm primary" data-mact="approve" data-mid="${id}">اعتماد</button><button class="btn sm" data-mact="changes" data-mid="${id}">طلب تعديل</button>`);
   if (open && K.d && can("drafts.use")) acts.push(`<button class="btn sm" data-case="${esc(c.id)}" data-tab="drafts" data-dk="${K.d}" data-droute="${K.route||""}">${icon("report")}الصياغة</button>`);
@@ -4843,7 +4845,7 @@ function openMemoFiled(m){
       <label class="f">ملاحظة (اختياري)<input class="inp" name="note"></label>
       <div style="display:flex;gap:8px"><button class="btn primary" type="submit">تم التقديم</button></div></form>`);
   dr.querySelector("#mfForm").onsubmit = async (e) => { e.preventDefault(); const f = e.target.elements;
-    if (await memoPatch(m, {status:"filed", filedAt:f.d.value, filedBy:S.uid||null, filedRef:f.ref.value.trim()||null}, `قُدّمت ${memoKind(m.kind).t}${f.d.value<= (m.due||"9")?" في موعدها":" بعد الموعد"}`, f.note.value.trim()||null)) { closeDrawer(); render(); toast("سُجّل التقديم"); } };
+    if (await memoPatch(m, {status:"filed", filedAt:f.d.value, filedBy:S.uid||null, filedRef:f.ref.value.trim()||null}, `قُدّمت ${memoKind(m.kind).t}${f.d.value<= (m.due||"9")?" في موعدها":" بعد الموعد"}`, f.note.value.trim()||null)) { closeDrawer(); render(); toast("سُجّل التقديم"); setTimeout(() => openClientReport("memo", m.id), 400); } };
 }
 function bindMemos(){
   const nw = $("memoNew"); if (nw) nw.onclick = () => openMemoForm(null, nw.dataset.mcase ? {caseId:nw.dataset.mcase} : (S.view==="case" ? {caseId:S.caseId} : {}));
@@ -5486,7 +5488,8 @@ function tabComms(c){
     ${list.length?list.map(x=>commRow(x,{showCase:false})).join(""):`<div class="empty">لم يُسجَّل تواصل بعد. كل اتصال أو رسالة أو اجتماع يُسجَّل هنا ليعرف كل الفريق ما قيل للموكل، ويُحسب زمن الرد في مؤشرات الأداء.</div>`}</section>
   <section class="panel" style="align-self:start"><header><h2>لماذا يُسجَّل</h2></header><ul class="small" style="margin:0;padding-inline-start:18px;display:grid;gap:6px;color:var(--ink-2)"><li>الرسالة الواردة التي تحتاج رداً تظهر في الرئيسية حتى يُسجَّل الرد؛ هدف المكتب الرد خلال ${replyTargetH()} ساعة (يُضبط في بيانات المكتب).</li><li>«متابعة في تاريخ» تذكّرك بما وعدت الموكل به.</li><li>عند انتهاء القضية يُسجَّل إبلاغ الموكل بالنتيجة ثم تقييمه للخدمة.</li></ul></section></div>`;
 }
-function homeCommsPanel(){
+function homeCommsPanel(){ return reportDuePanel() + homeCommsPanel0(); }
+function homeCommsPanel0(){
   const list = commsAwaiting().filter(x => !myBriefOnly() || !x.caseId || (S.cases.get(x.caseId)?.assignees||[]).includes(S.uid)); const fol = commsAll().filter(x => x.followUp && !x.followDone && daysUntil(x.followUp) <= 3);
   if (!list.length && !fol.length) return "";
   return `<section class="panel"><header><h2>رسائل الموكلين بانتظار الرد</h2><span class="sub">الهدف: خلال ${replyTargetH()} ساعة</span></header>${list.slice(0,6).map(x=>commRow(x)).join("")}${fol.length?`<p class="sub" style="margin:8px 0 0"><b>متابعات موعودة:</b> ${fol.slice(0,4).map(x=>`${esc(x.client||"")} — ${esc(x.summary.slice(0,40))} (${fmtD(x.followUp)})`).join(" · ")}</p>`:""}</section>`;
@@ -8061,7 +8064,7 @@ function openFilingSubmit(c){
       <div style="display:flex;gap:8px"><button class="btn primary" type="submit">حفظ</button></div></form>`);
   dr.querySelector("#fSubForm").onsubmit = async (e) => { e.preventDefault(); const el = e.target.elements; const reqNo = fromHindi(el.reqNo.value).replace(/\D/g,"") || null;
     const filing = {...f, state:"submitted", reqNo, submittedAt: el.d.value, steps:{...(f.steps||{}), submit:true}};
-    if (await patchCase(c, {filing}, `سجّل تقديم الدعوى في ناجز${reqNo?" — طلب "+reqNo:""}`)) { closeDrawer(); toast("حُفظ؛ يُربط رقم القضية عند صدوره"); } };
+    if (await patchCase(c, {filing}, `سجّل تقديم الدعوى في ناجز${reqNo?" — طلب "+reqNo:""}`)) { closeDrawer(); toast("حُفظ؛ يُربط رقم القضية عند صدوره"); if (!c.filing?.informed) setTimeout(() => openClientReport("filing", c.id), 400); } };
 }
 function openFilingCaseNo(c){
   const dr = openDrawer(`<header><div><span class="lbl">رفع الدعوى</span><h2 style="margin-top:4px">رقم القضية</h2><div class="sub">${esc(c.title||"")}</div></div><button class="btn sm" data-close>إغلاق</button></header>
@@ -9325,6 +9328,76 @@ document.addEventListener("click", async (e) => {
   const c = S.cases.get(del.dataset.sakdel); if (!c) return; del.disabled = true; const day = del.dataset.day;
   if (await patchCase(c, {sakWait:{...(c.sakWait||{}), add:null, off:day}}, `حُذفت من «بانتظار صدور الصك» (جلسة ${fmtD(day)})`)) { toast("حُذفت من القائمة"); render(); } else del.disabled = false;
 }, true);
+
+// ---------- إبلاغ الموكل بكل إجراء (9/11): تقديم مذكرة أو لائحة اعتراضية (استئناف/نقض/التماس) ورفع الدعوى في ناجز يُتبَع برسالة
+// للموكل (واتساب أو بريد أو خطاب على ورق المكتب أو اتصال)، تُسجَّل في «التواصل مع الموكل»؛ وما لم يُبلَّغ يبقى في «تقارير للموكلين
+// مستحقة» في الرئيسية وعلى المذكرة. Older actions (before REPORT_FROM) are not listed, so the list starts clean.
+const REPORT_FROM = "2026-10-26";
+const crDue = {
+  memo: (m) => m && m.status==="filed" && (m.filedAt||"") >= REPORT_FROM && !m.informed && !!S.cases.get(m.caseId) && !S.cases.get(m.caseId).deleted,
+  filing: (c) => c && !c.deleted && c.filing?.state==="submitted" && (c.filing.submittedAt||"") >= REPORT_FROM && !c.filing.informed,
+};
+function crItems(){
+  const out = [];
+  for (const m of (typeof memosAll === "function" ? memosAll() : [])) if (crDue.memo(m)) out.push({type:"memo", id:m.id, c:S.cases.get(m.caseId), what:memoKind(m.kind).t, day:m.filedAt});
+  for (const c of allCases()) if (crDue.filing(c)) out.push({type:"filing", id:c.id, c, what:"رفع الدعوى في ناجز", day:c.filing.submittedAt});
+  return out.filter(x => x.c && visibleCase(x.c)).sort((a,b) => (a.day||"").localeCompare(b.day||""));
+}
+const crDay = (d) => { const x = D(d && d.length===10 ? d+"T12:00:00+03:00" : d); return `${rHij(x)}هـ الموافق ${rGreg(x)}م`; };
+// the letter: the same frame as the hearing report (date, address, greeting, reference, close, signature)
+function crText(type, id){
+  if (type==="memo") { const m = (S.memos||[]).find(x => x.id===id); const c = m && S.cases.get(m.caseId); if (!c) return "";
+    const K = MEMO_KINDS[m.kind] || {}; const court = c.court ? ` لدى ${c.court}${c.circuit?` ـ ${c.circuit}`:""}` : "";
+    const next = K.route==="cassation" ? "وذلك اعتراضاً بطريق النقض على الحكم الصادر في الدعوى، وسيُحال الاعتراض إلى المحكمة العليا للنظر فيه، وسنوافيكم بما يصدر بشأنه فور صدوره بإذن الله."
+      : K.route==="appeal" ? `وذلك اعتراضاً على الحكم الصادر في الدعوى، وسنوافيكم بموعد نظر الاعتراض وما يصدر فيه فور علمنا به بإذن الله.`
+      : m.kind==="claim" ? "وسنوافيكم برقم القضية وموعد الجلسة الأولى فور صدورهما بإذن الله."
+      : "وسنوافيكم بما يستجد في الدعوى أولاً بأول بإذن الله.";
+    return reportFrame(c, `نفيدكم بأنه قد تم بحمد الله وتوفيقه تقديم ${K.t || "المذكرة"}${court} بتاريخ ${crDay(m.filedAt)}${m.filedRef?`، برقم (${m.filedRef})`:""}، ${next}`); }
+  const c = S.cases.get(id); if (!c) return ""; const f = c.filing || {}; const opp = reportOpp(c); const at = new Date();
+  return `التاريخ: ${rHij(at)}هـ\nالموافق: ${rGreg(at)}م\n\n${reportAddress(c)}\nالسلام عليكم ورحمة الله وبركاته، تحية طيبة وبعد،\nنفيدكم بأنه قد تم بحمد الله وتوفيقه رفع دعواكم${opp?` ضد ${opp}`:""} عبر منصة ناجز بتاريخ ${crDay(f.submittedAt || todayKey())}${f.reqNo?`، برقم الطلب (${f.reqNo})`:""}، وجارٍ قيدها لدى ${c.court || "المحكمة المختصة"}، وسنوافيكم برقم القضية وموعد الجلسة الأولى فور صدورهما بإذن الله.\n${REPORT_CLOSE}\n${reportSign()}`;
+}
+// a message is the letter without its date lines
+const crMsg = (t) => String(t||"").split("\n").filter(l => !/^(التاريخ|الموافق)\s*:/.test(l)).join("\n").replace(/^\n+/, "");
+async function crMark(type, id, channel, text){
+  const it = type==="memo" ? (S.memos||[]).find(x => x.id===id) : S.cases.get(id); const c = type==="memo" ? S.cases.get(it?.caseId) : it; if (!it || !c) return false;
+  const what = type==="memo" ? memoKind(it.kind).t : "رفع الدعوى في ناجز"; const now = new Date().toISOString();
+  const x = {id:"cm"+Date.now().toString(36)+Math.random().toString(36).slice(2,5), caseId:c.id, client:c.client||"", clientKey:normName(c.client||""), dir:"out", channel, at:now,
+    summary:`تقرير للموكل: ${what}`, text:String(text||"").slice(0, 4000), needsReply:false, repliedAt:null, followUp:null, followDone:false, kind:"report", by:S.uid||null, created:now};
+  const informed = {at:now, channel, by:S.uid||null, commId:x.id};
+  try { await S.db.doc("comms/"+x.id).set(x);
+    if (type==="memo") await S.db.doc("memos/"+id).update({informed}); else await patchCase(c, {filing:{...(c.filing||{}), informed}}, "أُبلغ الموكل برفع الدعوى");
+    await logAction(c.id, `أُبلغ الموكل (${COMM_CH[channel]||channel}): ${what}`); return true; }
+  catch { toast("تعذّر تسجيل الإبلاغ"); return false; }
+}
+function openClientReport(type, id){
+  const text = crText(type, id); if (!text) return;
+  const c = type==="memo" ? S.cases.get((S.memos||[]).find(x => x.id===id)?.caseId) : S.cases.get(id); const ph = normPhone(c?.clientPhone);
+  const what = type==="memo" ? memoKind((S.memos||[]).find(x => x.id===id)?.kind).t : "رفع الدعوى في ناجز";
+  const dr = openDrawer(`<header><div><span class="lbl">إبلاغ الموكل</span><h2 style="margin-top:4px">${esc(what)}</h2><div class="sub">${esc(c?.client||"")}${c?.caseNo?` · ${esc(c.caseNo)}`:""} — كل إجراء في القضية يُبلَّغ به الموكل؛ يُسجَّل الإبلاغ في «التواصل مع الموكل».</div></div><button class="btn sm" data-close>إغلاق</button></header>
+    <div class="body"><label class="f">نص التقرير (عدّله قبل الإرسال إن شئت)<textarea class="inp" id="crText" style="min-height:260px">${esc(text)}</textarea></label>
+      ${ph?"":`<label class="f">جوال الموكل (لا جوال في الملف)<input class="inp num" id="crPhone" inputmode="tel" placeholder="05xxxxxxxx"></label>`}
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn primary" type="button" data-crch="whatsapp">${icon("wa")}إرسال واتساب</button>
+        <button class="btn" type="button" data-crch="email">بريد إلكتروني</button>
+        <button class="btn" type="button" data-crch="letter">${icon("report")}خطاب Word على ورق المكتب</button>
+        <button class="btn ghost" type="button" data-crch="phone">أبلغته باتصال</button>
+        <button class="btn ghost" type="button" data-close style="margin-inline-start:auto">لاحقاً</button></div>
+      <p class="sub" style="margin:8px 0 0">ما لم يُبلَّغ يبقى في «تقارير للموكلين مستحقة» في الرئيسية.</p></div>`);
+  dr.querySelectorAll("[data-crch]").forEach(b => b.onclick = async () => { const ch = b.dataset.crch; const t = dr.querySelector("#crText").value.trim(); if (!t) { toast("اكتب نص التقرير"); return; }
+    if (ch==="whatsapp") { const p = ph || normPhone(dr.querySelector("#crPhone")?.value); if (!p) { toast("أدخل جوال الموكل"); return; }
+      window.open(`https://wa.me/${p}?text=${encodeURIComponent(crMsg(t))}`, "_blank", "noopener");
+      if (!ph && c && S.canWrite) patchCase(c, {clientPhone:dr.querySelector("#crPhone").value.trim()}, "أُضيف جوال الموكل من إبلاغه").catch(() => {}); }
+    else if (ch==="email") { location.href = `mailto:?subject=${encodeURIComponent(`${what} — ${c?.caseNo || c?.title || ""}`)}&body=${encodeURIComponent(crMsg(t))}`; }
+    else if (ch==="letter") { b.disabled = true; try { await downloadBytes(await buildLetterheadDocx(t), safeName(`تقرير للموكل - ${what} - ${c?.caseNo || c?.client || ""}`) + ".docx"); } catch (x) { toast(x?.msg || "تعذّر تجهيز الخطاب"); b.disabled = false; return; } b.disabled = false; }
+    if (await crMark(type, id, ch, t)) { closeDrawer(); render(); toast("سُجّل إبلاغ الموكل"); } });
+}
+function reportDuePanel(){
+  if (!can("cases.edit")) return ""; const L = crItems(); if (!L.length) return "";
+  return `<section class="panel" id="crDue"><header><h2>تقارير للموكلين مستحقة</h2><span class="sub">كل إجراء يُبلَّغ به الموكل</span></header>${L.slice(0,12).map(x => `<div class="ev" style="grid-template-columns:auto minmax(0,1fr) auto;align-items:center"><span class="t num">${esc(fmtD(x.day))}</span>
+    <div style="min-width:0"><span class="what">${esc(x.what)}</span><div class="sub">${esc(x.c.client||"")} · <button class="btn ghost sm" style="padding:0" data-case="${esc(x.c.id)}">${esc(x.c.caseNo || x.c.title.slice(0,40))}</button></div></div>
+    <button class="btn sm primary" data-crep="${x.type}:${esc(x.id)}" ${S.canWrite?"":"disabled"}>إبلاغ الموكل</button></div>`).join("")}${L.length>12?`<p class="sub" style="margin:6px 0 0">و${L.length-12} غيرها.</p>`:""}</section>`;
+}
+document.addEventListener("click", (e) => { const b = e.target.closest?.("[data-crep]"); if (!b) return; e.preventDefault(); e.stopPropagation(); const [t, ...rest] = b.dataset.crep.split(":"); openClientReport(t, rest.join(":")); }, true);
 
 // ---------- events
 // the home page's third column exists on wide screens only: its panels move there, and back when the window narrows
