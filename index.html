@@ -1320,7 +1320,7 @@ function tabDrafts(c){
       : `<button class="btn primary" id="drRun" ${busy?"disabled":""}>${icon("spark")}اكتب المسودة</button>`}</div>
     <div id="drState" style="margin-top:10px">${busy?`<div class="thinking"><span class="dot"></span>${esc(busy)}</div>`:(ks.note?`<div class="${ks.noteLink?"notice":"sub"}">${esc(ks.note)}${ks.noteLink?` <a href="${esc(href(ks.noteLink))}" target="_blank" rel="noopener">فتح الملف</a>`:""}</div>`:"")}</div>
     ${!docMode?`<label class="f" style="margin-top:10px">المسودة (قابلة للتعديل — يتعلم الديوان من تعديلاتك عند الحفظ)<textarea class="inp" id="drOut" style="min-height:48vh">${esc(ks.out||"")}</textarea></label>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn" id="drCopy">${icon("copy")}نسخ</button><button class="btn" id="drSave" ${ro}>حفظ المسودة في الديوان</button><button class="btn" id="drWord">${icon("report")}تنزيل Word على ورق المكتب</button><button class="btn" id="drWordSave" ${ro}>${icon("folder")}حفظ Word في مجلد القضية</button></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn" id="drCopy">${icon("copy")}نسخ</button><button class="btn" id="drSave" ${ro}>حفظ المسودة في الديوان</button><button class="btn" id="drWord">${icon("report")}تنزيل Word على ورق المكتب</button><button class="btn primary" id="drPdf" ${ro}>${icon("report")}PDF: حفظ في مستندات القضية</button><button class="btn" id="drWordSave" ${ro}>${icon("folder")}حفظ Word في مجلد القضية</button></div>
     ${ks.lib?.length?`<details style="margin-top:8px"><summary>مواد المكتبة التي قرأها الديوان لهذه المسودة (${ks.lib.length})</summary><ul class="small" style="margin:6px 0 0;padding-inline-start:18px">${ks.lib.map(x=>`<li>${esc(x.ref)}${x.cited?" — استُشهد بها":""}</li>`).join("")}</ul></details>`:""}
     <p class="sub" style="margin:8px 0 0">للتحقق من نصوص المواد غير الموجودة في المكتبة: <button class="btn ghost sm" id="drAsk" style="padding:0">نسخ قائمة المواد</button> ثم راجعها في موقع هيئة الخبراء أو أضف نصوصها إلى المكتبة.</p>`:""}
   </section>
@@ -1461,7 +1461,7 @@ function bindDrafts(cur){
   const dc=$("drCopy"); if (dc) dc.onclick=()=>{ const v=$("drOut").value; navigator.clipboard?.writeText(v).then(()=>toast("نُسخت المسودة"),()=>{ $("drOut").select(); toast("حدّد النص وانسخه"); }); };
   const dsv=$("drSave"); if (dsv) dsv.onclick=saveDraft;
   const dw=$("drWord"); if (dw) dw.onclick=()=>draftWord(false);
-  const dws=$("drWordSave"); if (dws) dws.onclick=()=>draftWord(true);
+  const dws=$("drWordSave"); if (dws) dws.onclick=()=>draftWord(true); const dpf=$("drPdf"); if (dpf) dpf.onclick=()=>draftPdf();
   const fd=$("feeDocDl"); if (fd) fd.onclick=()=>draftWord(false);
   const fs=$("feeDocSave"); if (fs) fs.onclick=()=>draftWord(true);
   const da=$("drAsk"); if (da) da.onclick=()=>{ const t = `أعد ${DRAFT_KINDS[st.kind].t} لقضية ${cur.caseNo||cur.title} في ديوان القضايا بمهارات المكتب وأسلوبه، وتحقق من كل مادة من أم القرى، وأخرجها Word على الورق الرسمي واحفظها في مجلد القضية.${(st.k[st.kind]?.ins||"").trim()?" توجيهي: "+st.k[st.kind].ins.trim():""}`; navigator.clipboard?.writeText(t).then(()=>toast("نُسخت قائمة المواد؛ راجعها في موقع هيئة الخبراء"),()=>toast(t)); };
@@ -6547,13 +6547,19 @@ async function openReport(c, s){
     <label class="f">نص التقرير (راجعه وعدّله قبل الإرسال)<textarea class="inp" id="repText" style="min-height:44vh;line-height:1.9">${esc(prev?.text || (S.repStyle==="formal" ? reportFrame(c, reportOpening(c, s)+" …") : ""))}</textarea></label>
     <div id="repState" class="sub">${prev?`آخر نسخة محفوظة ${fmtDate.format(D(prev.at))}${prev.file?.webUrl?` · <a href="${esc(href(prev.file.webUrl))}" target="_blank" rel="noopener">ملف Word</a>`:""}`:"اضغط «صياغة التقرير» ليكتب المساعد ما جرى في الجلسة داخل نموذج المكتب؛ التاريخ والمخاطبة والخاتمة والتوقيع من النموذج نفسه."}</div>
     <label class="f">جوال الموكل (للإرسال عبر واتساب)<input class="inp num" id="repPhone" inputmode="tel" placeholder="05xxxxxxxx" value="${esc(c.clientPhone||"")}"></label></div>
-    <div class="foot"><button class="btn primary" id="repGen">${icon("spark")}${prev?"إعادة الصياغة":"صياغة التقرير"}</button><button class="btn" id="repWord">${icon("report")}Word على ورق المكتب</button>${S.mcp?`<button class="btn" id="repWordSave" ${S.canWrite?"":"disabled"}>Word إلى مجلد القضية</button>`:""}<button class="btn" id="repCopy">${icon("copy")}نسخ</button><a class="btn" id="repWa" target="_blank" rel="noopener" ${phone?"":"hidden"}>${icon("wa")}فتح في واتساب</a><button class="btn" id="repMail" type="button">بريد إلكتروني</button><button class="btn ghost" id="repCall" type="button" ${S.canWrite?"":"disabled"}>أبلغته باتصال</button><button class="btn" id="repSave" ${S.canWrite?"":"disabled"}>حفظ في الملف</button></div>`);
+    <div class="foot"><button class="btn primary" id="repGen">${icon("spark")}${prev?"إعادة الصياغة":"صياغة التقرير"}</button><button class="btn primary" id="repPdf" type="button" ${S.canWrite?"":"disabled"}>${icon("report")}PDF: حفظ في القضية وإرسال</button><button class="btn" id="repWord">${icon("report")}Word على ورق المكتب</button>${S.mcp?`<button class="btn" id="repWordSave" ${S.canWrite?"":"disabled"}>Word إلى مجلد القضية</button>`:""}<button class="btn" id="repCopy">${icon("copy")}نسخ</button><a class="btn" id="repWa" target="_blank" rel="noopener" ${phone?"":"hidden"}>${icon("wa")}فتح في واتساب</a><button class="btn" id="repMail" type="button">بريد إلكتروني</button><button class="btn ghost" id="repCall" type="button" ${S.canWrite?"":"disabled"}>أبلغته باتصال</button><button class="btn" id="repSave" ${S.canWrite?"":"disabled"}>حفظ في الملف</button></div>`);
   const ta = dr.querySelector("#repText"), ph = dr.querySelector("#repPhone"), wa = dr.querySelector("#repWa"), st = dr.querySelector("#repState");
   const updWa = () => { const p = normPhone(ph.value); wa.hidden = !p; if (p) wa.href = `https://web.whatsapp.com/send?phone=${p}&text=${encodeURIComponent(ta.value)}`; };
   ta.oninput = updWa; ph.oninput = updWa; updWa();
   const was = s?.id && (c.sessInformed||{})[s.id]; if (was) st.insertAdjacentHTML("afterbegin", `<span class="pill ok">أُبلغ الموكل · ${esc(COMM_CH[was.channel]||"")} · ${esc(fmtD(was.at.slice(0,10)))}</span> `);
   const markS = async (ch) => { if (!s?.id || !S.canWrite || !ta.value.trim() || /…$/.test(ta.value.trim())) return false; const ok = await crMarkSession(c, s, ch, ta.value); if (ok) { c = S.cases.get(c.id) || c; toast("سُجّل إبلاغ الموكل بتقرير الجلسة"); } return ok; };
   wa.addEventListener("click", () => { markS("whatsapp"); });
+  dr.querySelector("#repPdf").onclick = async (e) => { if (!ta.value.trim() || /…$/.test(ta.value.trim())) { toast("اكتب التقرير أولاً (أو اضغط «صياغة التقرير»)"); return; } e.target.disabled = true;
+    try { st.innerHTML = `<span class="thinking"><span class="dot"></span>يجهّز PDF على ورق المكتب ويحفظه في مستندات القضية…</span>`; const bytes = await pdfFromText(ta.value); const f = await pdfSaveToCase(c, bytes, fileName());
+      await saveRep({file:{name:f.name, webUrl:f.webUrl, uri:f.uri}, pdf:true}); const how = await pdfShare(bytes, f.name, `تقرير جلسة — ${c.caseNo || c.title}`);
+      st.innerHTML = `حُفظ «${esc(f.name)}» في مستندات القضية${how==="shared"?" وأُرسل":how==="downloaded"?"، ونُزّل على جهازك لإرساله":""}.${f.webUrl?` <a href="${esc(href(f.webUrl))}" target="_blank" rel="noopener">فتح</a>`:""}`;
+      if (how !== "cancelled") await markS("letter"); }
+    catch (err) { st.innerHTML = `<span style="color:var(--crit)">${esc(err?.msg || "تعذّر تجهيز PDF.")}</span>`; } e.target.disabled = false; };
   dr.querySelector("#repMail").onclick = () => { location.href = `mailto:?subject=${encodeURIComponent(`تقرير جلسة — ${c.caseNo || c.title}`)}&body=${encodeURIComponent(ta.value)}`; markS("email"); };
   dr.querySelector("#repCall").onclick = async () => { if (!ta.value.trim() || /…$/.test(ta.value.trim())) { toast("اكتب التقرير أولاً (أو اضغط «صياغة التقرير»)"); return; } if (await markS("phone")) closeDrawer(); };
   const fileName = () => safeName(`تقرير جلسة ${c.caseNo||c.title.slice(0,30)} ${rGreg(s?.start ? D(s.start) : new Date()).replace(/\//g,"-")}`) + ".docx";
@@ -9394,7 +9400,8 @@ function openClientReport(type, id){
     <div class="body"><label class="f">نص التقرير (عدّله قبل الإرسال إن شئت)<textarea class="inp" id="crText" style="min-height:260px">${esc(text)}</textarea></label>
       ${ph?"":`<label class="f">جوال الموكل (لا جوال في الملف)<input class="inp num" id="crPhone" inputmode="tel" placeholder="05xxxxxxxx"></label>`}
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn primary" type="button" data-crch="whatsapp">${icon("wa")}إرسال واتساب</button>
+        <button class="btn primary" type="button" data-crch="pdf">${icon("report")}PDF: حفظ في القضية وإرسال</button>
+        <button class="btn" type="button" data-crch="whatsapp">${icon("wa")}نص واتساب</button>
         <button class="btn" type="button" data-crch="email">بريد إلكتروني</button>
         <button class="btn" type="button" data-crch="letter">${icon("report")}خطاب Word على ورق المكتب</button>
         <button class="btn ghost" type="button" data-crch="phone">أبلغته باتصال</button>
@@ -9405,6 +9412,10 @@ function openClientReport(type, id){
       window.open(`https://wa.me/${p}?text=${encodeURIComponent(crMsg(t))}`, "_blank", "noopener");
       if (!ph && c && S.canWrite) patchCase(c, {clientPhone:dr.querySelector("#crPhone").value.trim()}, "أُضيف جوال الموكل من إبلاغه").catch(() => {}); }
     else if (ch==="email") { location.href = `mailto:?subject=${encodeURIComponent(`${what} — ${c?.caseNo || c?.title || ""}`)}&body=${encodeURIComponent(crMsg(t))}`; }
+    else if (ch==="pdf") { b.disabled = true; try { const bytes = await pdfFromText(t); const f = await pdfSaveToCase(c, bytes, safeName(`تقرير للموكل - ${what} - ${c?.caseNo || c?.client || ""}`) + ".pdf");
+        const how = await pdfShare(bytes, f.name, what); b.disabled = false; if (how === "cancelled") { toast("حُفظ PDF في مستندات القضية؛ لم يُرسل بعد"); return; }
+        if (await crMark(type, id, "letter", t)) { closeDrawer(); render(); toast(how==="shared" ? "حُفظ PDF في القضية وأُرسل" : "حُفظ PDF في القضية ونُزّل لإرساله"); } return; }
+      catch (x) { toast(x?.msg || "تعذّر تجهيز PDF"); b.disabled = false; return; } }
     else if (ch==="letter") { b.disabled = true; try { await downloadBytes(await buildLetterheadDocx(t), safeName(`تقرير للموكل - ${what} - ${c?.caseNo || c?.client || ""}`) + ".docx"); } catch (x) { toast(x?.msg || "تعذّر تجهيز الخطاب"); b.disabled = false; return; } b.disabled = false; }
     if (await crMark(type, id, ch, t)) { closeDrawer(); render(); toast("سُجّل إبلاغ الموكل"); } });
 }
@@ -9417,6 +9428,169 @@ function reportDuePanel(){
 document.addEventListener("click", (e) => { const b = e.target.closest?.("[data-crep]"); if (!b) return; e.preventDefault(); e.stopPropagation(); const [t, ...rest] = b.dataset.crep.split(":"); const id = rest.join(":");
   if (t==="session") { const [cid, sid] = id.split("|"); const c = S.cases.get(cid); const ss = c && (c.sessions||[]).find(x => x.id===sid); if (ss) openReport(c, ss); return; }
   openClientReport(t, id); }, true);
+
+// ---------- PDF على ورق المكتب مباشرة من الديوان (10/11): ما يكتبه الديوان (تقرير جلسة، تقرير للموكل، مذكرة، لائحة، خطاب) يخرج PDF على
+// الورق الرسمي نفسه (صورة الترويسة وهوامش الصفحة من ملف الورق في «الخط والورق الرسمي»)، ويُحفظ في مجلد القضية، ويُشارَك مع الموكل —
+// دون Word ولا تحويل على الحاسوب. The pages are drawn in the browser on a canvas (Arabic shaping by the browser itself) at print
+// resolution and written into a small PDF; the paragraph rules follow the Word export (docx.js lineToPara).
+const PDF_DPI = 150;
+const pdfTw = (t) => t / 1440 * PDF_DPI;          // twips -> px
+const pdfPt = (pt) => pt * PDF_DPI / 72;          // points -> px
+let PDF_PAPER = null;                              // {key, w, h, mar:{top,right,bottom,left}, art:[{img,x,y,w,h}]} in px
+async function pdfPaper(){
+  const bytes = await paperBytes(); const key = JSON.stringify(S.learn?.letterhead?.src || null) + "|" + bytes.length;
+  if (PDF_PAPER?.key === key) return PDF_PAPER;
+  const JSZip = await needZip(); const z = await JSZip.loadAsync(bytes);
+  const xml = await z.file("word/document.xml").async("string"); const num = (re, d) => { const m = re.exec(xml); return m ? +m[1] : d; };
+  const W = num(/<w:pgSz[^>]*w:w="(\d+)"/, 11906), H = num(/<w:pgSz[^>]*w:h="(\d+)"/, 16838);
+  const mar = {top: num(/<w:pgMar[^>]*w:top="(-?\d+)"/, 1440), right: num(/<w:pgMar[^>]*w:right="(\d+)"/, 1134), bottom: num(/<w:pgMar[^>]*w:bottom="(-?\d+)"/, 1440), left: num(/<w:pgMar[^>]*w:left="(\d+)"/, 1134),
+    header: num(/<w:pgMar[^>]*w:header="(\d+)"/, 708), footer: num(/<w:pgMar[^>]*w:footer="(\d+)"/, 708)};
+  if (DOCF.bottomMin && mar.bottom < DOCF.bottomMin) mar.bottom = DOCF.bottomMin;
+  const rels = async (part) => { const f = z.file(part.replace(/([^/]+)$/, "_rels/$1.rels")); if (!f) return {}; const r = {}; for (const m of (await f.async("string")).matchAll(/Id="(\w+)"[^>]*Target="([^"]+)"/g)) r[m[1]] = m[2]; return r; };
+  const docRels = await rels("word/document.xml"); const art = [];
+  // the default header and footer of the section carry the paper's art (a full-page image, or a band at the top / bottom)
+  for (const [kind, re] of [["header", /<w:headerReference[^>]*w:type="default"[^>]*r:id="(\w+)"/], ["footer", /<w:footerReference[^>]*w:type="default"[^>]*r:id="(\w+)"/]]) {
+    const m = re.exec(xml) || new RegExp(`<w:${kind}Reference[^>]*r:id="(\\w+)"`).exec(xml); if (!m || !docRels[m[1]]) continue;
+    const part = "word/" + docRels[m[1]].replace(/^\.?\//, ""); const px = await z.file(part)?.async("string"); if (!px) continue; const pr = await rels(part);
+    for (const d of px.split(/<w:drawing>/).slice(1)) {
+      const ext = /<wp:extent cx="(\d+)" cy="(\d+)"/.exec(d); const emb = /r:embed="(\w+)"/.exec(d); if (!ext || !emb || !pr[emb[1]]) continue;
+      const media = z.file("word/" + pr[emb[1]].replace(/^\.?\//, "")); if (!media) continue;
+      const w = +ext[1] / 635, h = +ext[2] / 635; let x, y;
+      if (w >= W * 0.9 && h >= H * 0.85) { x = 0; y = 0; }                                    // a full page of paper art
+      else { const ph = /<wp:positionH relativeFrom="(\w+)">[\s\S]*?(?:<wp:posOffset>(-?\d+)<\/wp:posOffset>|<wp:align>(\w+)<\/wp:align>)/.exec(d);
+        const pv = /<wp:positionV relativeFrom="(\w+)">[\s\S]*?(?:<wp:posOffset>(-?\d+)<\/wp:posOffset>|<wp:align>(\w+)<\/wp:align>)/.exec(d);
+        const hx = ph?.[2] != null ? +ph[2] / 635 : null, al = ph?.[3] || "center";
+        x = hx != null ? (ph[1]==="page" ? hx : mar.left + hx) : al==="left" ? mar.left : al==="right" ? W - mar.right - w : (W - w) / 2;
+        const vy = pv?.[2] != null ? +pv[2] / 635 : 0;
+        y = kind==="header" ? (pv?.[1]==="page" ? vy : mar.header + vy) : (pv?.[1]==="page" ? vy : H - mar.footer - h + vy); }
+      const img = await createImageBitmap(new Blob([await media.async("uint8array")])).catch(() => null);
+      if (img) art.push({img, x: pdfTw(x), y: pdfTw(y), w: pdfTw(w), h: pdfTw(h)});
+    }
+  }
+  return PDF_PAPER = {key, w: Math.round(pdfTw(W)), h: Math.round(pdfTw(H)), mar: Object.fromEntries(Object.entries(mar).map(([k, v]) => [k, pdfTw(v)])), art, wPt: W / 20, hPt: H / 20};
+}
+// the office font when this computer has it (as in Word), else a Naskh face loaded once
+let PDF_FONT_READY = null;
+function pdfFontReady(){
+  if (PDF_FONT_READY) return PDF_FONT_READY;
+  if (!document.querySelector('link[data-pdffont]')) { const l = document.createElement("link"); l.rel = "stylesheet"; l.dataset.pdffont = "1"; l.href = "https://fonts.googleapis.com/css2?family=Noto+Naskh+Arabic:wght@400;700&display=swap"; document.head.appendChild(l); }
+  return PDF_FONT_READY = Promise.race([Promise.all([document.fonts.load('400 24px "Noto Naskh Arabic"', "ا"), document.fonts.load('700 24px "Noto Naskh Arabic"', "ا")]).catch(() => null), new Promise(r => setTimeout(r, 4000))]);
+}
+const pdfFamily = () => `"${String(DOCF.font||"").replace(/"/g, "")}", "Noto Naskh Arabic", "Traditional Arabic", "Arial", sans-serif`;
+// the paragraphs, as the Word export shapes them
+function pdfBlocks(text){
+  const navy = "#" + (DOCF.head || "1F3864"); const out = []; const R = (t, o={}) => ({t, b:!!o.b, c:o.c || null, u:!!o.u});
+  for (const raw of String(text||"").split(/\r?\n/)) {
+    const t = raw.replace(/\*\*/g, "").replace(/^#+\s*/, "").replace(/\s+$/, ""); const s = t.trim(); if (!s) continue; let m;
+    if (/^(صاحب الفضيلة|أصحاب الفضيلة|أصحاب المعالي|صاحب المعالي|فضيلة رئيس|سعادة رئيس|معالي)/.test(s)) { out.push({runs:[R(s,{b:1,c:navy})], after:80}); continue; }
+    if ((m = s.match(/^(الموضوع|طريقة الاعتراض)\s*[:：]\s*(.*)$/))) { out.push({runs:[R(m[1]+": ",{b:1,c:navy}), R(m[2])]}); continue; }
+    if (/^(الطلبات|سبب النقض|أسباب الاعتراض|الوقائع|التكييف النظامي|المستندات المؤيدة|أطراف الدعوى|وصف المحل|المرفقات|فهرس المرفقات)\s*[:：]?$/.test(s)) { out.push({runs:[R(s.replace(/[:：]$/, ""),{b:1,c:navy,u:1})], after:80, keepNext:true}); continue; }
+    if ((m = s.match(new RegExp(`^((?:${ORD_AR})|السبب\\s+\\S+|البند\\s+\\S+|سبب النقض)\\s*[:：\\-–ـ]\\s*(.*)$`)))) {
+      if (!m[2]) { out.push({runs:[R(m[1]+":",{b:1,c:navy})], keepNext:true, after:80}); continue; }
+      if (s.length < 90 && !/[.،]$/.test(s)) { out.push({runs:[R(s,{b:1,c:navy})], keepNext:true, after:80}); continue; }
+      out.push({runs:[R(m[1]+": ",{b:1,c:navy}), R(m[2])]}); continue; }
+    if ((m = s.match(/^([0-9٠-٩]{1,2})\s*[\/\-.)]\s*(.+)$/))) { out.push({runs:[R(m[1]+"/ ",{b:1,c:navy}), R(m[2])], ind:true, after:80}); continue; }
+    if ((m = s.match(/^[-•–]\s+(.+)$/))) { out.push({runs:[R("• ",{b:1,c:navy}), R(m[1])], ind:true, after:80}); continue; }
+    if (/^(والله ولي التوفيق|والله الموفق|وصلى الله|هذا والله|وتقبلوا)/.test(s)) { out.push({runs:[R(s,{b:1})], jc:"center", keepNext:true}); continue; }
+    if (s.length < 60 && signRx().test(s)) { out.push({runs:[R(s,{b:1,c:navy})], jc:"center", keepNext:true, after:40}); continue; }
+    out.push({runs:[R(s)]});
+  }
+  return out;
+}
+// one page = one canvas; text right to left, justified like the Word paragraphs
+async function pdfPages(text, opts={}){
+  const P = await pdfPaper(); await pdfFontReady(); const fam = pdfFamily();
+  const fpx = pdfPt((DOCF.sz || 28) / 2), lineH = fpx * 1.2 * ((DOCF.line || 360) / 240), gap = (a) => pdfTw(a ?? 110);
+  const x0 = P.mar.left, x1 = P.w - P.mar.right, top = Math.max(P.mar.top, pdfTw(400)), bottom = P.h - P.mar.bottom;
+  const pages = []; let cv, ctx, y;
+  const newPage = () => { cv = document.createElement("canvas"); cv.width = P.w; cv.height = P.h; ctx = cv.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, P.w, P.h);
+    for (const a of P.art) ctx.drawImage(a.img, a.x, a.y, a.w, a.h); ctx.textBaseline = "alphabetic"; pages.push(cv); y = top; };
+  const setFont = (r) => { ctx.font = `${r.b ? "700" : "400"} ${fpx}px ${fam}`; };
+  const isLtr = (w) => /[A-Za-z]/.test(w) && !/[؀-ۿ]/.test(w);
+  newPage();
+  let [main] = splitReview(text); let table = null;
+  if (opts.objection) { const [f, rest] = parseTableBlock(main); if (f) { table = f; main = rest; } }
+  if (table) {   // the objection table: label | value rows, the labels in navy cells
+    const rows = Object.entries(table); const labW = (x1 - x0) * 0.3, pad = pdfTw(80), navy = "#" + (DOCF.tableHead || DOCF.head || "1F3864"), border = "#" + (DOCF.border || "9DB3A6");
+    for (const [k, v] of rows) { ctx.direction = "rtl"; ctx.textAlign = "right";
+      ctx.font = `400 ${fpx * 0.9}px ${fam}`; const words = String(v||"").split(/\s+/).filter(Boolean); const lines = [""]; for (const w of words) { const t = lines.at(-1) ? lines.at(-1) + " " + w : w; if (ctx.measureText(t).width > (x1 - x0 - labW - 2*pad) && lines.at(-1)) lines.push(w); else lines[lines.length-1] = t; }
+      const h = Math.max(1, lines.length) * fpx * 1.35 + 2*pad; if (y + h > bottom) newPage();
+      ctx.fillStyle = navy; ctx.fillRect(x1 - labW, y, labW, h); ctx.strokeStyle = border; ctx.lineWidth = 2; ctx.strokeRect(x0, y, x1 - x0, h); ctx.beginPath(); ctx.moveTo(x1 - labW, y); ctx.lineTo(x1 - labW, y + h); ctx.stroke();
+      ctx.fillStyle = "#fff"; ctx.font = `700 ${fpx * 0.9}px ${fam}`; ctx.fillText(k, x1 - pad, y + pad + fpx * 0.95);
+      ctx.fillStyle = "#111"; ctx.font = `400 ${fpx * 0.9}px ${fam}`; lines.forEach((l, i) => ctx.fillText(l, x1 - labW - pad, y + pad + fpx * 0.95 + i * fpx * 1.35));
+      y += h; }
+    y += gap(200); }
+  for (const b of pdfBlocks(main)) {
+    // the words with their style; a run of Latin words stays in its own order
+    const toks = []; for (const r of b.runs) for (const w of r.t.split(/\s+/).filter(Boolean)) { const last = toks.at(-1); if (last && isLtr(w) && last.ltr && last.r===r) last.t += " " + w; else toks.push({t:w, r, ltr:isLtr(w)}); }
+    for (const k of toks) { setFont(k.r); k.w = ctx.measureText(k.t).width; } setFont({}); const sp = ctx.measureText(" ").width;
+    const ind = b.ind ? pdfTw(280) : 0; const lines = []; let cur = [], cw = 0;
+    for (const k of toks) { const avail = x1 - x0 - (lines.length ? ind : 0); if (cur.length && cw + sp + k.w > avail) { lines.push(cur); cur = []; cw = 0; } cw += (cur.length ? sp : 0) + k.w; cur.push(k); }
+    if (cur.length) lines.push(cur);
+    if (b.keepNext && y + lineH * 3 > bottom) newPage();
+    lines.forEach((ln, i) => {
+      if (y + lineH > bottom) newPage();
+      const right = x1 - (i ? ind : 0), avail = right - x0, used = ln.reduce((a, k) => a + k.w, 0) + sp * (ln.length - 1);
+      const last = i === lines.length - 1; const extra = !last && !b.jc && ln.length > 1 ? (avail - used) / (ln.length - 1) : 0;
+      let x = b.jc === "center" ? (x0 + x1) / 2 + used / 2 : right; const base = y + fpx * 1.05;
+      for (const k of ln) { setFont(k.r); ctx.fillStyle = k.r.c || "#111"; ctx.direction = k.ltr ? "ltr" : "rtl"; ctx.textAlign = "right"; ctx.fillText(k.t, x, base);
+        if (k.r.u) { ctx.fillRect(x - k.w, base + fpx * 0.18, k.w, Math.max(1, fpx * 0.06)); }
+        x -= k.w + sp + extra; }
+      y += lineH; });
+    y += gap(b.after);
+  }
+  return pages;
+}
+// a small PDF: one JPEG page image per page, at the paper's own size
+async function pdfFromPages(pages, wPt, hPt){
+  const enc = new TextEncoder(); const parts = []; const offs = []; let len = 0; const push = (x) => { const b = typeof x === "string" ? enc.encode(x) : x; parts.push(b); len += b.length; };
+  const obj = (n, body) => { offs[n] = len; push(`${n} 0 obj\n`); for (const b of [].concat(body)) push(b); push("\nendobj\n"); };
+  push("%PDF-1.4\n%\xE2\xE3\xCF\xD3\n"); const N = pages.length; const kids = pages.map((_, i) => `${3 + i*3} 0 R`).join(" ");
+  obj(1, "<< /Type /Catalog /Pages 2 0 R >>"); obj(2, `<< /Type /Pages /Kids [${kids}] /Count ${N} >>`);
+  for (let i = 0; i < N; i++) { const cv = pages[i]; const jpg = new Uint8Array(await (await new Promise(r => cv.toBlob(r, "image/jpeg", 0.86))).arrayBuffer());
+    const p = 3 + i*3, c = p + 1, im = p + 2; const draw = `q ${wPt.toFixed(2)} 0 0 ${hPt.toFixed(2)} 0 0 cm /Im0 Do Q`;
+    obj(p, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${wPt.toFixed(2)} ${hPt.toFixed(2)}] /Resources << /XObject << /Im0 ${im} 0 R >> >> /Contents ${c} 0 R >>`);
+    obj(c, [`<< /Length ${draw.length} >>\nstream\n`, draw, "\nendstream"]);
+    obj(im, [`<< /Type /XObject /Subtype /Image /Width ${cv.width} /Height ${cv.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpg.length} >>\nstream\n`, jpg, "\nendstream"]);
+    cv.width = cv.height = 0; }
+  const xref = len; const n = 3 + N*3; push(`xref\n0 ${n}\n0000000000 65535 f \n`); for (let i = 1; i < n; i++) push(String(offs[i]).padStart(10, "0") + " 00000 n \n");
+  push(`trailer\n<< /Size ${n} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`);
+  const out = new Uint8Array(len); let o = 0; for (const b of parts) { out.set(b, o); o += b.length; } return out;
+}
+async function pdfFromText(text, opts={}){ const pages = await pdfPages(text, opts); const P = PDF_PAPER; return pdfFromPages(pages, P.wPt, P.hPt); }
+// to the client: the phone's share sheet (WhatsApp, mail…) with the file itself where the device offers it, else the file is downloaded
+async function pdfShare(bytes, name, title){
+  const file = new File([bytes], name, {type:"application/pdf"});
+  if (navigator.canShare && navigator.canShare({files:[file]})) { try { await navigator.share({files:[file], title: title || name}); return "shared"; } catch (e) { if (e?.name === "AbortError") return "cancelled"; } }
+  const a = document.createElement("a"); a.href = URL.createObjectURL(file); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60000); return "downloaded";
+}
+// the PDF goes to the case's folder in the office files (and its documents list) before it goes anywhere else
+async function pdfSaveToCase(c, bytes, name){
+  name = name.replace(/\.docx$/i, "").replace(/(\.pdf)?$/i, ".pdf");
+  const F = typeof cloudFiles === "function" ? cloudFiles() : null; if (!F) return saveDocxToCase(c, bytes, name);
+  const folder = await cloudCaseFolder(S.cases.get(c.id) || c);   // the case folder is made if it has none, as an upload does
+  const r = await F.uploadFile(folder, new Blob([bytes], {type:"application/pdf"}), name, {conflict:"rename", bytes});
+  const f = {name:r.name, uri:r.uri, size:r.size, webUrl:r.webUrl, path:r.path, modified:new Date().toISOString(), kind:docKind(r.name), src:"diwan"};
+  const cur = S.cases.get(c.id) || c; await saveDocs(cur, {...(cur.documents||{}), files:[f, ...(cur.documents?.files||[]).filter(x => x.uri!==f.uri)].slice(0, 300)}, `حفظ «${f.name}» في مستندات القضية`);
+  return f;
+}
+// the drafting tab: the memo / objection / letter as PDF, saved in the case folder and to the drafts record
+async function draftPdf(){
+  const c = S.cases.get(S.caseId); const st = draftState(c.id); const kind = st.kind; const ks = st.k[kind]; readDraftInputs(ks); const stEl = $("drState");
+  if (isDocKind(kind, ks)) { toast("عقد الأتعاب ونماذج التعبئة تُخرج Word من نموذجها"); return; }
+  const text = (ks.out||"").trim(); if (!text) { toast("لا توجد مسودة بعد"); return; }
+  try { if (stEl) stEl.innerHTML = `<div class="thinking"><span class="dot"></span>يجهّز PDF على ورق المكتب ويحفظه في مجلد القضية…</div>`;
+    const bytes = await pdfFromText(text, {objection: kind==="objection" && skillOn("jadwal"), route: ks.route});
+    const f = await pdfSaveToCase(c, bytes, draftFileName(c, kind, ks).replace(/\.docx$/i, ".pdf"));
+    const rec = {kind, route:kind==="objection"?ks.route:null, text: ks.out, applied: ks.applied||appliedNames(kind), at:new Date().toISOString(), by:S.uid||null, file:{name:f.name, webUrl:f.webUrl, uri:f.uri}, pdf:true};
+    await saveDraftDoc(S.cases.get(c.id), rec, `حفظ ${DRAFT_KINDS[kind].t} (PDF) في مجلد القضية`);
+    if (ks.gen) { recordEdit(c, kind, ks.gen, ks.out); ks.gen = ks.out; }
+    ks.note = `حُفظ «${f.name}» في مستندات القضية.`; ks.noteLink = f.webUrl || null;
+    const el2 = $("drState"); if (el2) el2.innerHTML = `<div class="notice">${esc(ks.note)} ${f.webUrl?`<a href="${esc(href(f.webUrl))}" target="_blank" rel="noopener">فتح الملف</a>`:""} <button class="btn sm" type="button" id="drPdfShare">مشاركة / تنزيل</button></div>`;
+    const sh = $("drPdfShare"); if (sh) sh.onclick = () => pdfShare(bytes, f.name, DRAFT_KINDS[kind].t);
+    toast("حُفظ PDF في مستندات القضية"); }
+  catch (e) { const m = e?.msg || "تعذّر تجهيز PDF: " + (e?.message || e?.code || ""); if (stEl) stEl.innerHTML = `<div class="notice err">${esc(m)}</div>`; }
+}
 
 // ---------- events
 // the home page's third column exists on wide screens only: its panels move there, and back when the window narrows
