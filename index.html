@@ -659,7 +659,7 @@ function render(){
   const v = S.view;
   const cv = v==="case" ? S.cases.get(S.caseId) : null;
   const blocked = (!["case","client","search"].includes(v) && !viewAllowed(v)) || (["case","client","search"].includes(v) && !can("cases.view")) || (cv && (!visibleCase(cv) || (cv.kind==="engagement" && !can("billing.view"))));
-  const html = blocked ? vNoPerm() : v==="home"?vHome(): v==="cases"?vCases(): v==="case"?vCase(): v==="review"?vReview(): v==="filing"?(S.view="memos", S.memoUI={...(S.memoUI||{}), tab:"filing"}, vMemos()): v==="crm"?vCrm(): v==="agenda"?vAgenda(): v==="retainers"?vRetainers(): v==="finance"?vFinance(): v==="clients"?vClients(): v==="client"?vClient(): v==="search"?vSearch(): v==="library"?vLibrary(): v==="learn"?vLearn(): v==="staff"?vStaff(): v==="memos"?vMemos(): v==="kpi"?vKpi(): v==="portal"?vPortal(): vSync();
+  const html = blocked ? vNoPerm() : v==="home"?vHome(): v==="cases"?vCases(): v==="case"?vCase(): v==="review"?vReview(): v==="filing"?(S.view="memos", S.memoUI={...(S.memoUI||{}), tab:"filing"}, vMemos()): v==="crm"?vCrm(): v==="agenda"?vAgenda(): v==="retainers"?vRetainers(): v==="finance"?(S.view="home", vHome()): v==="clients"?vClients(): v==="client"?vClient(): v==="search"?vSearch(): v==="library"?vLibrary(): v==="learn"?vLearn(): v==="staff"?vStaff(): v==="memos"?vMemos(): v==="kpi"?vKpi(): v==="portal"?vPortal(): vSync();
   $("main").innerHTML = html;
   afterRender();
 }
@@ -1991,7 +1991,7 @@ function billActions(b){
   if (b.state==="invoiced") return lgDocBtn(b) + `<button class="btn sm primary" ${k} data-bact="pay">تسجيل سداد</button>${b.src!=="legacy"?`<button class="btn sm ghost" ${k} data-bact="undo">تراجع</button>`:""}${wa}`;
   if (b.paid) return lgDocBtn(b) + `<button class="btn sm primary" ${k} data-bact="pay">تسجيل سداد</button><button class="btn sm ghost" ${k} data-bact="undo">تراجع عن السداد</button>${wa}`;
   if (b.state==="waiting") return `<button class="btn sm" ${k} data-bact="reach">تحقق الشرط</button>`;
-  return `<button class="btn sm" ${k} data-bact="invoice">تسجيل فاتورة</button><button class="btn sm primary" ${k} data-bact="pay">تسجيل سداد</button>${wa}`;
+  return `<button class="btn sm primary" ${k} data-bact="pay">تسجيل سداد</button>${wa}`;
 }
 function findBill(src, id, key){ return billingItems().find(b=>b.src===src && String(b.id)===String(id) && String(b.key)===String(key)); }
 async function writeBill(b, patch, action){
@@ -2183,7 +2183,8 @@ function vFinanceBills(){
     <label class="search">${icon("search")}<input id="billQ" type="search" value="${esc(S.billQ||"")}" placeholder="العميل، رقم القضية، رقم الفاتورة" aria-label="بحث في الفوترة"></label></div>
   <section class="panel">${billRows(list.slice(0,300), true)}</section>`;
 }
-function homeBillingPanel(){
+function homeBillingPanel(){ return homeDuePanel(); }
+function homeBillingPanel0(){
   const all = billingItems(); const isDue = (b) => b.state==="due"||b.state==="invoiced";
   const dueNow = all.filter(b=>isDue(b) && b.src!=="legacy").sort((a,b)=>(a.due||"").localeCompare(b.due||""));
   const legacy = all.filter(b=>isDue(b) && b.src==="legacy");
@@ -2815,7 +2816,7 @@ function viewAllowed(v){
   const p = VIEW_PERM[v]; return !p || can(p);
 }
 const NAV_ALL = [["home","الرئيسية","home"],["cases","القضايا","cases"],["filing","رفع الدعوى","doc"],["crm","إدارة العملاء","people"],["clients","الموكلون","people"],["portal","متابعة الشركات","portal"],["review","استكمال البيانات","review"],["memos","المذكرات والمهام","memo"],["agenda","الأجندة","agenda"],["retainers","عقود الأتعاب","retainer"],["finance","الفوترة","money"],["kpi","مؤشرات الأداء","kpi"],["library","المكتبة القانونية","book"],["learn","التعلم من المحامي","learn"],["staff","الموظفون والصلاحيات","shield"],["sync","المزامنة والإضافة","sync"]];
-const navItems = () => NAV_ALL.filter(([k]) => k!=="filing" && viewAllowed(k));
+const navItems = () => NAV_ALL.filter(([k]) => k!=="filing" && k!=="finance" && viewAllowed(k));
 // controls hidden from members without the permission (the screens stay readable)
 const PERM_UI = [
   ["cases.edit", "#caseNew,#caseNew2,[data-editcase],#notesSave,form[data-rev] [type=submit]"],
@@ -8543,7 +8544,7 @@ function vCrm(){
   const qn = arNorm(fromHindi(q)); const list = all.filter(fx).filter(l => !qn || arNorm([l.name,l.request,l.phone,l.idNo,l.opponent].join(" ")).includes(qn));
   const inv = crmInvoiceDue();
   return header("إدارة العملاء", "العملاء المحتملون وعروض الأسعار — يكتب العرضَ الفريق، ويعتمده مالك المكتب", `<button class="btn primary" id="leadNew" ${S.canWrite?"":"disabled"}>+ عميل محتمل</button>`) + `
-  ${inv.length ? `<div class="notice warn" style="margin-bottom:12px"><b>فواتير مطلوب إصدارها:</b> ${inv.map(x=>`${esc(x.l.name)} — ${x.due.map(b=>`${esc(b.label)} ${sar(b.total)} ريال`).join("، ")}`).join(" · ")} <button class="btn sm" data-nav="finance">الفوترة</button></div>` : ""}
+  ${inv.length ? `<div class="notice warn" style="margin-bottom:12px"><b>مبالغ مستحقة:</b> ${inv.map(x=>`${esc(x.l.name)} — ${x.due.map(b=>`${esc(b.label)} ${sar(b.total)} ريال`).join("، ")}`).join(" · ")} <button class="btn sm" data-nav="home">الرئيسية ← مبالغ مستحقة</button></div>` : ""}
   <div class="toolbar"><label class="search">${icon("search")}<input id="crmQ" type="search" placeholder="الاسم، الطلب، الجوال، الهوية أو السجل…" value="${esc(UI.q||"")}" aria-label="بحث في العملاء المحتملين"></label></div>
   <div class="chips" style="margin-bottom:14px">${F.map(([k,l,f])=>`<button class="chip" data-crmf="${k}" aria-pressed="${UI.f===k}">${l} <span class="num muted">${all.filter(f).length}</span></button>`).join("")}</div>
   <div class="table-wrap">${list.length ? `<table><thead><tr><th>العميل</th><th>الطلب</th><th class="hide-sm">العرض</th><th>المتابعة</th><th class="hide-sm">الحالة</th></tr></thead><tbody>${list.map(l => { const lq = lastQuote(l); const st = LEAD_ST[l.status||"new"]; const qs = lq ? Q_ST[qState(lq)] : null;
@@ -9591,6 +9592,27 @@ async function draftPdf(){
     toast("حُفظ PDF في مستندات القضية"); }
   catch (e) { const m = e?.msg || "تعذّر تجهيز PDF: " + (e?.message || e?.code || ""); if (stEl) stEl.innerHTML = `<div class="notice err">${esc(m)}</div>`; }
 }
+
+// ---------- إشعارات استحقاق المبالغ بدل الفوترة (12/11): لا صفحة «الفوترة» ولا تسجيل فواتير؛ ما يستحق من الأتعاب (دفعات عقود القضايا
+// والعقود السنوية) يظهر إشعاراً في الرئيسية: مستحق الآن، ويستحق خلال 7 أيام. يُزال الإشعار بـ«تسجيل سداد». The fee schedules, the
+// payments and every record already kept stay as they are; only the billing pages and the «تسجيل فاتورة» action are gone.
+function homeDuePanel(){
+  if (!can("billing.view")) return "";
+  const all = billingItems().filter(b => b.src!=="legacy");
+  const due = all.filter(b => b.state==="due" || b.state==="invoiced").sort((a,b) => (a.due||"").localeCompare(b.due||""));
+  const soon = all.filter(b => b.state==="upcoming" && b.due && daysUntil(b.due) <= 7).sort((a,b) => (a.due||"").localeCompare(b.due||""));
+  if (!due.length && !soon.length) return "";
+  const sum = (arr) => arr.reduce((a,b) => a + (billAmt(b)||0), 0);
+  const row = (b) => `<div class="ev" style="grid-template-columns:auto minmax(0,1fr) auto;align-items:center"><span class="t num">${b.due?fmtD(b.due):"—"}${b.due?"<br>"+daysPill(b.due):""}</span>
+    <div style="min-width:0"><span class="what">${esc(b.client||"")} — ${b.total!=null?`<b class="num">${sar(b.left!=null&&b.paid?b.left:b.total)}</b> ريال`:"مبلغ يُحدد"}</span>
+      <div class="sub">${esc(b.label||"")} · <button class="btn ghost sm" style="padding:0" data-case="${esc(b.id)}" data-tab="${b.src==="case"?"fees":"overview"}">${esc(b.src==="contract" ? "عقد سنوي" : (b.caseNo || (b.title||"").slice(0,40)))}</button></div></div>
+    <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:end">${billActions(b)}</div></div>`;
+  return `<section class="panel" id="duePanel"><header><h2>مبالغ مستحقة</h2><span class="sub">إشعارات استحقاق الأتعاب؛ يختفي الإشعار حين يُسجَّل السداد</span></header>
+    ${due.length?`<p style="margin:0 0 6px"><b class="num" style="font-family:var(--f-display);font-size:1.3rem;color:var(--crit)">${sar(sum(due))}</b> <span class="muted">ريال مستحقة الآن (${due.length})</span></p>${due.slice(0,8).map(row).join("")}${due.length>8?`<details id="dueMore" style="margin-top:6px" ${S.dueOpen?"open":""}><summary class="sub" style="cursor:pointer">عرض الباقي (${due.length-8})</summary>${due.slice(8).map(row).join("")}</details>`:""}`:""}
+    ${soon.length?`<h3 class="sec" style="margin:10px 0 4px">تستحق خلال 7 أيام <span class="num muted">${soon.length}</span></h3>${soon.slice(0,6).map(row).join("")}`:""}
+  </section>`;
+}
+document.addEventListener("toggle", (e) => { if (e.target?.id === "dueMore") S.dueOpen = e.target.open; }, true);
 
 // ---------- events
 // the home page's third column exists on wide screens only: its panels move there, and back when the window narrows
