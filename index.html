@@ -1320,7 +1320,7 @@ function tabDrafts(c){
       : `<button class="btn primary" id="drRun" ${busy?"disabled":""}>${icon("spark")}اكتب المسودة</button>`}</div>
     <div id="drState" style="margin-top:10px">${busy?`<div class="thinking"><span class="dot"></span>${esc(busy)}</div>`:(ks.note?`<div class="${ks.noteLink?"notice":"sub"}">${esc(ks.note)}${ks.noteLink?` <a href="${esc(href(ks.noteLink))}" target="_blank" rel="noopener">فتح الملف</a>`:""}</div>`:"")}</div>
     ${!docMode?`<label class="f" style="margin-top:10px">المسودة (قابلة للتعديل — يتعلم الديوان من تعديلاتك عند الحفظ)<textarea class="inp" id="drOut" style="min-height:48vh">${esc(ks.out||"")}</textarea></label>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn" id="drCopy">${icon("copy")}نسخ</button><button class="btn" id="drSave" ${ro}>حفظ المسودة في الديوان</button><button class="btn" id="drWord">${icon("report")}تنزيل Word على ورق المكتب</button><button class="btn primary" id="drPdf" ${ro}>${icon("report")}PDF: حفظ في مستندات القضية</button><button class="btn" id="drWordSave" ${ro}>${icon("folder")}حفظ Word في مجلد القضية</button></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn" id="drCopy">${icon("copy")}نسخ</button><button class="btn" id="drSave" ${ro}>حفظ المسودة في الديوان</button><button class="btn" id="drWord">${icon("report")}تنزيل Word على ورق المكتب</button><button class="btn" id="drVerify" type="button">${icon("spark")}تحقق من المواد النظامية</button><button class="btn primary" id="drPdf" ${ro}>${icon("report")}PDF: حفظ في مستندات القضية</button><button class="btn" id="drWordSave" ${ro}>${icon("folder")}حفظ Word في مجلد القضية</button></div>
     ${ks.lib?.length?`<details style="margin-top:8px"><summary>مواد المكتبة التي قرأها الديوان لهذه المسودة (${ks.lib.length})</summary><ul class="small" style="margin:6px 0 0;padding-inline-start:18px">${ks.lib.map(x=>`<li>${esc(x.ref)}${x.cited?" — استُشهد بها":""}</li>`).join("")}</ul></details>`:""}
     <p class="sub" style="margin:8px 0 0">للتحقق من نصوص المواد غير الموجودة في المكتبة: <button class="btn ghost sm" id="drAsk" style="padding:0">نسخ قائمة المواد</button> ثم راجعها في موقع هيئة الخبراء أو أضف نصوصها إلى المكتبة.</p>`:""}
   </section>
@@ -1461,7 +1461,7 @@ function bindDrafts(cur){
   const dc=$("drCopy"); if (dc) dc.onclick=()=>{ const v=$("drOut").value; navigator.clipboard?.writeText(v).then(()=>toast("نُسخت المسودة"),()=>{ $("drOut").select(); toast("حدّد النص وانسخه"); }); };
   const dsv=$("drSave"); if (dsv) dsv.onclick=saveDraft;
   const dw=$("drWord"); if (dw) dw.onclick=()=>draftWord(false);
-  const dws=$("drWordSave"); if (dws) dws.onclick=()=>draftWord(true); const dpf=$("drPdf"); if (dpf) dpf.onclick=()=>draftPdf();
+  const dws=$("drWordSave"); if (dws) dws.onclick=()=>draftWord(true); const dpf=$("drPdf"); if (dpf) dpf.onclick=()=>draftPdf(); const dvf=$("drVerify"); if (dvf) dvf.onclick=()=>openLawVerify();
   const fd=$("feeDocDl"); if (fd) fd.onclick=()=>draftWord(false);
   const fs=$("feeDocSave"); if (fs) fs.onclick=()=>draftWord(true);
   const da=$("drAsk"); if (da) da.onclick=()=>{ const t = `أعد ${DRAFT_KINDS[st.kind].t} لقضية ${cur.caseNo||cur.title} في ديوان القضايا بمهارات المكتب وأسلوبه، وتحقق من كل مادة من أم القرى، وأخرجها Word على الورق الرسمي واحفظها في مجلد القضية.${(st.k[st.kind]?.ins||"").trim()?" توجيهي: "+st.k[st.kind].ins.trim():""}`; navigator.clipboard?.writeText(t).then(()=>toast("نُسخت قائمة المواد؛ راجعها في موقع هيئة الخبراء"),()=>toast(t)); };
@@ -7559,11 +7559,11 @@ const lgAccOptions = (sel) => lgSet().accounts.map(a=>`<option value="${esc(a.id
 const lgMethodOptions = (sel) => Object.entries(LG_METHODS).map(([k,l])=>`<option value="${k}" ${k===sel?"selected":""}>${l}</option>`).join("");
 // the pay drawer of «المستحقات» gets the receipt's method and account
 const lgDocBtn = (b) => b.inv && b.src!=="legacy" ? `<button class="btn sm ghost" data-lginv="${esc(b.src)}|${esc(b.id)}|${esc(b.key)}">فاتورة Word</button>` : "";
-function ledgerPayFields(){ return `<div class="row"><label class="f">طريقة الدفع<select class="inp" name="lgMethod">${lgMethodOptions("transfer")}</select></label><label class="f">إلى حساب<select class="inp" name="lgAcc">${lgAccOptions(lgSet().accounts.find(a=>a.kind==="bank")?.id)}</select></label></div><p class="sub" style="margin:0">يُنشأ سند قبض مرقّم بالمبلغ تلقائياً.</p>`; }
+function ledgerPayFields(){ return ""; return `<div class="row"><label class="f">طريقة الدفع<select class="inp" name="lgMethod">${lgMethodOptions("transfer")}</select></label><label class="f">إلى حساب<select class="inp" name="lgAcc">${lgAccOptions(lgSet().accounts.find(a=>a.kind==="bank")?.id)}</select></label></div><p class="sub" style="margin:0">يُنشأ سند قبض مرقّم بالمبلغ تلقائياً.</p>`; }
 async function lgWrite(coll, doc, action, caseId){ try { await S.db.doc(`${coll}/${doc.id}`).set(doc); await logAction(caseId||null, action); return true; } catch { toast("تعذّر الحفظ ولم يُحفظ التغيير — تحقق من الاتصال ثم أعد المحاولة"); return false; } }
 async function lgPatch(coll, id, patch, action, caseId){ try { await S.db.doc(`${coll}/${id}`).update(patch); await logAction(caseId||null, action); return true; } catch { toast("تعذّر الحفظ ولم يُحفظ التغيير — تحقق من الاتصال ثم أعد المحاولة"); return false; } }
 const lgId = (p) => p + Date.now().toString(36) + Math.random().toString(36).slice(2,5);
-async function ledgerAfterPay(b, patch, f){
+async function ledgerAfterPay(b, patch, f){ return;   // no receipt: the payment is kept on the fee item itself
   const amount = patch.paidAmount!=null ? +patch.paidAmount : b.total; if (!(amount > 0)) return;
   const r = {id:lgId("rc"), no:lgNextRc(), date:patch.paidAt || patch.diwanPaidAt || todayKey(), amount:r2(amount), method:f.lgMethod?.value || "transfer", account:f.lgAcc?.value || lgSet().accounts[0]?.id || "bank",
     client:b.client||"", clientKey:normName(b.client||""), caseId: b.src==="case" ? b.id : (b.caseId||null), engId: b.src==="contract" ? b.id : null, invNo: patch.invoiceNo || b.inv || null, label:b.label||null,
@@ -9710,6 +9710,37 @@ function bindOfficeTools(){
     catch (e) { say("تعذّر تجهيز الملف المضغوط: " + (e?.message || "")); }
     render(); });
 }
+
+// ---------- التحقق من المواد النظامية من مصادرها الرسمية (13/11): زر في «الصياغة» يستخرج من المسودة الإحالات إلى المواد وحدها
+// («المادة (…) من نظام …») ويطلب من المساعد أن يبحث عن نص كل مادة في المواقع الرسمية (هيئة الخبراء، أم القرى، وزارة العدل) ويعرض
+// النص والرابط. Nothing of the case goes out: only the article citations. It runs when the lawyer asks, not on every draft — a run costs
+// noticeably more than a draft.
+function lawCitations(text){
+  const out = new Map(); const rx = /الماد(?:ة|تين|تان)\s*\(?\s*([^\s،.؛:()]{1,25}(?:\s+(?:و|بعد)\s*\S{1,15}){0,3})\s*\)?(?:\s+\S+){0,2}?\s+من\s+((?:نظام|اللائحة|لائحة|النظام)\s+[^،.؛:\n()]{3,70})/g;
+  // the law's name ends at the first word that is not part of a name (so nothing of the case's own sentence rides along), six words at most
+  const STOP = new Set(["على","في","أن","بأن","أنه","بأنه","التي","الذي","الصادر","الصادرة","حيث","ما","إذ","إذا","لا","قد","هو","هي","تنص","نصت","ينص","والتي","فيما","من","عن","مع","وذلك","كما","مرة","و"]);
+  for (const m of String(text||"").matchAll(rx)) { const words = m[2].replace(/\s+/g, " ").trim().split(" "); const keep = [];
+    for (const w of words) { if (keep.length >= 1 && (STOP.has(w) || keep.length >= 6)) break; keep.push(w); }
+    out.set(`المادة (${m[1].trim()}) من ${keep.join(" ")}`.replace(/\s+/g, " "), 1); }
+  return [...out.keys()].slice(0, 12);
+}
+async function openLawVerify(){
+  const c = S.cases.get(S.caseId); const st = draftState(c.id); const ks = st.k[st.kind]; readDraftInputs(ks);
+  const cites = lawCitations(ks.out); if (!cites.length) { toast("لا إحالات إلى مواد نظامية في المسودة بصيغة «المادة (…) من نظام …»"); return; }
+  if (!S.sample) { toast("المساعد غير متاح في هذا العرض"); return; }
+  const dr = openDrawer(`<header><div><span class="lbl">التحقق من المواد النظامية</span><h2 style="margin-top:4px">${cites.length} ${cites.length===1?"إحالة":"إحالات"} في المسودة</h2><div class="sub">يُرسل للمساعد نص الإحالات فقط، بلا أي شيء من القضية؛ ويبحث في المواقع الرسمية وحدها. يأخذ دقيقة إلى دقيقتين، وتكلفته أعلى من صياغة مذكرة.</div></div><button class="btn sm" data-close>إغلاق</button></header>
+    <div class="body"><ul class="small" style="margin:0 0 10px;padding-inline-start:18px">${cites.map(x => `<li>${esc(x)}</li>`).join("")}</ul>
+      <div style="display:flex;gap:8px"><button class="btn primary" id="lvGo">${icon("spark")}ابدأ التحقق</button></div>
+      <div id="lvOut" style="margin-top:12px;white-space:pre-wrap;line-height:1.9"></div></div>`);
+  dr.querySelector("#lvGo").onclick = async (e) => { e.target.disabled = true; const out = dr.querySelector("#lvOut"); out.innerHTML = `<span class="thinking"><span class="dot"></span>يبحث في المواقع الرسمية…</span>`;
+    const prompt = `تحقق من نص كل مادة نظامية سعودية في القائمة الآتية من مصدرها الرسمي: موقع هيئة الخبراء بمجلس الوزراء، أو جريدة أم القرى، أو وزارة العدل. لا تعتمد على ذاكرتك إطلاقاً.\n\nالقائمة:\n${cites.map((x, i) => `${i+1}. ${x}`).join("\n")}\n\nلكل مادة اكتب بالعربية فقط، وبلا أي مقدمة أو جملة تمهيدية:\n«رقم البند. الإحالة» ثم سطر «النص الرسمي:» وفيه نص المادة حرفياً كما وجدته، ثم سطر «المصدر:» وفيه اسم الموقع ورابط الصفحة، ثم سطر «الحالة:» وفيه واحدة من: «موثّقة من صفحة النظام»، «موثّقة من مقتطف بحث فقط — راجع الرابط»، «لم أجد نصها في المصادر الرسمية».\nإن لم تجد النص فقل ذلك صراحة ولا تكتب نصاً من عندك. لا تكتب أي كلمة بغير العربية سوى الروابط.`;
+    try { const ctl = new AbortController(); S.drawerCtl = ctl; const r = await S.sample(prompt, {modelTier:"complex", web:true, signal:ctl.signal, onText: ({text}) => { out.textContent = lvClean(text); }});
+      out.textContent = lvClean(r.text) || "لم يرجع المساعد نتيجة."; await logAction(c.id, `تحقق من ${cites.length} مادة نظامية من المصادر الرسمية`); }
+    catch (x) { out.innerHTML = `<span style="color:var(--crit)">${esc(x?.code==="cancelled" ? "أُلغي." : aiErr(x))}</span>`; }
+    e.target.disabled = false; e.target.textContent = "إعادة التحقق"; };
+}
+// the model sometimes thinks aloud in English before it searches: those lines are not part of the answer
+const lvClean = (t) => String(t||"").split("\n").filter(l => !/^[\sA-Za-z0-9.,'’:;!?()\-]+$/.test(l) || !/[A-Za-z]{3}/.test(l)).join("\n").replace(/^[A-Za-z][A-Za-z\s.,'’]+(?=[\u0600-\u06FF*])/, "").trim();
 
 // ---------- events
 // the home page's third column exists on wide screens only: its panels move there, and back when the window narrows

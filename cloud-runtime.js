@@ -174,7 +174,7 @@
     const tier = ["quick", "default", "complex"].includes(opts.modelTier) ? opts.modelTier : "default";
     // the office's fixed instructions (its style, rules and verified law table) go apart, so the server can cache them
     let stable = ""; try { const L = typeof lawyerPrompt === "function" ? lawyerPrompt() : ""; if (L && typeof input === "string" && input.startsWith(L)) { stable = L; input = input.slice(L.length).replace(/^\s+/, ""); } } catch {}
-    let r; try { r = await realFetch(FN("sample"), {method: "POST", signal: opts.signal, headers: authHeaders(), body: JSON.stringify(stable ? {input, tier, stable} : {input, tier})}); }
+    let r; try { r = await realFetch(FN("sample"), {method: "POST", signal: opts.signal, headers: authHeaders(), body: JSON.stringify({input, tier, ...(stable ? {stable} : {}), ...(opts.web ? {web: true} : {})})}); }
     catch (e) { if (e && e.name === "AbortError") throw {code: "cancelled", message: "cancelled"}; throw {code: "network", message: String(e && e.message || e)}; }
     if (!r.ok) { let b = {}; try { b = await r.json(); } catch {} throw {code: b.code || (r.status === 403 ? "not_granted" : r.status === 429 ? "rate_limited" : "unavailable"), message: b.message || ("HTTP " + r.status)}; }
     const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = "", text = "", stop = null, ended = false; const use = {in: 0, out: 0, cached: 0};
