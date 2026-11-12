@@ -4064,6 +4064,9 @@ async function exportBackup(onStep){
   if (S.assets?.list) { onStep?.("الملفات المرفوعة…");
     try { const {assets} = await S.assets.list(); for (const a of assets||[]) { try { const r = await fetch("/_blob/"+a.id); if (!r.ok) continue; const ext = /pdf/.test(a.contentType||"") ? "pdf" : /jpeg/.test(a.contentType||"") ? "jpg" : /png/.test(a.contentType||"") ? "png" : "txt";
       z.file(`${root}/الملفات المرفوعة/${a.id}.${ext}`, new Uint8Array(await r.arrayBuffer())); files++; } catch {} } } catch {} }
+  try { const F = window.diwanCloudFiles; if (F?.manifest) { onStep?.("قائمة ملفات المكتب…"); const m = await F.manifest(); z.file(`${root}/ملفات المكتب/قائمة الملفات.json`, JSON.stringify(m, null, 1));
+      z.file(`${root}/ملفات المكتب/اقرأني.txt`, `ملفات المكتب (مستندات القضايا): ${m.length} ملفاً. هذه النسخة لا تحمل الملفات نفسها لحجمها، بل قائمتها (المسار والحجم وبصمة كل ملف) ليُعرف ما ينقص عند الحاجة.
+للاسترجاع: من الديوان ← المعرفة والإعدادات ← النسخة الاحتياطية ← «فحص نسخة / استرجاع منها».`); } } catch {}
   z.file(`${root}/اقرأني أولاً.txt`, `ديوان القضايا — نسخة احتياطية ${day}\n\nفيها كل سجلات قاعدة البيانات (${docs} سجلاً) بصيغة JSON في مجلد «قاعدة البيانات»، كل سجل في ملف باسم معرّفه داخل مجلد مجموعته، والملفات المرفوعة إلى الديوان (${files}).\nللاستعادة: يُسلَّم هذا الملف لمطوّر الديوان ليعيده إلى القاعدة بأداة الاستيراد.\nالملف يحوي بيانات موكلين سرية: احفظه في مكان آمن.\n`);
   onStep?.("يضغط الملف…");
   const blob = await z.generateAsync({type:"blob", compression:"DEFLATE", compressionOptions:{level:6}});
@@ -4080,10 +4083,11 @@ function backupPanel(){
   return `<section class="panel"><header><h2>النسخة الاحتياطية</h2>${b?.at?`<span class="sub">آخر نسخة ${esc(fmtDate.format(D(b.at)))}</span>`:""}</header>
     <p class="sub" style="margin:0 0 8px">ملف واحد فيه كل قضايا المكتب وجلساتها وضبوطها، والأتعاب، وما تعلّمه الديوان، والمكتبة القانونية، والملفات المرفوعة. احفظه في مكان آمن؛ ويُستعاد منه الديوان كاملاً عند الحاجة.</p>
     ${age!=null && age > 7 ? `<div class="notice warn" style="margin-bottom:8px">مضى على آخر نسخة ${arN(age,"يوم واحد","يومان","أيام","يوماً")}.</div>` : !b ? `<div class="notice warn" style="margin-bottom:8px">لم تُحفظ نسخة احتياطية من داخل الديوان بعد.</div>` : ""}
-    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="btn primary" id="bkGo">${icon("folder")}تنزيل نسخة احتياطية كاملة</button><span class="sub" id="bkState">${esc(S.bkState||"")}</span></div></section>`;
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="btn primary" id="bkGo">${icon("folder")}تنزيل نسخة احتياطية كاملة</button><label class="btn" style="cursor:pointer">فحص نسخة / استرجاع منها<input type="file" id="bkFile" accept=".zip" hidden></label><span class="sub" id="bkState">${esc(S.bkState||"")}</span></div>
+    <p class="sub" style="margin:8px 0 0">«فحص نسخة» يقارن ملف النسخة بما في الديوان الآن دون أن يغيّر شيئاً، ثم تسترجع منه ما تختار. <b>ملفات المكتب</b> (مستندات القضايا في «ملفات المكتب») لا تدخل في هذا الملف لحجمها؛ في النسخة قائمة بها فقط. وقاعدة البيانات نفسها تُنسخ تلقائياً كل يوم لدى المزوّد وتُحفظ أسبوعاً.</p>${backupCheckHtml()}</section>`;
 }
 function bindBackup(){
-  const b = $("bkGo"); if (!b) return;
+  bindBackupCheck(); const b = $("bkGo"); if (!b) return;
   // the panel re-renders when office/backup is written, so the status line is looked up fresh each time (v34)
   const say = (m) => { S.bkState = m; const st = $("bkState"); if (st) st.textContent = m; };
   b.onclick = async () => { b.disabled = true;
@@ -6554,14 +6558,15 @@ async function openReport(c, s){
   ta.oninput = updWa; ph.oninput = updWa; updWa();
   const was = s?.id && (c.sessInformed||{})[s.id]; if (was) st.insertAdjacentHTML("afterbegin", `<span class="pill ok">أُبلغ الموكل · ${esc(COMM_CH[was.channel]||"")} · ${esc(fmtD(was.at.slice(0,10)))}</span> `);
   const markS = async (ch) => { if (!s?.id || !S.canWrite || !ta.value.trim() || /…$/.test(ta.value.trim())) return false; const ok = await crMarkSession(c, s, ch, ta.value); if (ok) { c = S.cases.get(c.id) || c; toast("سُجّل إبلاغ الموكل بتقرير الجلسة"); } return ok; };
-  wa.addEventListener("click", () => { markS("whatsapp"); });
+  const askS = (ch) => { if (!s?.id || !S.canWrite || !ta.value.trim() || /…$/.test(ta.value.trim())) return; crAskSent(dr.querySelector(".body"), ch==="letter" ? "خطاب / PDF" : (COMM_CH[ch]||ch), async () => { if (await markS(ch)) dr.querySelector(".cr-ask")?.remove(); }); };
+  wa.addEventListener("click", () => { askS("whatsapp"); });
   dr.querySelector("#repPdf").onclick = async (e) => { if (!ta.value.trim() || /…$/.test(ta.value.trim())) { toast("اكتب التقرير أولاً (أو اضغط «صياغة التقرير»)"); return; } e.target.disabled = true;
-    try { st.innerHTML = `<span class="thinking"><span class="dot"></span>يجهّز PDF على ورق المكتب ويحفظه في مستندات القضية…</span>`; const bytes = await pdfFromText(ta.value); const f = await pdfSaveToCase(c, bytes, fileName());
+    try { st.innerHTML = `<span class="thinking"><span class="dot"></span>يجهّز PDF على ورق المكتب ويحفظه في مستندات القضية…</span>`; const bytes = await pdfFromText(ta.value); const f = await pdfSaveToCase(c, bytes, fileName(), ta.value);
       await saveRep({file:{name:f.name, webUrl:f.webUrl, uri:f.uri}, pdf:true}); const how = await pdfShare(bytes, f.name, `تقرير جلسة — ${c.caseNo || c.title}`);
       st.innerHTML = `حُفظ «${esc(f.name)}» في مستندات القضية${how==="shared"?" وأُرسل":how==="downloaded"?"، ونُزّل على جهازك لإرساله":""}.${f.webUrl?` <a href="${esc(href(f.webUrl))}" target="_blank" rel="noopener">فتح</a>`:""}`;
-      if (how !== "cancelled") await markS("letter"); }
+      if (how !== "cancelled") askS("letter"); }
     catch (err) { st.innerHTML = `<span style="color:var(--crit)">${esc(err?.msg || "تعذّر تجهيز PDF.")}</span>`; } e.target.disabled = false; };
-  dr.querySelector("#repMail").onclick = () => { location.href = `mailto:?subject=${encodeURIComponent(`تقرير جلسة — ${c.caseNo || c.title}`)}&body=${encodeURIComponent(ta.value)}`; markS("email"); };
+  dr.querySelector("#repMail").onclick = () => { location.href = `mailto:?subject=${encodeURIComponent(`تقرير جلسة — ${c.caseNo || c.title}`)}&body=${encodeURIComponent(ta.value)}`; askS("email"); };
   dr.querySelector("#repCall").onclick = async () => { if (!ta.value.trim() || /…$/.test(ta.value.trim())) { toast("اكتب التقرير أولاً (أو اضغط «صياغة التقرير»)"); return; } if (await markS("phone")) closeDrawer(); };
   const fileName = () => safeName(`تقرير جلسة ${c.caseNo||c.title.slice(0,30)} ${rGreg(s?.start ? D(s.start) : new Date()).replace(/\//g,"-")}`) + ".docx";
   const saveRep = async (extra={}) => { const patch = { reports: [...(c.reports||[]), {sessionId:s?.id||null, text:ta.value, at:new Date().toISOString(), by:S.uid||null, style:S.repStyle, ...extra}].slice(-30) };
@@ -6569,7 +6574,7 @@ async function openReport(c, s){
     const ok = await patchCase(c, patch, extra.file ? `حفظ تقرير جلسة للموكل (Word في مجلد القضية)` : "حفظ تقرير جلسة للموكل"); if (ok) c = S.cases.get(c.id) || c; return ok; };
   dr.querySelector("#repCopy").onclick = () => { navigator.clipboard?.writeText(ta.value).then(()=>toast("نُسخ التقرير"),()=>{ ta.select(); toast("حدّد النص وانسخه"); }); };
   dr.querySelector("#repSave").onclick = async () => { if (await saveRep()) toast("حُفظ التقرير في ملف القضية"); };
-  dr.querySelector("#repWord").onclick = async (e) => { e.target.disabled = true; try { st.innerHTML = `<span class="thinking"><span class="dot"></span>يجهّز ملف Word على ورق المكتب…</span>`; const bytes = await buildLetterheadDocx(ta.value); await downloadBytes(bytes, fileName()); st.textContent = `جُهّز الملف «${fileName()}».`; markS("letter"); } catch(err){ st.innerHTML = `<span style="color:var(--crit)">${esc(err?.msg||"تعذّر تجهيز ملف Word.")}</span>`; } e.target.disabled = false; };
+  dr.querySelector("#repWord").onclick = async (e) => { e.target.disabled = true; try { st.innerHTML = `<span class="thinking"><span class="dot"></span>يجهّز ملف Word على ورق المكتب…</span>`; const bytes = await buildLetterheadDocx(ta.value); await downloadBytes(bytes, fileName()); st.textContent = `جُهّز الملف «${fileName()}».`; askS("letter"); } catch(err){ st.innerHTML = `<span style="color:var(--crit)">${esc(err?.msg||"تعذّر تجهيز ملف Word.")}</span>`; } e.target.disabled = false; };
   const ws = dr.querySelector("#repWordSave"); if (ws) ws.onclick = async (e) => { e.target.disabled = true; try { st.innerHTML = `<span class="thinking"><span class="dot"></span>يجهّز الملف ويحفظه في مجلد القضية…</span>`; const bytes = await buildLetterheadDocx(ta.value); const f = await saveDocxToCase(c, bytes, fileName()); await saveRep({file:{name:f.name, webUrl:f.webUrl, uri:f.uri}}); st.innerHTML = `حُفظ «${esc(f.name)}» في مجلد القضية في ملفات المكتب.${f.webUrl?` <a href="${esc(href(f.webUrl))}" target="_blank" rel="noopener">فتح الملف</a>`:""}`; toast("حُفظ في مجلد القضية"); } catch(err){ st.innerHTML = `<span style="color:var(--crit)">${esc(err?.msg||"تعذّر الحفظ في مجلد القضية.")}</span>`; } e.target.disabled = false; };
   dr.querySelectorAll("[data-rstyle]").forEach(b=>b.onclick=()=>{ dr.querySelectorAll("[data-rstyle]").forEach(x=>x.setAttribute("aria-pressed", String(x===b))); S.repStyle = b.dataset.rstyle; if (!ta.value.trim() || /…$/.test(ta.value.trim())) { ta.value = S.repStyle==="formal" ? reportFrame(c, reportOpening(c, s)+" …") : ""; updWa(); } });
   dr.querySelector("#repGen").onclick = async (e) => {
@@ -9393,6 +9398,14 @@ async function crMark(type, id, channel, text){
     await logAction(c.id, `أُبلغ الموكل (${COMM_CH[channel]||channel}): ${what}`); return true; }
   catch { toast("تعذّر تسجيل الإبلاغ"); return false; }
 }
+// opening WhatsApp or the mail, or downloading the file, is not sending: the client is marked informed only when the lawyer says it went
+function crAskSent(host, chName, onYes){
+  host.querySelector(".cr-ask")?.remove();
+  host.insertAdjacentHTML("beforeend", `<div class="notice cr-ask" style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span>هل أُرسل التقرير للموكل (${esc(chName)})؟</span><button class="btn sm primary" type="button" data-crsent="1">نعم، أُرسل — سجّل الإبلاغ</button><button class="btn sm ghost" type="button" data-crsent="0">لم يُرسل بعد</button></div>`);
+  const box = host.querySelector(".cr-ask"); box.scrollIntoView({block:"nearest"});
+  box.querySelector('[data-crsent="1"]').onclick = async (e) => { e.target.disabled = true; await onYes(); };
+  box.querySelector('[data-crsent="0"]').onclick = () => { box.remove(); toast("لم يُسجَّل الإبلاغ؛ يبقى في «تقارير للموكلين مستحقة»"); };
+}
 function openClientReport(type, id){
   const text = crText(type, id); if (!text) return;
   const c = type==="memo" ? S.cases.get((S.memos||[]).find(x => x.id===id)?.caseId) : S.cases.get(id); const ph = normPhone(c?.clientPhone);
@@ -9413,12 +9426,15 @@ function openClientReport(type, id){
       window.open(`https://wa.me/${p}?text=${encodeURIComponent(crMsg(t))}`, "_blank", "noopener");
       if (!ph && c && S.canWrite) patchCase(c, {clientPhone:dr.querySelector("#crPhone").value.trim()}, "أُضيف جوال الموكل من إبلاغه").catch(() => {}); }
     else if (ch==="email") { location.href = `mailto:?subject=${encodeURIComponent(`${what} — ${c?.caseNo || c?.title || ""}`)}&body=${encodeURIComponent(crMsg(t))}`; }
-    else if (ch==="pdf") { b.disabled = true; try { const bytes = await pdfFromText(t); const f = await pdfSaveToCase(c, bytes, safeName(`تقرير للموكل - ${what} - ${c?.caseNo || c?.client || ""}`) + ".pdf");
+    else if (ch==="pdf") { b.disabled = true; try { const bytes = await pdfFromText(t); const f = await pdfSaveToCase(c, bytes, safeName(`تقرير للموكل - ${what} - ${c?.caseNo || c?.client || ""}`) + ".pdf", t);
         const how = await pdfShare(bytes, f.name, what); b.disabled = false; if (how === "cancelled") { toast("حُفظ PDF في مستندات القضية؛ لم يُرسل بعد"); return; }
-        if (await crMark(type, id, "letter", t)) { closeDrawer(); render(); toast(how==="shared" ? "حُفظ PDF في القضية وأُرسل" : "حُفظ PDF في القضية ونُزّل لإرساله"); } return; }
+        toast(how==="shared" ? "حُفظ PDF في مستندات القضية" : "حُفظ PDF في القضية ونُزّل على جهازك لإرساله");
+        crAskSent(dr.querySelector(".body"), "ملف PDF", async () => { if (await crMark(type, id, "letter", t)) { closeDrawer(); render(); toast("سُجّل إبلاغ الموكل"); } }); return; }
       catch (x) { toast(x?.msg || "تعذّر تجهيز PDF"); b.disabled = false; return; } }
     else if (ch==="letter") { b.disabled = true; try { await downloadBytes(await buildLetterheadDocx(t), safeName(`تقرير للموكل - ${what} - ${c?.caseNo || c?.client || ""}`) + ".docx"); } catch (x) { toast(x?.msg || "تعذّر تجهيز الخطاب"); b.disabled = false; return; } b.disabled = false; }
-    if (await crMark(type, id, ch, t)) { closeDrawer(); render(); toast("سُجّل إبلاغ الموكل"); } });
+    const done = async () => { if (await crMark(type, id, ch, t)) { closeDrawer(); render(); toast("سُجّل إبلاغ الموكل"); } };
+    if (ch==="phone") return done();
+    crAskSent(dr.querySelector(".body"), COMM_CH[ch] || ch, done); });
 }
 function reportDuePanel(){
   if (!can("cases.edit")) return ""; const L = crItems(); if (!L.length) return "";
@@ -9566,11 +9582,12 @@ async function pdfShare(bytes, name, title){
   const a = document.createElement("a"); a.href = URL.createObjectURL(file); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60000); return "downloaded";
 }
 // the PDF goes to the case's folder in the office files (and its documents list) before it goes anywhere else
-async function pdfSaveToCase(c, bytes, name){
+async function pdfSaveToCase(c, bytes, name, text){
   name = name.replace(/\.docx$/i, "").replace(/(\.pdf)?$/i, ".pdf");
   const F = typeof cloudFiles === "function" ? cloudFiles() : null; if (!F) return saveDocxToCase(c, bytes, name);
   const folder = await cloudCaseFolder(S.cases.get(c.id) || c);   // the case folder is made if it has none, as an upload does
-  const r = await F.uploadFile(folder, new Blob([bytes], {type:"application/pdf"}), name, {conflict:"rename", bytes});
+  const r = await F.uploadFile(folder, new Blob([bytes], {type:"application/pdf"}), name, {conflict:"rename", bytes, extract: !text});
+  if (text && F.setText) await F.setText(r.uri, text).catch(() => {});
   const f = {name:r.name, uri:r.uri, size:r.size, webUrl:r.webUrl, path:r.path, modified:new Date().toISOString(), kind:docKind(r.name), src:"diwan"};
   const cur = S.cases.get(c.id) || c; await saveDocs(cur, {...(cur.documents||{}), files:[f, ...(cur.documents?.files||[]).filter(x => x.uri!==f.uri)].slice(0, 300)}, `حفظ «${f.name}» في مستندات القضية`);
   return f;
@@ -9582,7 +9599,7 @@ async function draftPdf(){
   const text = (ks.out||"").trim(); if (!text) { toast("لا توجد مسودة بعد"); return; }
   try { if (stEl) stEl.innerHTML = `<div class="thinking"><span class="dot"></span>يجهّز PDF على ورق المكتب ويحفظه في مجلد القضية…</div>`;
     const bytes = await pdfFromText(text, {objection: kind==="objection" && skillOn("jadwal"), route: ks.route});
-    const f = await pdfSaveToCase(c, bytes, draftFileName(c, kind, ks).replace(/\.docx$/i, ".pdf"));
+    const f = await pdfSaveToCase(c, bytes, draftFileName(c, kind, ks).replace(/\.docx$/i, ".pdf"), text);
     const rec = {kind, route:kind==="objection"?ks.route:null, text: ks.out, applied: ks.applied||appliedNames(kind), at:new Date().toISOString(), by:S.uid||null, file:{name:f.name, webUrl:f.webUrl, uri:f.uri}, pdf:true};
     await saveDraftDoc(S.cases.get(c.id), rec, `حفظ ${DRAFT_KINDS[kind].t} (PDF) في مجلد القضية`);
     if (ks.gen) { recordEdit(c, kind, ks.gen, ks.out); ks.gen = ks.out; }
@@ -9613,6 +9630,49 @@ function homeDuePanel(){
   </section>`;
 }
 document.addEventListener("toggle", (e) => { if (e.target?.id === "dueMore") S.dueOpen = e.target.open; }, true);
+
+// ---------- فحص النسخة الاحتياطية واسترجاعها (12/11): المالك يختار ملف النسخة (zip) فيقارنه الديوان بما في القاعدة الآن — مطابق، مختلف، ناقص
+// الآن — دون أن يكتب شيئاً؛ ثم يسترجع السجلات الناقصة كلها، أو سجلاً بعينه، بتأكيد. Nothing is ever overwritten in bulk.
+const bkStable = (v) => JSON.stringify(v, (k, x) => x && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.keys(x).sort().map(n => [n, x[n]])) : x);
+async function backupRead(file, onStep){
+  const JSZip = await needZip(); const z = await JSZip.loadAsync(await file.arrayBuffer()); const recs = [];
+  for (const [name, f] of Object.entries(z.files)) { if (f.dir) continue; const m = /\/قاعدة البيانات\/(.+)\/([^/]+)\.json$/.exec(name.normalize("NFC")); if (!m) continue; recs.push({coll:m[1], id:m[2], f}); }
+  if (!recs.length) throw {msg:"ليس ملف نسخة احتياطية من الديوان (لا مجلد «قاعدة البيانات» فيه)."};
+  const colls = [...new Set(recs.map(r => r.coll))]; const now = new Map(); let i = 0;
+  for (const p of colls) { onStep?.(`يقرأ القاعدة الحالية (${++i} من ${colls.length})…`); try { const q = await S.db.collection(p).get(); for (const d of q.docs) now.set(p + "/" + d.id, d.data()); } catch {} }
+  const out = {total:recs.length, same:0, diff:[], missing:[], data:new Map(), name:file.name, colls:colls.length};
+  for (const r of recs) { const path = r.coll + "/" + r.id; let data; try { data = JSON.parse(await r.f.async("string")); } catch { continue; }
+    if (!now.has(path)) { out.missing.push(path); out.data.set(path, data); }
+    else if (bkStable(now.get(path)) === bkStable(data)) out.same++;
+    else { out.diff.push(path); out.data.set(path, data); } }
+  const inBackup = new Set(recs.map(r => r.coll + "/" + r.id)); out.newer = [...now.keys()].filter(p => !inBackup.has(p)).length;
+  return out;
+}
+function backupCheckHtml(){
+  const r = S.bkCheck; if (!r) return "";
+  const label = (p) => { const d = r.data.get(p) || {}; return esc(p) + (d.title || d.client || d.name ? ` — ${esc(String(d.title || d.client || d.name).slice(0, 60))}` : ""); };
+  return `<div class="notice" style="margin-top:10px"><b>نتيجة فحص «${esc(r.name)}»:</b> فيها ${fmtMoney.format(r.total)} سجل — <b>${fmtMoney.format(r.same)}</b> مطابق لما في الديوان الآن، <b>${r.diff.length}</b> تغيّر بعد النسخة، <b>${r.missing.length}</b> في النسخة وليس في الديوان الآن، و${r.newer} سجل أُضيف بعد النسخة.${r.same + r.diff.length + r.missing.length === r.total ? " الملف سليم ويُقرأ كاملاً." : ""}</div>
+    ${r.missing.length ? `<div style="margin-top:8px"><b>سجلات في النسخة وليست في الديوان الآن (${r.missing.length}):</b><div class="sub">${r.missing.slice(0, 12).map(label).join("<br>")}${r.missing.length > 12 ? `<br>و${r.missing.length - 12} غيرها` : ""}</div>
+      <button class="btn sm" type="button" id="bkRestoreMissing" style="margin-top:6px">استرجاع الناقصة كلها (${r.missing.length})</button></div>` : ""}
+    ${r.diff.length ? `<details style="margin-top:8px"><summary>سجلات تغيّرت بعد النسخة (${r.diff.length}) — استرجاع سجل بعينه إلى حالته في النسخة</summary><div class="tasks" style="margin-top:6px">${r.diff.slice(0, 200).map(p => `<div class="ev" style="grid-template-columns:minmax(0,1fr) auto;align-items:center"><span class="sub">${label(p)}</span><button class="btn sm ghost" type="button" data-bkone="${esc(p)}">استرجاع هذا السجل</button></div>`).join("")}</div>
+      <p class="sub">أغلب هذه تغييرات عملك الطبيعية بعد تاريخ النسخة؛ استرجاع سجل يُرجعه كما كان يوم النسخة ويُلغي ما عُدّل فيه بعدها.</p></details>` : ""}`;
+}
+async function backupRestore(paths){
+  const r = S.bkCheck; let ok = 0, bad = 0;
+  for (const p of paths) { const d = r.data.get(p); if (!d) continue; try { await S.db.doc(p).set(d); ok++; } catch { bad++; } }
+  await logAction(null, `استرجاع من النسخة الاحتياطية «${r.name}»: ${ok} سجل${bad ? `، وتعذّر ${bad}` : ""}`);
+  return {ok, bad};
+}
+function bindBackupCheck(){
+  const inp = $("bkFile"); if (!inp) return; const say = (m) => { S.bkState = m; const st = $("bkState"); if (st) st.textContent = m; };
+  inp.onchange = async () => { const f = inp.files[0]; inp.value = ""; if (!f) return;
+    try { say("يفتح ملف النسخة…"); S.bkCheck = await backupRead(f, say); say("انتهى الفحص."); } catch (e) { S.bkCheck = null; say(e?.msg || "تعذّر قراءة ملف النسخة."); }
+    render(); };
+  const all = $("bkRestoreMissing"); if (all) all.onclick = async () => { if (!all.dataset.armed) { all.dataset.armed = "1"; all.textContent = "تأكيد: استرجاع الناقصة"; return; } all.disabled = true;
+    const x = await backupRestore(S.bkCheck.missing); toast(`استُرجع ${x.ok} سجل${x.bad ? `، وتعذّر ${x.bad}` : ""}`); S.bkCheck = null; say("استُرجعت السجلات الناقصة. افحص النسخة مرة أخرى للتأكد."); render(); };
+  document.querySelectorAll("[data-bkone]").forEach(b => b.onclick = async () => { if (!b.dataset.armed) { b.dataset.armed = "1"; b.textContent = "تأكيد: يرجع كما في النسخة"; return; } b.disabled = true;
+    const p = b.dataset.bkone; const x = await backupRestore([p]); if (x.ok) { S.bkCheck.diff = S.bkCheck.diff.filter(q => q !== p); S.bkCheck.same++; toast("استُرجع السجل"); render(); } else { toast("تعذّر الاسترجاع"); b.disabled = false; } });
+}
 
 // ---------- events
 // the home page's third column exists on wide screens only: its panels move there, and back when the window narrows
