@@ -1762,7 +1762,7 @@ function vSync(){
   <div class="grid" style="align-content:start">
   ${can("cases.edit") || can("billing.edit") ? `<section class="panel"><header><h2>إضافة إلى الديوان</h2></header><div style="display:flex;gap:8px;flex-wrap:wrap">${can("cases.edit")?`<button class="btn primary" id="caseNew2" ${S.canWrite?"":"disabled"}>+ قضية جديدة</button>`:""}${can("billing.edit")?`<button class="btn" id="ctNew2" ${S.canWrite?"":"disabled"}>+ عقد سنوي جديد</button>`:""}</div>
     <p class="sub" style="margin:8px 0 0">القضية الجديدة تُضاف${can("billing.view")?" مع عقد أتعابها بالمعاملة وتواريخ فوترتها":""}. وإن كانت مقيدة في ناجز فأدخل رقمها؛ يكمل التحديث من ناجز جلساتها وأحكامها.</p></section>` : ""}
-  ${odLinkPanel()}${xPanel()}${dupPanel()}${backupPanel()}${trashPanel()}</div></div>`;
+  ${odLinkPanel()}${xPanel()}${dupPanel()}${backupPanel()}${filesCopyPanel()}${aiUsePanel()}${trashPanel()}</div></div>`;
 }
 
 // ---------- money, dates and the billing model (contracts + case fees), independent of Odoo
@@ -4087,7 +4087,7 @@ function backupPanel(){
     <p class="sub" style="margin:8px 0 0">«فحص نسخة» يقارن ملف النسخة بما في الديوان الآن دون أن يغيّر شيئاً، ثم تسترجع منه ما تختار. <b>ملفات المكتب</b> (مستندات القضايا في «ملفات المكتب») لا تدخل في هذا الملف لحجمها؛ في النسخة قائمة بها فقط. وقاعدة البيانات نفسها تُنسخ تلقائياً كل يوم لدى المزوّد وتُحفظ أسبوعاً.</p>${backupCheckHtml()}</section>`;
 }
 function bindBackup(){
-  bindBackupCheck(); const b = $("bkGo"); if (!b) return;
+  bindBackupCheck(); bindOfficeTools(); const b = $("bkGo"); if (!b) return;
   // the panel re-renders when office/backup is written, so the status line is looked up fresh each time (v34)
   const say = (m) => { S.bkState = m; const st = $("bkState"); if (st) st.textContent = m; };
   b.onclick = async () => { b.disabled = true;
@@ -6552,7 +6552,7 @@ async function openReport(c, s){
     <label class="f">نص التقرير (راجعه وعدّله قبل الإرسال)<textarea class="inp" id="repText" style="min-height:44vh;line-height:1.9">${esc(prev?.text || (S.repStyle==="formal" ? reportFrame(c, reportOpening(c, s)+" …") : ""))}</textarea></label>
     <div id="repState" class="sub">${prev?`آخر نسخة محفوظة ${fmtDate.format(D(prev.at))}${prev.file?.webUrl?` · <a href="${esc(href(prev.file.webUrl))}" target="_blank" rel="noopener">ملف Word</a>`:""}`:"اضغط «صياغة التقرير» ليكتب المساعد ما جرى في الجلسة داخل نموذج المكتب؛ التاريخ والمخاطبة والخاتمة والتوقيع من النموذج نفسه."}</div>
     <label class="f">جوال الموكل (للإرسال عبر واتساب)<input class="inp num" id="repPhone" inputmode="tel" placeholder="05xxxxxxxx" value="${esc(c.clientPhone||"")}"></label></div>
-    <div class="foot"><button class="btn primary" id="repGen">${icon("spark")}${prev?"إعادة الصياغة":"صياغة التقرير"}</button><button class="btn primary" id="repPdf" type="button" ${S.canWrite?"":"disabled"}>${icon("report")}PDF: حفظ في القضية وإرسال</button><button class="btn" id="repWord">${icon("report")}Word على ورق المكتب</button>${S.mcp?`<button class="btn" id="repWordSave" ${S.canWrite?"":"disabled"}>Word إلى مجلد القضية</button>`:""}<button class="btn" id="repCopy">${icon("copy")}نسخ</button><a class="btn" id="repWa" target="_blank" rel="noopener" ${phone?"":"hidden"}>${icon("wa")}فتح في واتساب</a><button class="btn" id="repMail" type="button">بريد إلكتروني</button><button class="btn ghost" id="repCall" type="button" ${S.canWrite?"":"disabled"}>أبلغته باتصال</button><button class="btn" id="repSave" ${S.canWrite?"":"disabled"}>حفظ في الملف</button></div>`);
+    <div class="foot"><button class="btn primary" id="repGen">${icon("spark")}${prev?"إعادة الصياغة":"صياغة التقرير"}</button><button class="btn primary" id="repPdf" type="button" ${S.canWrite?"":"disabled"}>${icon("report")}PDF: حفظ في القضية وإرسال</button><details style="order:9;flex-basis:100%"><summary class="sub" style="cursor:pointer">خيارات أخرى: Word، نسخ النص</summary><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px"><button class="btn" id="repWord">${icon("report")}Word على ورق المكتب</button>${S.mcp?`<button class="btn" id="repWordSave" ${S.canWrite?"":"disabled"}>Word إلى مجلد القضية</button>`:""}<button class="btn" id="repCopy">${icon("copy")}نسخ</button></div></details><a class="btn" id="repWa" target="_blank" rel="noopener" ${phone?"":"hidden"}>${icon("wa")}فتح في واتساب</a><button class="btn" id="repMail" type="button">بريد إلكتروني</button><button class="btn ghost" id="repCall" type="button" ${S.canWrite?"":"disabled"}>أبلغته باتصال</button><button class="btn" id="repSave" ${S.canWrite?"":"disabled"}>حفظ في الملف</button></div>`);
   const ta = dr.querySelector("#repText"), ph = dr.querySelector("#repPhone"), wa = dr.querySelector("#repWa"), st = dr.querySelector("#repState");
   const updWa = () => { const p = normPhone(ph.value); wa.hidden = !p; if (p) wa.href = `https://web.whatsapp.com/send?phone=${p}&text=${encodeURIComponent(ta.value)}`; };
   ta.oninput = updWa; ph.oninput = updWa; updWa();
@@ -9672,6 +9672,43 @@ function bindBackupCheck(){
     const x = await backupRestore(S.bkCheck.missing); toast(`استُرجع ${x.ok} سجل${x.bad ? `، وتعذّر ${x.bad}` : ""}`); S.bkCheck = null; say("استُرجعت السجلات الناقصة. افحص النسخة مرة أخرى للتأكد."); render(); };
   document.querySelectorAll("[data-bkone]").forEach(b => b.onclick = async () => { if (!b.dataset.armed) { b.dataset.armed = "1"; b.textContent = "تأكيد: يرجع كما في النسخة"; return; } b.disabled = true;
     const p = b.dataset.bkone; const x = await backupRestore([p]); if (x.ok) { S.bkCheck.diff = S.bkCheck.diff.filter(q => q !== p); S.bkCheck.same++; toast("استُرجع السجل"); render(); } else { toast("تعذّر الاسترجاع"); b.disabled = false; } });
+}
+
+// ---------- أدوات المالك (12/11): استخدام المساعد (عدّ فقط)، ونسخ ملفات المكتب إلى جهازه مجلداً مجلداً
+const TIER_AR = {quick:"سريع", default:"متوسط", complex:"قوي"};
+function aiUsePanel(){
+  if (!(S.me?.owner || S.me?.legacy)) return ""; const U = S.aiUse;
+  const body = !U ? "" : U.error ? `<div class="notice err">${esc(U.error)}</div>` : !U.rows.length ? `<div class="empty">لا استخدام مسجَّل لهذا الشهر بعد.</div>` : (() => {
+    const tot = {}; const by = {}; for (const r of U.rows) for (const [t, x] of Object.entries(r.tiers || {})) { const a = tot[t] = tot[t] || {n:0, in:0, out:0}; a.n += x.n; a.in += x.in + (x.cached || 0); a.out += x.out; const b = by[r.uid || "—"] = by[r.uid || "—"] || {n:0, out:0}; b.n += x.n; b.out += x.out; }
+    return `<div class="table-wrap" style="border:0"><table><thead><tr><th>المستوى</th><th>عدد الطلبات</th><th>كلمات مُدخلة (رموز)</th><th>كلمات مُخرجة (رموز)</th></tr></thead><tbody>${Object.entries(tot).map(([t, a]) => `<tr><td>${esc(TIER_AR[t] || t)}</td><td class="num">${fmtMoney.format(a.n)}</td><td class="num">${fmtMoney.format(a.in)}</td><td class="num">${fmtMoney.format(a.out)}</td></tr>`).join("")}</tbody></table></div>
+      <p class="sub" style="margin:6px 0 0">بحسب العضو: ${Object.entries(by).map(([u, b]) => `${esc(u === "—" ? "غير معروف" : memberName(u))} ${fmtMoney.format(b.n)} طلباً`).join(" · ")}. التكلفة بالريال تظهر في لوحة مزوّد المساعد؛ هنا العدّ فقط، ولا يُحفظ أي نص.</p>`; })();
+  return `<section class="panel"><header><h2>استخدام المساعد</h2><span class="sub">هذا الشهر</span></header><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn" id="aiUseGo">${U ? "تحديث" : "عرض استخدام هذا الشهر"}</button></div>${body ? `<div style="margin-top:8px">${body}</div>` : ""}</section>`;
+}
+// the office files (case documents) are too large for the one backup file: here they come down folder by folder, as a zip each
+function filesCopyPanel(){
+  if (!(S.me?.owner || S.me?.legacy) || !window.diwanCloudFiles?.manifest) return ""; const M = S.filesCopy;
+  return `<section class="panel"><header><h2>نسخ ملفات المكتب</h2><span class="sub">مستندات القضايا — ليست في ملف النسخة الاحتياطية</span></header>
+    <p class="sub" style="margin:0 0 8px">تُنزَّل مجلداً مجلداً (ملف مضغوط لكل مجلد) لتحفظها خارج الديوان. نزّل ما تغيّر منذ آخر مرة؛ التاريخ بجانب كل مجلد.</p>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn" id="fcList">${M?.groups ? "تحديث القائمة" : "عرض المجلدات"}</button><span class="sub" id="fcState">${esc(S.fcState || "")}</span></div>
+    ${M?.groups ? `<div class="tasks" style="margin-top:8px;max-height:420px;overflow:auto">${M.groups.map((g, i) => `<div class="ev" style="grid-template-columns:minmax(0,1fr) auto;align-items:center"><div style="min-width:0"><span class="what">${esc(g.name)}</span><div class="sub">${fmtMoney.format(g.files.length)} ملف · ${fmtSize(g.size)}${M.done?.[g.name] ? ` · نُزّل ${esc(fmtD(M.done[g.name].slice(0, 10)))}` : ""}${g.size > 1500e6 ? " · كبير: قد لا يحتمله المتصفح دفعة واحدة" : ""}</div></div><button class="btn sm" data-fcdl="${i}">تنزيل</button></div>`).join("")}</div>` : ""}</section>`;
+}
+function bindOfficeTools(){
+  const g = $("aiUseGo"); if (g) g.onclick = async () => { g.disabled = true; try { const m = todayKey().slice(0, 7); const q = await S.db.collection("aiuse").get(); S.aiUse = {rows: q.docs.filter(d => d.id.startsWith(m)).map(d => d.data())}; } catch { S.aiUse = {error: "تعذّر قراءة سجل الاستخدام."}; } render(); };
+  const say = (m) => { S.fcState = m; const st = $("fcState"); if (st) st.textContent = m; };
+  const l = $("fcList"); if (l) l.onclick = async () => { l.disabled = true; say("يقرأ قائمة الملفات…");
+    try { const F = window.diwanCloudFiles; const rows = await F.manifest(); const by = new Map();
+      for (const r of rows) { const seg = r.path.split("/"); const name = seg.length > 3 ? seg.slice(0, 3).join("/") : seg.slice(0, Math.max(1, seg.length - 1)).join("/"); const x = by.get(name) || {name, files: [], size: 0}; x.files.push(r); x.size += r.size || 0; by.set(name, x); }
+      S.filesCopy = {groups: [...by.values()].sort((a, b) => a.name.localeCompare(b.name, "ar")), done: S.office?.filesCopy?.done || {}}; say(`${fmtMoney.format(rows.length)} ملف في ${by.size} مجلداً.`); }
+    catch { say("تعذّر قراءة القائمة."); } render(); };
+  document.querySelectorAll("[data-fcdl]").forEach(b => b.onclick = async () => { const g = S.filesCopy.groups[+b.dataset.fcdl]; if (!g) return; b.disabled = true; const F = window.diwanCloudFiles;
+    try { const JSZip = await needZip(); const z = new JSZip(); let n = 0, bad = 0;
+      for (const r of g.files) { say(`«${g.name.split("/").pop()}»: ${++n} من ${g.files.length}…`); try { const blob = await F.fetchPath(r.path); z.file(r.path, blob, {binary: true}); } catch { bad++; } }
+      say("يضغط الملف…"); const out = await z.generateAsync({type: "blob", compression: "STORE"});
+      const a = document.createElement("a"); a.href = URL.createObjectURL(out); a.download = safeName(`ملفات المكتب - ${g.name.split("/").slice(1).join(" - ") || g.name} - ${todayKey()}`) + ".zip"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 120000);
+      const done = {...(S.filesCopy.done || {}), [g.name]: new Date().toISOString()}; S.filesCopy.done = done; try { await S.db.doc("office/filesCopy").set({done}); } catch {}
+      say(`نُزّل «${g.name.split("/").pop()}»: ${g.files.length - bad} ملف${bad ? `، وتعذّر ${bad}` : ""}.`); }
+    catch (e) { say("تعذّر تجهيز الملف المضغوط: " + (e?.message || "")); }
+    render(); });
 }
 
 // ---------- events

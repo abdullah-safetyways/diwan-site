@@ -212,6 +212,7 @@
   // database leaves out what is internal); each with the cases it belongs to
   // a document the Diwan wrote itself (a PDF drawn as page images) keeps its text beside it, so the search finds it
   F.setText = async (uri, text) => { const id = idOf(uri); if (!id) return; await sb.from(T).update({text: String(text || "").slice(0, 400000), text_how: "plain"}).eq("id", id); };
+  F.fetchPath = async (path) => { const row = await rowByPath(path); if (!row) throw tErr("not_found"); return download(row); };
   // every file the office keeps (path, size, fingerprint): the backup lists them, it does not carry them
   F.manifest = async () => { const out = []; for (let off = 0; ; off += 1000) { const {data, error} = await sb.from(T).select("path,size,sha256,modified_at,case_id").eq("is_folder", false).is("deleted_at", null).order("path").range(off, off + 999); if (error) throw tErr(error); out.push(...(data || [])); if (!data || data.length < 1000) break; } return out; };
   F.caseFiles = async (caseIds) => {

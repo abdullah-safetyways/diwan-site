@@ -177,17 +177,25 @@
     let r; try { r = await realFetch(FN("sample"), {method: "POST", signal: opts.signal, headers: authHeaders(), body: JSON.stringify(stable ? {input, tier, stable} : {input, tier})}); }
     catch (e) { if (e && e.name === "AbortError") throw {code: "cancelled", message: "cancelled"}; throw {code: "network", message: String(e && e.message || e)}; }
     if (!r.ok) { let b = {}; try { b = await r.json(); } catch {} throw {code: b.code || (r.status === 403 ? "not_granted" : r.status === 429 ? "rate_limited" : "unavailable"), message: b.message || ("HTTP " + r.status)}; }
-    const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = "", text = "", stop = null, ended = false;
+    const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = "", text = "", stop = null, ended = false; const use = {in: 0, out: 0, cached: 0};
     try { for (;;) { const {value, done: fin} = await reader.read(); if (fin) break; buf += dec.decode(value, {stream: true}); let i;
         while ((i = buf.indexOf("\n\n")) >= 0) { const chunk = buf.slice(0, i); buf = buf.slice(i + 2); const line = chunk.split("\n").find(l => l.startsWith("data:")); if (!line) continue; let ev; try { ev = JSON.parse(line.slice(5).trim()); } catch { continue; }
           if (ev.type === "content_block_delta" && ev.delta?.type === "text_delta") { text += ev.delta.text; opts.onText && opts.onText({text, delta: ev.delta.text}); }
-          else if (ev.type === "message_delta" && ev.delta?.stop_reason) stop = ev.delta.stop_reason;
+          else if (ev.type === "message_start" && ev.message?.usage) { const u = ev.message.usage; use.in += (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0); use.cached += u.cache_read_input_tokens || 0; }
+          else if (ev.type === "message_delta") { if (ev.usage?.output_tokens) use.out = ev.usage.output_tokens; if (ev.delta?.stop_reason) stop = ev.delta.stop_reason; }
           else if (ev.type === "message_stop") ended = true;
           else if (ev.type === "error") throw {code: "unavailable", message: ev.error?.message || "stream error", text}; } } }
     catch (e) { if (e && e.name === "AbortError") throw {code: "cancelled", message: "cancelled", text}; throw e; }
     if (stop === "refusal") throw {code: "refused", message: "اعتذر النموذج عن هذا الطلب", text};
     if (!stop && !ended) throw {code: "unavailable", message: "انقطع رد المساعد قبل اكتماله؛ أعد المحاولة", text};
+    useNote(tier, use);
     return {text, truncated: stop === "max_tokens", modelTierApplied: tier};
+  }
+  // how much the assistant is used (12/11): counts only — calls and tokens per day, member and tier — never the text. One small record a day per member.
+  async function useNote(tier, u){
+    try { const day = new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10); const id = `${day}_${String(WHO?.uid || "x").slice(0, 8)}`; const ref = db.doc("aiuse/" + id);
+      const cur = await ref.get(); const d = cur.exists ? cur.data() : {day, uid: WHO?.uid || null, tiers: {}}; const t = d.tiers[tier] || {n: 0, in: 0, out: 0, cached: 0};
+      d.tiers = {...d.tiers, [tier]: {n: t.n + 1, in: t.in + u.in, out: t.out + u.out, cached: (t.cached || 0) + u.cached}}; await ref.set(d); } catch {}
   }
   const sample = Object.assign((input, opts) => sampleCore(input, opts), {
     json: async (input, opts) => { const r = await sampleCore(input, opts); const t = r.text.trim(); const tryParse = (s) => { try { return JSON.parse(s); } catch { return undefined; } };
