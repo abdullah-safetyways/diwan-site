@@ -408,6 +408,7 @@ tr[aria-selected="true"] td{background:var(--accent-soft)}
 .qa-rail h2{font-size:.78rem;font-weight:600;color:var(--ink-3);margin:0 4px 6px}
 .qa-rail:has(#qaRailBox:empty){display:none}
 body:has(#asPanel:not([hidden])) .ux-bar{display:none}
+#dcAcc{display:none !important}
 .fold-head{cursor:pointer;user-select:none}.fold-head h2::after{content:"‹";display:inline-block;margin-inline-start:8px;color:var(--ink-3);transition:transform .15s}
 section.panel[data-fold="open"] > .fold-head h2::after{transform:rotate(-90deg)}
 section.panel[data-fold="shut"] > :not(header){display:none !important}section.panel[data-fold="shut"]{padding-bottom:10px}section.panel[data-fold="shut"] > header{margin-bottom:0}
@@ -809,7 +810,7 @@ function vCase(){
   const ours = c.ourSide; const ro = S.canWrite ? "" : "disabled";
   const nArch = (c.tasks||[]).length+(can("billing.view") ? (c.invoices||[]).length : 0);
   const TP = {ai:"ai.use", drafts:"drafts.use", fees:"billing.view", chat:"ai.use", time:"time.edit"};
-  const T = [["overview","نظرة عامة"],["sessions",`الجلسات (${(c.sessions||[]).length})`],["memos",`المذكرات والمهام${memosOf(c).filter(memoOpen).length+tasksOf(c).filter(t=>!t.done).length?` (${memosOf(c).filter(memoOpen).length+tasksOf(c).filter(t=>!t.done).length})`:""}`],["comms",`التواصل${commsOf({caseId:c.id}).filter(commAwaiting).length?` (${commsOf({caseId:c.id}).filter(commAwaiting).length})`:""}`],["ai","التحليل والخطوة القادمة"],["drafts","الصياغة"],["fees","الأتعاب"],["chat","اسأل عن القضية"],["files",`المستندات (${((c.documents||{}).files||[]).length})`],...(nArch?[["odoo",`أرشيف (${nArch})`]]:[]),["log","سجل التعديلات"]].filter(([k]) => !TP[k] || can(TP[k]));
+  const T = [["overview","نظرة عامة"],["sessions",`الجلسات (${(c.sessions||[]).length})`],["memos",`المذكرات والمهام${memosOf(c).filter(memoOpen).length+tasksOf(c).filter(t=>!t.done).length?` (${memosOf(c).filter(memoOpen).length+tasksOf(c).filter(t=>!t.done).length})`:""}`],["comms",`التواصل${commsOf({caseId:c.id}).filter(commAwaiting).length?` (${commsOf({caseId:c.id}).filter(commAwaiting).length})`:""}`],["ai","التحليل والخطوة القادمة"],["drafts","الصياغة"],["fees","الأتعاب"],["chat","اسأل عن القضية"],["files",`المستندات (${((c.documents||{}).files||[]).length})`],...(false?[["odoo",`أرشيف (${nArch})`]]:[]),["log","سجل التعديلات"]].filter(([k]) => !TP[k] || can(TP[k]));
   if (!T.some(([k])=>k===S.caseTab)) S.caseTab = "overview";
   const eng = c.engagementId ? S.cases.get(c.engagementId) : null;
   return `<button class="btn back" data-nav="cases">${icon("back")}كل القضايا</button>
@@ -861,10 +862,10 @@ function tabOverview(c){
       ${showJudg && !(c.judgment?.deadline && isFuture(c.judgment.deadline)) ? judgmentPanel(c) : ""}
       ${docsPanel(c)}
       ${!can("ai.use") ? "" : a?`<section class="panel"><header><h2>الخطوة القادمة المقترحة</h2><button class="btn ghost" data-tab="ai">التحليل الكامل</button></header>${(a.nextSteps||[]).slice(0,2).map((s,i)=>stepHtml(s,i)).join("")}<p class="sub" style="margin:.5rem 0 0">حُلّلت في ${esc(fmtDate.format(D(a.generatedAt)))}</p></section>`
-        :`<section class="panel"><header><h2>لا يوجد تحليل محفوظ بعد</h2></header><p class="muted" style="margin:0 0 10px">يقرأ المساعد بيانات ناجز والضبوط والأحكام ويقترح الخطوة القادمة باختصار.</p><button class="btn primary" data-tab="ai">${icon("spark")}حلّل القضية</button></section>`}
+        :""}
     </div>
     <div class="grid" style="align-content:start">
-      <section class="panel"><header><h2>بيانات القضية</h2><button class="btn sm" data-editcase ${ro}>تعديل</button></header>
+      <section class="panel"><header><h2>بيانات القضية</h2></header>
         <dl class="kv">${kv.map(([k,v])=>`<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">${c.caseNo?`<button class="btn sm" type="button" id="copyNo">${icon("copy")}نسخ رقم القضية</button>`:""}<a class="btn sm" href="https://najiz.sa" target="_blank" rel="noopener">فتح ناجز</a>${c.deleted?"":`<button class="btn sm ghost del-sm" data-delcase ${ro} style="color:var(--crit);margin-inline-start:auto">حذف القضية</button>`}</div>${xCaseBlock(c)}</section>
       ${can("billing.view")?`<section class="panel"><header><h2>الأتعاب</h2><button class="btn sm ghost" data-tab="fees">${fz?.items?.length?"التفاصيل":"تحرير عقد بالمعاملة"}</button></header>
@@ -1323,7 +1324,7 @@ function tabDrafts(c){
       : `<button class="btn primary" id="drRun" ${busy?"disabled":""}>${icon("spark")}اكتب المسودة</button>`}</div>
     <div id="drState" style="margin-top:10px">${busy?`<div class="thinking"><span class="dot"></span>${esc(busy)}</div>`:(ks.note?`<div class="${ks.noteLink?"notice":"sub"}">${esc(ks.note)}${ks.noteLink?` <a href="${esc(href(ks.noteLink))}" target="_blank" rel="noopener">فتح الملف</a>`:""}</div>`:"")}</div>
     ${!docMode?`<label class="f" style="margin-top:10px">المسودة (قابلة للتعديل — يتعلم الديوان من تعديلاتك عند الحفظ)<textarea class="inp" id="drOut" style="min-height:48vh">${esc(ks.out||"")}</textarea></label>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn" id="drCopy">${icon("copy")}نسخ</button><button class="btn" id="drSave" ${ro}>حفظ المسودة في الديوان</button><button class="btn" id="drWord">${icon("report")}تنزيل Word على ورق المكتب</button><button class="btn" id="drVerify" type="button">${icon("spark")}تحقق من المواد النظامية</button><button class="btn primary" id="drPdf" ${ro}>${icon("report")}PDF: حفظ في مستندات القضية</button><button class="btn" id="drWordSave" ${ro}>${icon("folder")}حفظ Word في مجلد القضية</button></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn" id="drSave" ${ro}>حفظ المسودة في الديوان</button><details style="order:9;flex-basis:100%"><summary class="sub" style="cursor:pointer">خيارات أخرى: نسخ النص، Word</summary><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px"><button class="btn" id="drCopy">${icon("copy")}نسخ</button><button class="btn" id="drWord">${icon("report")}تنزيل Word على ورق المكتب</button><span id="drMoreEnd"></span></div></details><button class="btn" id="drVerify" type="button">${icon("spark")}تحقق من المواد النظامية</button><button class="btn primary" id="drPdf" ${ro}>${icon("report")}PDF: حفظ في مستندات القضية</button></div>
     ${ks.lib?.length?`<details style="margin-top:8px"><summary>مواد المكتبة التي قرأها الديوان لهذه المسودة (${ks.lib.length})</summary><ul class="small" style="margin:6px 0 0;padding-inline-start:18px">${ks.lib.map(x=>`<li>${esc(x.ref)}${x.cited?" — استُشهد بها":""}</li>`).join("")}</ul></details>`:""}
     <p class="sub" style="margin:8px 0 0">للتحقق من نصوص المواد غير الموجودة في المكتبة: <button class="btn ghost sm" id="drAsk" style="padding:0">نسخ قائمة المواد</button> ثم راجعها في موقع هيئة الخبراء أو أضف نصوصها إلى المكتبة.</p>`:""}
   </section>
@@ -1763,7 +1764,7 @@ function vSync(){
       <p class="small" style="margin:0">يحدّث كل عضو قضاياه من حسابه في ناجز من لوحة «ربط ناجز». يدخل ناجز من متصفحك بحساباته الثلاثة، ويضيف القضايا الجديدة ويحدّث الجلسات والضبوط والأحكام، ويحافظ على ما أكدته أنت وعلى تعديلاتك على الجلسات والملاحظات والتحليلات والمسودات والمستندات.</p>
     </div></section>` : ""}</div>
   <div class="grid" style="align-content:start">
-  ${can("cases.edit") || can("billing.edit") ? `<section class="panel"><header><h2>إضافة إلى الديوان</h2></header><div style="display:flex;gap:8px;flex-wrap:wrap">${can("cases.edit")?`<button class="btn primary" id="caseNew2" ${S.canWrite?"":"disabled"}>+ قضية جديدة</button>`:""}${can("billing.edit")?`<button class="btn" id="ctNew2" ${S.canWrite?"":"disabled"}>+ عقد سنوي جديد</button>`:""}</div>
+  ${false ? `<section class="panel"><header><h2>إضافة إلى الديوان</h2></header><div style="display:flex;gap:8px;flex-wrap:wrap">${can("cases.edit")?`<button class="btn primary" id="caseNew2" ${S.canWrite?"":"disabled"}>+ قضية جديدة</button>`:""}${can("billing.edit")?`<button class="btn" id="ctNew2" ${S.canWrite?"":"disabled"}>+ عقد سنوي جديد</button>`:""}</div>
     <p class="sub" style="margin:8px 0 0">القضية الجديدة تُضاف${can("billing.view")?" مع عقد أتعابها بالمعاملة وتواريخ فوترتها":""}. وإن كانت مقيدة في ناجز فأدخل رقمها؛ يكمل التحديث من ناجز جلساتها وأحكامها.</p></section>` : ""}
   ${odLinkPanel()}${xPanel()}${dupPanel()}${backupPanel()}${filesCopyPanel()}${aiUsePanel()}${trashPanel()}</div></div>`;
 }
@@ -2818,7 +2819,7 @@ function viewAllowed(v){
   if (v==="review") return can("cases.edit") || can("billing.edit");
   const p = VIEW_PERM[v]; return !p || can(p);
 }
-const NAV_ALL = [["home","الرئيسية","home"],["cases","القضايا","cases"],["filing","رفع الدعوى","doc"],["crm","إدارة العملاء","people"],["clients","الموكلون","people"],["portal","متابعة الشركات","portal"],["review","استكمال البيانات","review"],["memos","المذكرات والمهام","memo"],["agenda","الأجندة","agenda"],["retainers","عقود الأتعاب","retainer"],["finance","الفوترة","money"],["kpi","مؤشرات الأداء","kpi"],["library","المكتبة القانونية","book"],["learn","التعلم من المحامي","learn"],["staff","الموظفون والصلاحيات","shield"],["sync","المزامنة والإضافة","sync"]];
+const NAV_ALL = [["home","الرئيسية","home"],["cases","القضايا","cases"],["filing","رفع الدعوى","doc"],["crm","إدارة العملاء","people"],["clients","الموكلون","people"],["portal","متابعة الشركات","portal"],["review","استكمال البيانات","review"],["memos","المذكرات والمهام","memo"],["agenda","الأجندة","agenda"],["retainers","عقود الأتعاب","retainer"],["finance","الفوترة","money"],["kpi","مؤشرات الأداء","kpi"],["library","المكتبة القانونية","book"],["learn","التعلم من المحامي","learn"],["staff","الموظفون والصلاحيات","shield"],["sync","المزامنة","sync"]];
 const navItems = () => NAV_ALL.filter(([k]) => k!=="filing" && k!=="finance" && viewAllowed(k));
 // controls hidden from members without the permission (the screens stay readable)
 const PERM_UI = [
@@ -2878,7 +2879,7 @@ function vStaff(){
   const reqs = (S.joinReqs||[]).filter(r => !(S.office?.staff?.members||{})[r.uid] || (S.office.staff.members[r.uid].active===false));
   const assigned = (uid) => [...S.cases.values()].filter(c => isCase(c) && !c.deleted && (c.assignees||[]).includes(uid)).length;
   const UI = S.staffUI = S.staffUI || {};
-  return header("الموظفون والصلاحيات", "من يدخل الديوان، وأي القضايا يرى، وماذا يستطيع أن يفعل") + `
+  return header("الموظفون والصلاحيات", "من يدخل الديوان، وأي القضايا يرى، وماذا يستطيع أن يفعل", S.me?.owner ? `<button class="btn primary" id="staffAcc" type="button">حسابات الدخول</button>` : "") + `
   <div class="cols">
     <section class="panel"><header><h2>فريق المكتب</h2><span class="sub">${arN(members.filter(m=>m.active!==false).length+1,"عضو واحد","عضوان","أعضاء","عضواً")}</span></header>
       <div class="staff-row"><span class="av" style="background:var(--accent);color:var(--accent-ink)">${esc((S.me?.name||"م").slice(0,1))}</span><div style="min-width:0"><b>${esc(S.me?.name||"أنت")}</b> <span class="pill ok">مالك المكتب</span><div class="sub">كل الصلاحيات · ${SCOPES.all}</div></div></div>
@@ -5283,9 +5284,9 @@ const INTAKE_ITEMS = [
   ["next", "الموعد القادم أو مرحلة القيد", c => (c.nextSession && isFuture(c.nextSession)) || c.stage==="قبل القيد" || c.notInNajiz ? "ok" : null, c => `<button class="btn sm" type="button" data-tab="sessions">الجلسات</button>`],
 ];
 const CLOSING_ITEMS = [
-  ["outcome", "تقييم القضية ونتيجتها", c => c.outcome ? "ok" : null, c => can("kpi.view") ? `<button class="btn sm" type="button" data-evalcase="${esc(c.id)}">تقييم</button>` : `<span class="sub">يقيّمها مالك المكتب</span>`],
+  ["outcome", "تقييم القضية ونتيجتها", c => c.outcome ? "ok" : null, c => ""],
   ["fees", "تسوية الأتعاب: لا مستحق على الموكل", c => { if (!can("billing.view")) return null; const it = billingItems().filter(b=>b.src==="case" && b.id===c.id); return it.some(b=>b.state==="due"||b.state==="invoiced") ? "bad" : "ok"; }, c => can("billing.view") ? `<button class="btn sm" type="button" data-tab="fees">الأتعاب</button>` : ""],
-  ["trust", "تسوية أموال الموكل: رصيد الأمانات صفر", c => can("billing.view") ? (Math.abs(trustBalance({caseId:c.id})) < 0.005 ? "ok" : "bad") : null, c => can("billing.view") ? `<button class="btn sm" type="button" data-tab="fees">أموال الموكل</button>` : ""],
+  ["trust", "تسوية أموال الموكل: رصيد الأمانات صفر", c => null, c => ""],
   ["inform", "إبلاغ الموكل بالنتيجة", c => (S.comms||[]).some(x => x.caseId===c.id && x.dir==="out" && (x.kind==="closing" || (c.closedAt && (x.at||"").slice(0,10) >= c.closedAt.slice(0,10)))) ? "ok" : null, c => `<button class="btn sm" type="button" data-comm="${esc(c.id)}" data-commkind="closing">تسجيل الإبلاغ</button>`],
   ["csat", "استبيان رضا الموكل", c => c.csat ? "ok" : null, c => `<button class="btn sm" type="button" data-csat="${esc(c.id)}">${c.csat?"تعديل":"تسجيل التقييم"}</button>`],
   ["docs", "إعادة المستندات الأصلية إلى الموكل", null, null],
@@ -5374,7 +5375,7 @@ function vTrust(){
   <div class="cols"><section class="panel" style="align-self:start"><header><h2>أرصدة الموكلين</h2></header>${clients.length?`<div class="table-wrap" style="border:0"><table><thead><tr><th>الموكل</th><th>الرصيد</th><th class="hide-sm">آخر حركة</th></tr></thead><tbody>${clients.map(c=>`<tr class="clickable" data-trustclient="${esc(c.key)}" ${sel===c.key?'style="background:var(--surface-2)"':""}><td>${esc(c.name)}</td><td class="num"><b style="${c.bal<0?"color:var(--crit)":""}">${sar(c.bal)}</b></td><td class="num hide-sm">${fmtD(c.last)}</td></tr>`).join("")}</tbody></table></div>`:`<div class="empty">لا أموال موكلين مسجلة بعد.</div>`}</section>
   <section class="panel"><header><h2>${sel?`حركات ${esc(clients.find(c=>c.key===sel)?.name||"")}`:"كل الحركات"}</h2><div style="display:flex;gap:6px">${sel?`<button class="btn sm ghost" id="trustAll">الكل</button>`:""}${can("billing.edit")?`<button class="btn sm primary" id="trustNew" ${S.canWrite?"":"disabled"}>+ حركة</button>`:""}</div></header>${trustRows(list.slice(0,200), {actions:true})}</section></div>`;
 }
-function caseTrustPanel(c){
+function caseTrustPanel(c){ return "";
   if (!can("billing.view")) return ""; const list = trustEntries({caseId:c.id}); const bal = trustBalance({caseId:c.id});
   return `<section class="panel"><header><h2>أموال الموكل في هذه القضية</h2><div style="display:flex;gap:8px;align-items:center"><span class="sub">الرصيد لدى المكتب: <b class="num" style="${bal<0?"color:var(--crit)":""}">${sar(bal)}</b> ريال</span>${can("billing.edit")?`<button class="btn sm" data-trustcase="${esc(c.id)}" ${S.canWrite?"":"disabled"}>+ حركة</button>`:""}</div></header>
     ${list.length?trustRows(list, {client:false, actions:true}):`<p class="sub" style="margin:0">لا أمانات ولا تحصيل مسجل لهذه القضية. ما يُحصَّل من التنفيذ لصالح الموكل يُقيَّد هنا ثم يُسجَّل تحويله إليه.</p>`}</section>`;
@@ -5420,7 +5421,7 @@ function timerButton(c){
   if (!can("time.edit")) return ""; const t = S.timer;
   if (t && t.caseId===c.id) return `<button class="btn sm" id="timerStop" style="color:var(--crit)">■ إيقاف <span class="mono" id="timerClock">00:00:00</span></button>`;
   if (t) { const o = S.cases.get(t.caseId); return `<button class="btn sm ghost" id="timerStop" title="المؤقت يعمل على قضية أخرى">■ مؤقت يعمل: ${esc(o?.caseNo||"قضية أخرى")}</button>`; }
-  return `<button class="btn sm ghost" id="timerStart" data-tcase="${esc(c.id)}">▶ بدء المؤقت</button>`;
+  return "";
 }
 function openTimeEntry(pre={}){
   const c = pre.caseId ? S.cases.get(pre.caseId) : null; const cands = c ? [] : allCases().filter(x=>OPEN.has(x.status));
@@ -7552,7 +7553,7 @@ function vLgVat(){
   <div class="cols"><section class="panel"><header><h2>المبيعات الخاضعة</h2></header>${v.sales.length?`<div class="table-wrap" style="border:0"><table><thead><tr><th>الفاتورة</th><th>الموكل</th><th>قبل الضريبة</th><th>الضريبة</th></tr></thead><tbody>${v.sales.map(b=>`<tr><td class="mono">${esc(b.inv||"بلا فاتورة")}<div class="sub">${fmtD(b.invAt||b.paidAt)}</div></td><td>${esc(b.client||"")}</td><td class="num">${sar(b.net)}</td><td class="num"><b>${sar(lgVatOf(b))}</b></td></tr>`).join("")}</tbody></table></div>`:`<div class="empty">لا مبيعات خاضعة في الفترة.</div>`}</section>
   <section class="panel"><header><h2>المشتريات والمصروفات</h2></header>${v.buys.length?`<div class="table-wrap" style="border:0"><table><thead><tr><th>التاريخ</th><th>البند</th><th>قبل الضريبة</th><th>الضريبة</th></tr></thead><tbody>${v.buys.map(x=>`<tr><td class="num">${fmtD(x.date)}</td><td>${esc(x.category||"")}${x.payee?`<div class="sub">${esc(x.payee)}</div>`:""}</td><td class="num">${sar(r2(x.amount-(+x.vat||0)))}</td><td class="num"><b>${sar(x.vat)}</b></td></tr>`).join("")}</tbody></table></div>`:`<div class="empty">لا مصروفات بضريبة في الفترة.</div>`}</section></div>`;
 }
-function caseExpensePanel(c){
+function caseExpensePanel(c){ return "";
   if (!can("billing.view")) return ""; const list = lgExpenses().filter(x => x.caseId===c.id); const open = list.filter(x=>x.recharge && !x.billedAt);
   return `<section class="panel"><header><h2>مصروفات القضية</h2><div style="display:flex;gap:8px;align-items:center"><span class="sub">المجموع: <b class="num">${sar(list.reduce((a,x)=>a+(+x.amount||0),0))}</b>${open.length?` · غير مُطالَب به: <b class="num" style="color:var(--warn)">${sar(open.reduce((a,x)=>a+(+x.amount||0),0))}</b>`:""}</span>${can("billing.edit")?`<button class="btn sm" data-lgexpcase="${esc(c.id)}" ${S.canWrite?"":"disabled"}>+ مصروف</button>`:""}</div></header>
     ${list.length?lgExpRows(list, {case:false}):`<p class="sub" style="margin:0">لا مصروفات مسجلة لهذه القضية (رسوم، خبراء، تنقلات…).</p>`}</section>`;
@@ -9762,6 +9763,22 @@ function foldPanels(){
   });
 }
 
+// ---------- واجهة أخف (14/11): بعد كل رسم تُزال لوحات الشرح الثابتة، وتُجمع أدوات النقل التي انتهى دورها في لوحة واحدة مطوية، وزر
+// «الحسابات» يُفتح من صفحة «الموظفون والصلاحيات». The duplicates removed at the source are in integrate_cloud.py; this pass only tidies panels.
+const TRIM_EXPLAIN = new Set(["كيف تسير المذكرة", "لماذا يُسجَّل", "كيف تُحسب الاستحقاقات", "كيف يدخل الموظف؟"]);
+const TRIM_TOOLS = ["مجلدات المكتب", "بيانات الموكلين من المستندات", "التكرارات"];
+function uiTrim(){
+  const main = document.getElementById("main"); if (!main) return;
+  main.querySelectorAll("section.panel > header h2").forEach(h => { if (TRIM_EXPLAIN.has(h.textContent.trim())) h.closest("section.panel").remove(); });
+  main.querySelectorAll("section.panel [data-delcase]").forEach(b => b.remove());   // deleting a case stays in its header (this second button comes with a later patch)
+  if (S.view === "sync" && !main.querySelector("#toolsBox")) {
+    const secs = [...main.querySelectorAll("section.panel")].filter(s => TRIM_TOOLS.some(t => (s.querySelector(":scope > header h2")?.textContent || "").trim().startsWith(t)));
+    if (secs.length) { const box = document.createElement("section"); box.className = "panel"; box.id = "toolsBox"; box.innerHTML = `<header><h2>أدوات الصيانة</h2><span class="sub">ربط المجلدات، استخراج بيانات الموكلين، التكرارات</span></header><div class="grid" style="gap:12px"></div>`;
+      secs[0].before(box); const inner = box.querySelector(".grid"); for (const s of secs) { s.dataset.fold = "open"; inner.appendChild(s); } }
+  }
+  const a = document.getElementById("staffAcc"); if (a) a.onclick = () => document.getElementById("dcAcc")?.click();
+}
+
 // ---------- events
 // the home page's third column exists on wide screens only: its panels move there, and back when the window narrows
 const WIDE = window.matchMedia ? window.matchMedia("(min-width:1500px)") : null;
@@ -9769,7 +9786,7 @@ if (WIDE) { try { WIDE.addEventListener("change", () => { if (S.view==="home") r
 function homeRail(){ const r = $("homeRail"); if (!r || !WIDE?.matches) return; [...document.querySelectorAll("[data-rail]")].sort((a,b)=>a.dataset.rail-b.dataset.rail).forEach(p => r.append(p)); }
 function afterRender(){
   homeRail();
-  foldPanels(); bindLibrary(); bindLearn(); bindStaff(); bindBackup(); if (S.view==="sync") { bindNajizSync(); bindMoenSync(); } bindMemos(); bindKpi(); bindContracts2(); bindPortal(); bindConflict(); bindChecklists(); bindTrust(); bindTime(); bindComms(); bindTasks(); bindWork(); bindAssist(); bindNzPolicy(); bindOdLink(); bindStale(); bindRequests(); bindExtract(); bindLedger(); bindNzReqs(); bindFiling(); bindTracks(); bindCrm(); bindTrackSections(); nzEnforce();
+  uiTrim(); foldPanels(); bindLibrary(); bindLearn(); bindStaff(); bindBackup(); if (S.view==="sync") { bindNajizSync(); bindMoenSync(); } bindMemos(); bindKpi(); bindContracts2(); bindPortal(); bindConflict(); bindChecklists(); bindTrust(); bindTime(); bindComms(); bindTasks(); bindWork(); bindAssist(); bindNzPolicy(); bindOdLink(); bindStale(); bindRequests(); bindExtract(); bindLedger(); bindNzReqs(); bindFiling(); bindTracks(); bindCrm(); bindTrackSections(); nzEnforce();
   document.querySelectorAll("[data-ftab]").forEach(b=>b.onclick=()=>{ S.finTab=b.dataset.ftab; render(); });
   document.querySelectorAll("[data-onb]").forEach(b=>b.onclick=()=>{ const [v,t] = b.dataset.onb.split(":"); if (t) S.learnTab = t; go(v); });
   const ox = $("onbHide"); if (ox) ox.onclick = () => { try { localStorage.setItem("dq.onb", "1"); } catch {} S.onbHidden = true; render(); };
