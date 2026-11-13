@@ -789,7 +789,7 @@ function revRow(c){
   return `<div class="rev">
     <div class="rev-head"><div style="min-width:0"><button type="button" class="btn ghost sm" data-case="${id}" style="padding-inline:0">${c.caseNo?`<span class="mono">${esc(c.caseNo)}</span> · `:""}${esc(c.title)}</button><div class="sub">${why}${c.nextSession&&isFuture(c.nextSession)?" · الجلسة القادمة "+fmtDate.format(D(c.nextSession)):""}</div></div><span class="pill ${stCls(c.status)}">${STATUS[c.status]}</span></div>
     ${(c.reviewNotes||[]).map(n=>`<div class="notice warn">${esc(n)}</div>`).join("")}
-    ${feeP ? revFeeBlock(c) : ""}
+    ${feeP ? `<div style="margin-top:8px"><button class="btn sm" type="button" data-case="${esc(c.id)}" data-tab="fees">سجّل عقد الأتعاب في تبويب «الأتعاب»</button></div>` : ""}
     ${dataP ? `<form class="rev-grid" data-rev="${id}">
       <label class="f">المحكمة<input class="inp ${sug("court")}" name="court" list="courtList" value="${esc(c.court||"")}"></label>
       <label class="f">الدائرة<input class="inp ${sug("circuit")}" name="circuit" value="${esc(c.circuit||"")}"></label>
@@ -867,8 +867,8 @@ function tabOverview(c){
     <div class="grid" style="align-content:start">
       <section class="panel"><header><h2>بيانات القضية</h2></header>
         <dl class="kv">${kv.map(([k,v])=>`<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">${c.caseNo?`<button class="btn sm" type="button" id="copyNo">${icon("copy")}نسخ رقم القضية</button>`:""}<a class="btn sm" href="https://najiz.sa" target="_blank" rel="noopener">فتح ناجز</a>${c.deleted?"":`<button class="btn sm ghost del-sm" data-delcase ${ro} style="color:var(--crit);margin-inline-start:auto">حذف القضية</button>`}</div>${xCaseBlock(c)}</section>
-      ${can("billing.view")?`<section class="panel"><header><h2>الأتعاب</h2><button class="btn sm ghost" data-tab="fees">${fz?.items?.length?"التفاصيل":"تحرير عقد بالمعاملة"}</button></header>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">${c.caseNo?`<button class="btn sm" type="button" id="copyNo">${icon("copy")}نسخ رقم القضية</button>`:""}<a class="btn sm" href="https://najiz.sa" target="_blank" rel="noopener">فتح ناجز</a></div>${xCaseBlock(c)}</section>
+      ${can("billing.view")?`<section class="panel"><header><h2>الأتعاب</h2></header>
         ${fz?.items?.length?`<p style="margin:0"><span class="pill ${fz.signed?"ok":"warn"}">عقد بالمعاملة ${fz.signed?"موقَّع":"مسودة"}</span> ${esc(feeSummary(fz))}${fz.vat?" + الضريبة":""}${fz.src==="doc"?' <span class="pill">من العقد — للمراجعة</span>':""}</p>${dueNow.length?`<div class="notice warn" style="margin-top:8px">مستحق الآن: <b class="num">${sar(dueNow.reduce((x,b)=>x+(b.total||0),0))}</b> ريال — ${esc(dueNow.map(b=>b.label).join("، "))}</div>`:`<p class="sub" style="margin:6px 0 0">${fb.filter(b=>b.state==="paid").length} محصّلة · ${fb.filter(b=>b.state==="waiting"||b.state==="upcoming").length} قادمة</p>`}`
           : eng ? `<p class="sub" style="margin:0">ضمن ${esc(eng.title||"عقد سنوي")}.</p>` : c.feesNA ? `<p class="sub" style="margin:0">لا أتعاب مستقلة لهذه القضية.</p>` : `<p class="sub" style="margin:0">لم يُسجَّل لهذه القضية عقد أتعاب بالمعاملة ولا عقد سنوي.</p>`}</section>`:""}
       ${promisePanel(c)}
@@ -4763,9 +4763,10 @@ function memoStats(list){
   return {late: open.filter(memoLate).length, soon: open.filter(m => m.due && m.due >= T && daysUntil(m.due) <= 14).length, review: open.filter(m => m.status==="review").length,
     filed30: list.filter(m => m.status==="filed" && m.filedAt && daysUntil(m.filedAt) >= -30), open};
 }
-function memoTabs(){ const t = S.memoUI?.tab || "work"; const wl = workItems(S.uid).filter(i=>i.due&&i.due<todayKey()).length; return `<div class="tabs" role="tablist" style="margin-bottom:12px"><button class="tab" role="tab" data-mtab="work" aria-selected="${t==="work"}">عملي${wl?` <span class="pill crit">${wl}</span>`:""}</button>${canSeeTeam()?`<button class="tab" role="tab" data-mtab="team" aria-selected="${t==="team"}">الفريق</button>`:""}<button class="tab" role="tab" data-mtab="memos" aria-selected="${t==="memos"}">المذكرات المطلوبة</button><button class="tab" role="tab" data-mtab="tasks" aria-selected="${t==="tasks"}">المهام${tasksAll().filter(x=>!x.done&&taskMine(x)).length?` (${tasksAll().filter(x=>!x.done&&taskMine(x)).length})`:""}</button>${viewAllowed("filing")?`<button class="tab" role="tab" data-mtab="filing" aria-selected="${t==="filing"}">رفع الدعاوى${filingCases().length?` (${filingCases().length})`:""}</button>`:""}</div>`; }
+function memoTabs(){ const t = S.memoUI?.tab || "work"; const wl = workItems(S.uid).filter(i=>i.due&&i.due<todayKey()).length; return `<div class="tabs" role="tablist" style="margin-bottom:12px"><button class="tab" role="tab" data-mtab="work" aria-selected="${t==="work"}">عملي${wl?` <span class="pill crit">${wl}</span>`:""}</button>${canSeeTeam()?`<button class="tab" role="tab" data-mtab="team" aria-selected="${t==="team"}">الفريق</button>`:""}${viewAllowed("filing")?`<button class="tab" role="tab" data-mtab="filing" aria-selected="${t==="filing"}">رفع الدعاوى${filingCases().length?` (${filingCases().length})`:""}</button>`:""}</div>`; }
 function vMemos(){
   const UI = S.memoUI = S.memoUI || {f:"open"}; const all = memosAll(); const st = memoStats(all); const T = todayKey();
+  if (UI.tab==="tasks" || UI.tab==="memos" || (UI.tab==="team" && !canSeeTeam())) UI.tab = "work";   // old links to the two lists open «عملي»
   if (UI.tab==="tasks") return header("المذكرات والمهام", "ما على المكتب أن يكتبه ويقدّمه، وما على كل عضو أن ينجزه") + memoTabs() + vTasks();
   if (UI.tab==="filing" && viewAllowed("filing")) return vFiling();
   if ((UI.tab||"work")==="work") return header("المذكرات والمهام", "ما عليك اليوم وهذا الأسبوع — المهام والمذكرات معاً") + memoTabs() + vWork();
