@@ -408,6 +408,9 @@ tr[aria-selected="true"] td{background:var(--accent-soft)}
 .qa-rail h2{font-size:.78rem;font-weight:600;color:var(--ink-3);margin:0 4px 6px}
 .qa-rail:has(#qaRailBox:empty){display:none}
 body:has(#asPanel:not([hidden])) .ux-bar{display:none}
+.fold-head{cursor:pointer;user-select:none}.fold-head h2::after{content:"‹";display:inline-block;margin-inline-start:8px;color:var(--ink-3);transition:transform .15s}
+section.panel[data-fold="open"] > .fold-head h2::after{transform:rotate(-90deg)}
+section.panel[data-fold="shut"] > :not(header){display:none !important}section.panel[data-fold="shut"]{padding-bottom:10px}section.panel[data-fold="shut"] > header{margin-bottom:0}
 .date-echo{display:block;font-size:.78rem;color:var(--ink-3);margin-top:3px;min-height:1em}
 .st-m{display:none;margin-top:4px}
 @media (max-width:860px){.st-m{display:inline-flex}}
@@ -806,7 +809,7 @@ function vCase(){
   const ours = c.ourSide; const ro = S.canWrite ? "" : "disabled";
   const nArch = (c.tasks||[]).length+(can("billing.view") ? (c.invoices||[]).length : 0);
   const TP = {ai:"ai.use", drafts:"drafts.use", fees:"billing.view", chat:"ai.use", time:"time.edit"};
-  const T = [["overview","نظرة عامة"],["sessions",`الجلسات (${(c.sessions||[]).length})`],["memos",`المذكرات والمهام${memosOf(c).filter(memoOpen).length+tasksOf(c).filter(t=>!t.done).length?` (${memosOf(c).filter(memoOpen).length+tasksOf(c).filter(t=>!t.done).length})`:""}`],["comms",`التواصل${commsOf({caseId:c.id}).filter(commAwaiting).length?` (${commsOf({caseId:c.id}).filter(commAwaiting).length})`:""}`],["time",`الوقت${timeEntries({caseId:c.id}).length?` (${hm(timeSum(timeEntries({caseId:c.id})))})`:""}`],["ai","التحليل والخطوة القادمة"],["drafts","الصياغة"],["fees","الأتعاب"],["chat","اسأل عن القضية"],["files",`المستندات (${((c.documents||{}).files||[]).length})`],...(nArch?[["odoo",`أرشيف (${nArch})`]]:[]),["log","سجل التعديلات"]].filter(([k]) => !TP[k] || can(TP[k]));
+  const T = [["overview","نظرة عامة"],["sessions",`الجلسات (${(c.sessions||[]).length})`],["memos",`المذكرات والمهام${memosOf(c).filter(memoOpen).length+tasksOf(c).filter(t=>!t.done).length?` (${memosOf(c).filter(memoOpen).length+tasksOf(c).filter(t=>!t.done).length})`:""}`],["comms",`التواصل${commsOf({caseId:c.id}).filter(commAwaiting).length?` (${commsOf({caseId:c.id}).filter(commAwaiting).length})`:""}`],["ai","التحليل والخطوة القادمة"],["drafts","الصياغة"],["fees","الأتعاب"],["chat","اسأل عن القضية"],["files",`المستندات (${((c.documents||{}).files||[]).length})`],...(nArch?[["odoo",`أرشيف (${nArch})`]]:[]),["log","سجل التعديلات"]].filter(([k]) => !TP[k] || can(TP[k]));
   if (!T.some(([k])=>k===S.caseTab)) S.caseTab = "overview";
   const eng = c.engagementId ? S.cases.get(c.engagementId) : null;
   return `<button class="btn back" data-nav="cases">${icon("back")}كل القضايا</button>
@@ -1751,7 +1754,7 @@ function vSync(){
   const miss = (k) => op.filter(c=>!c[k]).length;
   const full = can("sync.use");
   return header("المزامنة والإضافة", full ? "مصادر البيانات، والإضافة، والمحذوفات" : "ربط حسابك في ناجز وإضافة القضايا") + `<div class="cols">
-  <div class="grid" style="align-content:start">${najizSyncPanel()}${moenSyncPanel()}${full ? `<section class="panel" style="align-self:start"><header><h2>مصادر البيانات</h2></header>
+  <div class="grid" style="align-content:start">${najizSyncPanel()}${moenSyncPanel()}${false ? `<section class="panel" style="align-self:start"><header><h2>مصادر البيانات</h2></header>
     <div class="grid" style="gap:10px">
       <div class="notice"><b>ناجز — المصدر الأساسي</b><br>القضايا والأطراف والجلسات بضبوطها الكاملة والأحكام ومواعيد الاعتراض، من حسابات ناجز أفراد وناجز محامين وناجز أعمال (${esc(String(Object.keys(m.najiz?.accounts||{}).length||"—"))} حسابات). آخر تحديث: ${m.najiz?.syncedAt?esc(fmtDate.format(D(m.najiz.syncedAt))+" "+fmtTime.format(D(m.najiz.syncedAt))):"—"} · ${m.najiz?.caseCount||"—"} قضية.</div>
       <div class="notice"><b>الديوان مستقل عن أودو</b><br>القضايا من ناجز، والعقود السنوية والأتعاب والفوترة تُدار هنا. ما نُقل سابقاً من أودو (فواتير ومهام قديمة) محفوظ أرشيفاً داخل الديوان، ولا يُرجع إلى أودو بعد الآن.</div>
@@ -9742,6 +9745,23 @@ async function openLawVerify(){
 // the model sometimes thinks aloud in English before it searches: those lines are not part of the answer
 const lvClean = (t) => String(t||"").split("\n").filter(l => !/^[\sA-Za-z0-9.,'’:;!?()\-]+$/.test(l) || !/[A-Za-z]{3}/.test(l)).join("\n").replace(/^[A-Za-z][A-Za-z\s.,'’]+(?=[\u0600-\u06FF*])/, "").trim();
 
+// ---------- لوحات تُطوى (13/11): صفحة «المزامنة والإضافة» تعرض ما يُستعمل كل يوم مفتوحاً، وبقية اللوحات مطوية بعنوانها؛ ضغطة على العنوان
+// تفتح اللوحة، ويتذكر المتصفح ما فتحته. Nothing is removed: a folded panel is the same panel, closed.
+const FOLD_OPEN = new Set(["ربط ناجز", "إضافة إلى الديوان", "النسخة الاحتياطية"]);   // the daily ones stay open
+const foldKey = (h) => "diwan.fold." + String(h || "").replace(/[\d()٠-٩\s]+/g, " ").trim();
+function foldPanels(){
+  if (S.view !== "sync") return;
+  document.querySelectorAll("#main section.panel").forEach(sec => {
+    const head = sec.querySelector(":scope > header"); const h2 = head?.querySelector("h2"); if (!h2 || sec.dataset.fold) return;
+    const title = h2.textContent.trim(); const key = foldKey(title); let saved = null; try { saved = localStorage.getItem(key); } catch {}
+    const open = saved != null ? saved === "1" : FOLD_OPEN.has(title.replace(/\s*\(.*$/, ""));
+    sec.dataset.fold = open ? "open" : "shut"; head.setAttribute("role", "button"); head.setAttribute("tabindex", "0"); head.setAttribute("aria-expanded", String(open)); head.classList.add("fold-head");
+    const flip = (e) => { if (e.target.closest("button, a, input, select, label")) return; if (e.type === "keydown" && e.key !== "Enter" && e.key !== " ") return; e.preventDefault();
+      const now = sec.dataset.fold !== "open"; sec.dataset.fold = now ? "open" : "shut"; head.setAttribute("aria-expanded", String(now)); try { localStorage.setItem(key, now ? "1" : "0"); } catch {} };
+    head.addEventListener("click", flip); head.addEventListener("keydown", flip);
+  });
+}
+
 // ---------- events
 // the home page's third column exists on wide screens only: its panels move there, and back when the window narrows
 const WIDE = window.matchMedia ? window.matchMedia("(min-width:1500px)") : null;
@@ -9749,7 +9769,7 @@ if (WIDE) { try { WIDE.addEventListener("change", () => { if (S.view==="home") r
 function homeRail(){ const r = $("homeRail"); if (!r || !WIDE?.matches) return; [...document.querySelectorAll("[data-rail]")].sort((a,b)=>a.dataset.rail-b.dataset.rail).forEach(p => r.append(p)); }
 function afterRender(){
   homeRail();
-  bindLibrary(); bindLearn(); bindStaff(); bindBackup(); if (S.view==="sync") { bindNajizSync(); bindMoenSync(); } bindMemos(); bindKpi(); bindContracts2(); bindPortal(); bindConflict(); bindChecklists(); bindTrust(); bindTime(); bindComms(); bindTasks(); bindWork(); bindAssist(); bindNzPolicy(); bindOdLink(); bindStale(); bindRequests(); bindExtract(); bindLedger(); bindNzReqs(); bindFiling(); bindTracks(); bindCrm(); bindTrackSections(); nzEnforce();
+  foldPanels(); bindLibrary(); bindLearn(); bindStaff(); bindBackup(); if (S.view==="sync") { bindNajizSync(); bindMoenSync(); } bindMemos(); bindKpi(); bindContracts2(); bindPortal(); bindConflict(); bindChecklists(); bindTrust(); bindTime(); bindComms(); bindTasks(); bindWork(); bindAssist(); bindNzPolicy(); bindOdLink(); bindStale(); bindRequests(); bindExtract(); bindLedger(); bindNzReqs(); bindFiling(); bindTracks(); bindCrm(); bindTrackSections(); nzEnforce();
   document.querySelectorAll("[data-ftab]").forEach(b=>b.onclick=()=>{ S.finTab=b.dataset.ftab; render(); });
   document.querySelectorAll("[data-onb]").forEach(b=>b.onclick=()=>{ const [v,t] = b.dataset.onb.split(":"); if (t) S.learnTab = t; go(v); });
   const ox = $("onbHide"); if (ox) ox.onclick = () => { try { localStorage.setItem("dq.onb", "1"); } catch {} S.onbHidden = true; render(); };
