@@ -192,7 +192,9 @@
     return {text, truncated: stop === "max_tokens", modelTierApplied: tier};
   }
   // how much the assistant is used (12/11): counts only — calls and tokens per day, member and tier — never the text. One small record a day per member.
-  async function useNote(tier, u){
+  let useChain = Promise.resolve();   // one update at a time, so two quick calls do not overwrite each other's count
+  function useNote(tier, u){ useChain = useChain.then(() => useNoteNow(tier, u)); return useChain; }
+  async function useNoteNow(tier, u){
     try { const day = new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10); const id = `${day}_${String(WHO?.uid || "x").slice(0, 8)}`; const ref = db.doc("aiuse/" + id);
       const cur = await ref.get(); const d = cur.exists ? cur.data() : {day, uid: WHO?.uid || null, tiers: {}}; const t = d.tiers[tier] || {n: 0, in: 0, out: 0, cached: 0};
       d.tiers = {...d.tiers, [tier]: {n: t.n + 1, in: t.in + u.in, out: t.out + u.out, cached: (t.cached || 0) + u.cached}}; await ref.set(d); } catch {}
@@ -203,6 +205,16 @@
       if (v === undefined) { const a = Math.min(...[t.indexOf("{"), t.indexOf("[")].filter(i => i >= 0)); const b = Math.max(t.lastIndexOf("}"), t.lastIndexOf("]")); if (isFinite(a) && b > a) v = tryParse(t.slice(a, b + 1)); }
       if (v === undefined) throw {code: "invalid_json", message: "no json", text: r.text}; return v; },
     limits: async () => ({maxPromptBytes: 262144, tools: false, images: false}) });
+  // reading a scanned page (13/11): one page image (base64 JPEG) → its text, by the reading model on the server; usage is counted under «read»
+  async function readPage(data, media = "image/jpeg", signal){
+    let r; try { r = await realFetch(FN("sample"), {method: "POST", signal, headers: authHeaders(), body: JSON.stringify({read: {media, data}})}); }
+    catch (e) { if (e && e.name === "AbortError") throw {code: "cancelled", message: "cancelled"}; throw {code: "network", message: String(e && e.message || e)}; }
+    let b = {}; try { b = await r.json(); } catch {}
+    if (!r.ok) throw {code: b.code || (r.status === 403 ? "not_granted" : r.status === 503 ? "not_configured" : "unavailable"), message: b.message || ("HTTP " + r.status)};
+    if (typeof b.text !== "string") throw {code: "not_configured", message: "the server does not read pages yet"};   // an older «sample» on the server
+    if (b.usage) useNote("read", b.usage);
+    return {text: String(b.text || ""), truncated: !!b.truncated};
+  }
   let sampleOn = null;
   async function sampleReady(){ if (sampleOn !== null) return sampleOn;
     try { const r = await realFetch(FN("sample"), {method: "POST", headers: authHeaders(), body: JSON.stringify({probe: true})}); if (r.ok || r.status === 503 || r.status === 403) sampleOn = r.ok; return r.ok; }   // only a clear answer is remembered
@@ -345,6 +357,6 @@
     if (name === "sample") return (WHO?.staff && await sampleReady()) ? sample : null;
     if (name === "mcp") return WHO?.staff ? (window.diwanCloudFiles?.mcp || null) : null;   // the office's files (cloud-files.js)
     return null; } };
-  window.diwanCloud = {sb, db, cache, whoami: () => WHO};
+  window.diwanCloud = {sb, db, cache, whoami: () => WHO, readPage};
   whenReady().catch((e) => { console.error(e); });
 })();

@@ -2,8 +2,9 @@
    ملفات المكتب في Supabase بالمسارات نفسها التي كانت في ون درايف («Law Firm/…»)، ويقدّم للصفحة أدوات «Microsoft 365» الأربع
    (read_resource، sharepoint_search، sharepoint_folder_search، sharepoint_upload_file) بالصيغ نفسها، فيعمل كل ما في الديوان من
    مستندات (ربط المجلد برقم القضية، القارئ، حفظ الوورد في مجلد القضية، استخراج بيانات الموكل، بحث المساعد) دون تغيير فيه.
-   نص كل ملف يُستخرج مرة واحدة في المتصفح ويُحفظ معه: PDF ووورد بقارئي الصفحة نفسها، والممسوح والصور بقارئ نصوص مجاني (Tesseract،
-   عربي) يعمل في المتصفح بلا أي خدمة مدفوعة. وفيه لوحة «ملفات المكتب»: استيراد الأرشيف من الجهاز، والقراءة المجانية للممسوح.
+   نص كل ملف يُستخرج مرة واحدة ويُحفظ معه: PDF ووورد بقارئي الصفحة نفسها (بلا تكلفة)، والممسوح والصور تُقرأ صفحةً صفحةً بنموذج
+   القراءة في المساعد (Haiku 5.5، 13/11)، والقارئ المجاني في المتصفح (Tesseract) احتياط إن لم يكن المساعد مضبوطاً.
+   وفيه لوحة «ملفات المكتب»: استيراد الأرشيف من الجهاز، وقراءة الممسوح.
    يحتاج قبله cloud-runtime.js (window.diwanCloud). */
 (() => {
   "use strict";
@@ -76,7 +77,7 @@
       const b = new Uint8Array(await (await download(row)).arrayBuffer()); let s = ""; for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000));
       return {content: [{type: "image", mimeType: row.mime || "image/jpeg", data: btoa(s)}]};
     }
-    if (!(row.text || "").trim()) return text(JSON.stringify({note: "No text could be extracted from this file" + (row.text_how === "none" ? " (scanned; waiting for the free reader)" : "") + "."}));
+    if (!(row.text || "").trim()) return text(JSON.stringify({note: "No text could be extracted from this file" + (row.text_how === "none" ? " (scanned; waiting to be read)" : "") + "."}));
     const pages = String(row.text).split(PAGE_SEP), n = pages.length;
     const a = Math.max(1, +startPage || 1), b = Math.min(n, +endPage || n);
     return text(pages.slice(a - 1, b).join("\n\n") + (b < n ? `\n[truncated: pages ${a}-${b} of ${n}]` : ""));
@@ -236,7 +237,9 @@
       .map(r => ({name: r.name, uri: uriOf(r.id), size: r.size, webUrl: webUrlOf(r.path), path: r.path, modified: r.modified_at, kind: kindOf ? kindOf(r.name) : undefined}));
   };
 
-  // ---------------------------------------------------------------- the free reader for scans and photos (Tesseract, Arabic, in this browser)
+  // ---------------------------------------------------------------- reading scans and photos (13/11): each page goes as an image to the reading
+  // model on the server (Haiku 5.5: it reads Arabic print and handwriting far better than a free reader, at about a tenth of a cent a page), and its
+  // text is saved with the file (text_how "ai"). The free reader (Tesseract, in this browser) stays only for when the assistant is not set up.
   let ocrWorker = null;
   const loadScript = (src) => new Promise((res, rej) => { const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = () => rej(new Error("load " + src)); document.head.appendChild(s); });
   async function ocrReady(){
@@ -245,29 +248,60 @@
     ocrWorker = await window.Tesseract.createWorker("ara", 1, {workerPath: BASE + "ocr/worker.min.js", corePath: BASE + "ocr/", langPath: BASE + "ocr/", gzip: true});
     return ocrWorker;
   }
-  const ocrClean = (t) => String(t || "").replace(/[‎‏‪-‮]/g, "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
-  async function ocrRow(row, onPage){
-    const w = await ocrReady(); const blob = await download(row); const out = [];
+  const ocrClean = (t) => String(t || "").replace(/[\u200e\u200f\u202a-\u202e]/g, "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  const LONG = 1568;   // the longest side the model looks at; a larger image costs more and reads no better
+  const toJpeg = (cv) => cv.toDataURL("image/jpeg", 0.85).split(",")[1];
+  async function pageImages(row, blob, each){   // calls each(canvas, i, n) for every page, in order; returns false if stopped
     if (extOf(row.name) === "pdf") {
       const lib = F.extractor?.needPdf ? await F.extractor.needPdf() : null; if (!lib) throw new Error("pdf.js");
       const pdf = await lib.getDocument({data: new Uint8Array(await blob.arrayBuffer()), isEvalSupported: false}).promise;
       for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i); const vp = page.getViewport({scale: 2}); const cv = document.createElement("canvas"); cv.width = vp.width; cv.height = vp.height;
-        await page.render({canvasContext: cv.getContext("2d"), viewport: vp}).promise; page.cleanup?.();
-        out.push(ocrClean((await w.recognize(cv)).data.text)); cv.width = cv.height = 0; onPage?.(i, pdf.numPages);
-        if (F.ocr.stop && i < pdf.numPages) return {pages: out, complete: false};
+        const page = await pdf.getPage(i); const v1 = page.getViewport({scale: 1}); const vp = page.getViewport({scale: Math.min(3, LONG / Math.max(v1.width, v1.height))});
+        const cv = document.createElement("canvas"); cv.width = Math.round(vp.width); cv.height = Math.round(vp.height); const g = cv.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, cv.width, cv.height);
+        await page.render({canvasContext: g, viewport: vp}).promise; page.cleanup?.();
+        await each(cv, i, pdf.numPages); cv.width = cv.height = 0;
+        if (F.ocr.stop && i < pdf.numPages) return false;
       }
-    } else { out.push(ocrClean((await w.recognize(blob)).data.text)); onPage?.(1, 1); }
-    return {pages: out, complete: true};
+      return true;
+    }
+    const bmp = await createImageBitmap(blob); const k = Math.min(1, LONG / Math.max(bmp.width, bmp.height));
+    const cv = document.createElement("canvas"); cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k); const g = cv.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, cv.width, cv.height);
+    g.drawImage(bmp, 0, 0, cv.width, cv.height); bmp.close?.(); await each(cv, 1, 1); cv.width = cv.height = 0; return true;
   }
+  const wait = (ms) => new Promise(r => setTimeout(r, ms));
+  async function aiPage(cv){
+    const data = toJpeg(cv);
+    for (let a = 0; ; a++) {
+      try { return ocrClean((await C.readPage(data, "image/jpeg")).text); }
+      catch (e) {
+        if (e?.code === "refused") return "[تعذّرت قراءة هذه الصفحة]";
+        if (e?.code === "not_configured" || e?.code === "not_granted" || a >= 3) throw e;
+        await wait(e?.code === "rate_limited" ? 20000 * (a + 1) : 3000 * (a + 1));
+      }
+    }
+  }
+  F.readMode = null;   // "ai" once the server answered a page; "free" when the assistant is not set up
+  async function ocrRow(row, onPage){
+    const blob = await download(row); const out = []; let how = F.readMode === "free" ? "ocr" : "ai";
+    const done = await pageImages(row, blob, async (cv, i, n) => {
+      if (how === "ai") { try { out.push(await aiPage(cv)); F.readMode = "ai"; }
+        catch (e) { if (e?.code !== "not_configured" && e?.code !== "not_granted") throw e; F.readMode = "free"; how = "ocr"; } }   // no assistant: the free reader, from this page on
+      if (out.length < i) out.push(ocrClean((await (await ocrReady()).recognize(cv)).data.text));
+      onPage?.(i, n);
+    });
+    return {pages: out, complete: done, how};
+  }
+  F.readOne = (row) => ocrRow(row);   // reads a file's pages without saving anything (for checks)
   // the queue: files never read yet (Word/PDF/text) first, then scans waiting for the free reader; open cases before the rest
   F.ocr = {running: false, stop: false, done: 0, pages: 0, failed: 0, current: null, left: null};
   async function queue(){
     const sel = "id,path,name,case_id,text_how,size";
-    const [a, b] = await Promise.all([sb.from(T).select(sel).is("text_how", null).eq("is_folder", false).is("deleted_at", null).limit(1000), sb.from(T).select(sel).eq("text_how", "none").is("deleted_at", null).limit(1000)]);
-    const rows = [...(a.data || []), ...(b.data || [])].filter(r => r.text_how === "none" || DIRECT.has(extOf(r.name)) || isImg(r.name));
+    const [a, b, c] = await Promise.all([sb.from(T).select(sel).is("text_how", null).eq("is_folder", false).is("deleted_at", null).limit(1000), sb.from(T).select(sel).eq("text_how", "none").is("deleted_at", null).limit(1000),
+      F.readMode === "free" ? {data: []} : sb.from(T).select(sel).eq("text_how", "ocr").is("deleted_at", null).limit(1000)]);   // what the old free reader read is read again by the model, last
+    const rows = [...(a.data || []), ...(b.data || []), ...(c.data || [])].filter(r => r.text_how === "none" || r.text_how === "ocr" || DIRECT.has(extOf(r.name)) || isImg(r.name));
     const open = (r) => { const c = r.case_id && C.cache.get("cases/" + r.case_id); return c && OPEN.has(c.status) ? 0 : r.case_id ? 1 : 2; };
-    return rows.sort((x, y) => (x.text_how === "none") - (y.text_how === "none") || open(x) - open(y));
+    const rank = (r) => r.text_how == null ? 0 : r.text_how === "none" ? 1 : 2;
+    return rows.sort((x, y) => rank(x) - rank(y) || open(x) - open(y));
   }
   F.runReader = async (onChange) => {
     const st = F.ocr; if (st.running) return; Object.assign(st, {running: true, stop: false, done: 0, pages: 0, failed: 0, started: Date.now()});
@@ -281,9 +315,10 @@
             if (r.text_how == null) { if (!await extract({...r})) continue; }
             else { const o = await ocrRow(r, (i, n) => { st.page = `${i}/${n}`; st.pages++; onChange?.(); });
               if (!o.complete) break;   // stopped half way through a document: nothing is saved for it
-              await sb.from(T).update({text: o.pages.join(PAGE_SEP), text_how: "ocr", pages: o.pages.length, text_at: new Date().toISOString()}).eq("id", r.id); }
+              if (r.text_how === "ocr" && o.how === "ocr") { st.done++; continue; }   // nothing better to replace it with
+              await sb.from(T).update({text: o.pages.join(PAGE_SEP), text_how: o.how, pages: o.pages.length, text_at: new Date().toISOString()}).eq("id", r.id); }
             st.done++;
-          } catch (e) { st.failed++; await sb.from(T).update({text_how: "error", text_at: new Date().toISOString()}).eq("id", r.id); }
+          } catch (e) { st.failed++; if (r.text_how !== "ocr") await sb.from(T).update({text_how: "error", text_at: new Date().toISOString()}).eq("id", r.id); }
           st.left = Math.max(0, st.left - 1); st.page = null; onChange?.();
         }
       }
@@ -357,7 +392,7 @@
     panel.querySelector(".body").innerHTML = `
       <section><h3>في الديوان الآن</h3>
         <p>${ar(s?.files)} ملف · ${fmtB(s?.bytes || 0)} · ${ar(s?.with_case)} منها داخل مجلد قضية مربوطة</p>
-        <p class="sub">نص مقروء: ${ar((by.pdf || 0) + (by.docx || 0) + (by.plain || 0))} مباشرة · ${ar(by.ocr || 0)} بالقراءة المجانية${by.ai ? ` · ${ar(by.ai)} بالمساعد` : ""} · بانتظار القراءة: ${ar(waitingText + waitingScan)}${by.error ? ` · تعذّرت قراءة ${ar(by.error)}` : ""}</p></section>
+        <p class="sub">نص مقروء: ${ar((by.pdf || 0) + (by.docx || 0) + (by.plain || 0))} مباشرة · ${ar(by.ai || 0)} ممسوح قرأه الذكاء الاصطناعي${by.ocr ? ` · ${ar(by.ocr)} قرأها القارئ المجاني القديم (تُعاد قراءتها)` : ""} · بانتظار القراءة: ${ar(waitingText + waitingScan)}${by.error ? ` · تعذّرت قراءة ${ar(by.error)}` : ""}</p></section>
       <section><h3>استيراد الأرشيف من هذا الجهاز</h3>
         <p class="sub">نزّل مجلد «Law Firm» من ون درايف إلى جهازك (وفك ضغطه)، ثم اختره هنا. يُرفع كل شيء بمساراته نفسها، ويُربط مجلد كل قضية بقضيته برقمها، والقضايا المفتوحة أولاً. يمكن الإيقاف والعودة لاحقاً: ما رُفع لا يُرفع مرة ثانية. نص المستندات يُقرأ بعد الرفع من «ابدأ القراءة» أدناه.</p>
         <label class="pick"><input type="file" id="dfPick" webkitdirectory directory multiple ${ps?.running ? "disabled" : ""}> اختيار مجلد «Law Firm»</label>
@@ -371,10 +406,10 @@
             <button id="dfLink" ${ps?.running ? "disabled" : ""}>ربط المجلدات بالقضايا</button></div>
           ${ps?.failed?.length ? `<details><summary>ما تعذّر رفعه</summary>${ps.failed.slice(0, 200).map(f => `<div class="sub">${esc(f.path)} — ${esc(f.error)}</div>`).join("")}</details>` : ""}
           <p id="dfLinkOut" class="sub">${esc(plan.linkMsg || "")}</p></div>` : ""}</section>
-      <section><h3>القراءة المجانية للمستندات الممسوحة والصور</h3>
-        <p class="sub">تقرأ الصكوك والمستندات المصوّرة في هذا المتصفح بلا أي تكلفة (قارئ نصوص عربي)، فيجدها البحث ويقرؤها المساعد. دقتها أقل من المساعد، وتكفي للبحث في الغالب. تعمل ما دامت الصفحة مفتوحة، والقضايا المفتوحة أولاً.</p>
-        <p>${o.running ? `يقرأ: ${esc(o.current || "")}${o.page ? ` (صفحة ${esc(o.page)})` : ""} — أُنجز ${ar(o.done)} ملف، ${ar(o.pages)} صفحة${speed ? `، نحو ${ar(speed)} صفحة في الدقيقة` : ""}، بقي ${ar(o.left)}` : `بانتظار القراءة: ${ar(waitingScan)} ممسوح، و${ar(waitingText)} لم يُقرأ بعد`}</p>
-        <div class="btns">${o.running ? `<button id="ocStop">إيقاف</button>` : `<button id="ocGo" class="pri" ${waitingText + waitingScan ? "" : "disabled"}>ابدأ القراءة</button>`}</div></section>
+      <section><h3>قراءة المستندات الممسوحة والصور</h3>
+        <p class="sub">تُقرأ الصكوك والمستندات المصوّرة صفحةً صفحةً بالذكاء الاصطناعي (نموذج القراءة في المساعد)، فيُنسخ نصها كما هو ويجده البحث ويقرؤه المساعد. التكلفة نحو عُشر سنت للصفحة، وتظهر في «استخدام المساعد». تعمل ما دامت الصفحة مفتوحة، والقضايا المفتوحة أولاً، ثم يُعاد ما قرأه القارئ المجاني القديم.${F.readMode === "free" ? ` <b>المساعد غير مضبوط الآن، فتعمل القراءة بالقارئ المجاني الأضعف.</b>` : ""}</p>
+        <p>${o.running ? `يقرأ: ${esc(o.current || "")}${o.page ? ` (صفحة ${esc(o.page)})` : ""} — أُنجز ${ar(o.done)} ملف، ${ar(o.pages)} صفحة${speed ? `، نحو ${ar(speed)} صفحة في الدقيقة` : ""}، بقي ${ar(o.left)}` : `بانتظار القراءة: ${ar(waitingScan)} ممسوح، و${ar(waitingText)} لم يُقرأ بعد${by.ocr ? `، و${ar(by.ocr)} تُعاد قراءتها` : ""}`}</p>
+        <div class="btns">${o.running ? `<button id="ocStop">إيقاف</button>` : `<button id="ocGo" class="pri" ${waitingText + waitingScan + (by.ocr || 0) ? "" : "disabled"}>ابدأ القراءة</button>`}</div></section>
       <section><h3>الملفات المكررة</h3>
         <p class="sub">ملفات محتواها واحد حرفياً (مثل وكالة نُسخت في مجلد كل قضية). تُبقي نسخة واحدة — المقترحة هي التي في مجلد الموكل، فتظهر في كل قضاياه — وتُخفى الباقية: كل قضية كانت تعرض نسخة مخفية تعرض المحفوظة بدلها، ولا يُحذف شيء نهائياً (تُستعاد من «المخفية»).</p>
         ${dup?.groups ? (dup.groups.length ? dup.groups.map((g, gi) => `<div class="grp"><p><b>${esc(g.items[0].name)}</b> <span class="sub">${ar(g.n)} نسخ · ${fmtB(g.bytes)} لكل نسخة</span></p>

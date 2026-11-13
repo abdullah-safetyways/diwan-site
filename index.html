@@ -1182,7 +1182,7 @@ async function openReader(c, f){
   const load = async () => {
     const t = $("rdText"); if (!t) return;
     try { const txt = await docText(f.uri, `${page}-${page+4}`); const more = /truncated: pages \d+-(\d+) of (\d+)/.exec(txt); const clean = txt.replace(/\[truncated:[^\]]*\]/g,"").trim();
-      if (page===1) t.textContent = clean || "(لا نص مقروء في هذا الملف بعد — إن كان صورة أو ممسوحاً فشغّل «القراءة المجانية» من «ملفات المكتب» أعلى الصفحة ثم افتحه ثانية)"; else t.textContent += "\n\n" + clean;
+      if (page===1) t.textContent = clean || "(لا نص مقروء في هذا الملف بعد — إن كان صورة أو ممسوحاً فشغّل «ابدأ القراءة» من «ملفات المكتب» أعلى الصفحة ثم افتحه ثانية)"; else t.textContent += "\n\n" + clean;
       const btn = $("rdMore"); if (more && +more[1] < +more[2]) { btn.hidden=false; btn.textContent=`الصفحات التالية (${+more[1]+1}–${Math.min(+more[1]+5,+more[2])} من ${more[2]})`; btn.onclick=()=>{ page=+more[1]+1; btn.hidden=true; load(); }; } else btn.hidden = true;
     } catch(e){ t.innerHTML = `<div class="notice err">تعذّرت قراءة الملف (${esc(e?.code||"خطأ")}). افتحه في ملفات المكتب.</div>`; }
   };
@@ -9680,7 +9680,7 @@ function bindBackupCheck(){
 }
 
 // ---------- أدوات المالك (12/11): استخدام المساعد (عدّ فقط)، ونسخ ملفات المكتب إلى جهازه مجلداً مجلداً
-const TIER_AR = {quick:"سريع", default:"متوسط", complex:"قوي"};
+const TIER_AR = {quick:"سريع", default:"متوسط", complex:"قوي", read:"قراءة المستندات"};
 function aiUsePanel(){
   if (!(S.me?.owner || S.me?.legacy)) return ""; const U = S.aiUse;
   const body = !U ? "" : U.error ? `<div class="notice err">${esc(U.error)}</div>` : !U.rows.length ? `<div class="empty">لا استخدام مسجَّل لهذا الشهر بعد.</div>` : (() => {
