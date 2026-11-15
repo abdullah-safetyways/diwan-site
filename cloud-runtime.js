@@ -155,6 +155,15 @@
   const realFetch = window.fetch.bind(window);
   window.fetch = async (u, o) => { const m = /\/_blob\/([0-9a-f]{32})/.exec(String(u)); if (m) { await whenReady(); const {data, error} = await sb.storage.from(BUCKET).download(m[1]);
       return error || !data ? new Response("", {status: 404}) : new Response(data, {status: 200, headers: {"content-type": data.type || "application/octet-stream"}}); } return realFetch(u, o); };
+  // (16/11, review) an image of an uploaded file (the letterhead's logo in «الخط والورق الرسمي») asked the site for «/_blob/…» and got a 404:
+  // such an image is shown from the file itself, read once per page
+  const blobImg = new Map();
+  const fixImg = (img) => { const m = /\/_blob\/([0-9a-f]{32})/.exec(img.getAttribute("src") || ""); if (!m) return; const id = m[1];
+    if (!blobImg.has(id)) blobImg.set(id, (async () => { await whenReady(); const {data, error} = await sb.storage.from(BUCKET).download(id); return error || !data ? "" : URL.createObjectURL(data); })());
+    img.removeAttribute("src"); blobImg.get(id).then(u => { if (u) { img.src = u; img.hidden = false; } }); };
+  new MutationObserver(ms => { for (const m of ms) { if (m.type === "attributes") { if (m.target.tagName === "IMG") fixImg(m.target); continue; }
+      for (const n of m.addedNodes) if (n.nodeType === 1) { if (n.tagName === "IMG") fixImg(n); else n.querySelectorAll?.('img[src*="/_blob/"]').forEach(fixImg); } } })
+    .observe(document.documentElement, {subtree: true, childList: true, attributes: true, attributeFilter: ["src"]});
 
   // a link to an uploaded file (a task's attachment: href «/_blob/<id>») opens the file itself, through a link valid for five minutes —
   // the browser alone would ask the site for «/_blob/…», which does not exist there
@@ -182,7 +191,7 @@
         while ((i = buf.indexOf("\n\n")) >= 0) { const chunk = buf.slice(0, i); buf = buf.slice(i + 2); const line = chunk.split("\n").find(l => l.startsWith("data:")); if (!line) continue; let ev; try { ev = JSON.parse(line.slice(5).trim()); } catch { continue; }
           if (ev.type === "content_block_delta" && ev.delta?.type === "text_delta") { text += ev.delta.text; opts.onText && opts.onText({text, delta: ev.delta.text}); }
           else if (ev.type === "message_start" && ev.message?.usage) { const u = ev.message.usage; use.in += (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0); use.cached += u.cache_read_input_tokens || 0; }
-          else if (ev.type === "message_delta") { if (ev.usage?.output_tokens) use.out = ev.usage.output_tokens; if (ev.delta?.stop_reason) stop = ev.delta.stop_reason; }
+          else if (ev.type === "message_delta") { if (ev.usage?.output_tokens) use.out += ev.usage.output_tokens; if (ev.delta?.stop_reason) stop = ev.delta.stop_reason; }
           else if (ev.type === "message_stop") ended = true;
           else if (ev.type === "error") throw {code: "unavailable", message: ev.error?.message || "stream error", text}; } } }
     catch (e) { if (e && e.name === "AbortError") throw {code: "cancelled", message: "cancelled", text}; throw e; }

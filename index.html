@@ -438,6 +438,7 @@ section.panel[data-fold="shut"] > :not(header){display:none !important}section.p
 .tab-more[open] .chev,.ux-rev[open]>summary .chev{transform:rotate(180deg)}
 .tab-menu{position:absolute;top:calc(100% + 4px);inset-inline-end:0;z-index:12;min-width:220px;display:grid;gap:2px;padding:6px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.14);transform-origin:top left}
 .tab-more[open] .tab-menu{animation:uxPop 160ms cubic-bezier(.23,1,.32,1)}
+@media (max-width:640px){.tab-menu{position:fixed;top:auto;left:12px;right:12px;min-width:0;max-height:70vh;overflow:auto}.role{white-space:normal;overflow-wrap:anywhere}}   /* 16/11 review: on a phone the menu and long session labels stayed inside the screen */
 @keyframes uxPop{from{opacity:0;transform:scale(.96)}}
 .tab-item{display:block;width:100%;text-align:start;border:0;background:none;padding:10px 12px;border-radius:8px;cursor:pointer;color:var(--ink-2);font-weight:600;white-space:nowrap}
 .tab-item[aria-selected="true"]{color:var(--accent);background:var(--accent-soft)}
@@ -4175,7 +4176,7 @@ function nzMerge(E, live, opts){
   const byNo = new Map(), otherNo = new Map();
   for (const [cid, d] of live) { if (d.kind != null && d.kind !== "case") continue; if (d.caseNo && !byNo.has(String(d.caseNo))) byNo.set(String(d.caseNo), cid); if (/^\d{6,}$/.test(cid) && !byNo.has(cid)) byNo.set(cid, cid); }
   for (const [cid, d] of live) for (const n of d.otherCaseNos || []) if (!otherNo.has(String(n))) otherNo.set(String(n), cid);
-  const out = new Map(); const plan = []; let partial = 0;
+  const out = new Map(); const plan = []; let partial = 0; E.__filingTaken = new Set();
   for (const [code, x] of Object.entries(E.cases || {})) {
     const {v, meta, sessions: nsess, urgent, partial: pt} = nzView(code, x, ids, TODAY, AT); if (pt) partial++;
     let cid = byNo.get(code) || code; let l = live.get(cid); let filed = false;
@@ -8108,8 +8109,10 @@ function openFilingMerge(fc, nc){
   const dr = openDrawer(`<header><div><span class="lbl">رفع الدعوى</span><h2 style="margin-top:4px">قُيّدت الدعوى برقم ${esc(nc.caseNo)}</h2><div class="sub">${esc(fc.title||"")}</div></div><button class="btn sm" data-close>إغلاق</button></header>
     <div class="body"><p style="margin-top:0">هذا الرقم قرأه الديوان من ناجز في ملف مستقل: <b>${esc(nc.title||nc.caseNo)}</b>${nc.court?` — ${esc(nc.court)}`:""}.</p>
       <p class="sub">بالربط يصير ملف ناجز هو القضية، وينتقل إليه من ملف رفع الدعوى: سجل الرفع (مقيّدة)، والمحامي المسؤول والفريق، والمستندات، والأتعاب وسندات القبض، والمهام المفتوحة، وتقارير الموكل. وينتقل ملف رفع الدعوى إلى المحذوفات بسجله كاملاً.</p>
+      ${ckeyRaw(fc.client||"")!==ckeyRaw(nc.client||"") ? `<p style="color:#b3261e;margin:0 0 8px"><b>تنبيه: الموكل مختلف.</b> ملف الرفع: «${esc(fc.client||"—")}» — ملف ناجز: «${esc(nc.client||"—")}». تأكد من رقم القضية قبل الربط؛ الأتعاب والمستندات ستنتقل إلى ملف ناجز.</p>
+        <label style="display:flex;gap:6px;align-items:center;margin-bottom:8px"><input type="checkbox" id="fMergeSure"> تأكدت: هما الدعوى نفسها</label>` : ""}
       <div style="display:flex;gap:8px"><button class="btn primary" id="fMergeGo">اربطهما</button><button class="btn" data-close>إلغاء</button></div></div>`);
-  dr.querySelector("#fMergeGo").onclick = async (e) => { e.target.disabled = true; if (await filingMerge(fc, nc)) { closeDrawer(); toast(`رُبطت الدعوى بالقضية ${nc.caseNo}`); } else e.target.disabled = false; };
+  dr.querySelector("#fMergeGo").onclick = async (e) => { const sure = dr.querySelector("#fMergeSure"); if (sure && !sure.checked) { toast("الموكل مختلف: أكّد أنهما الدعوى نفسها أولاً"); return; } e.target.disabled = true; if (await filingMerge(fc, nc)) { closeDrawer(); toast(`رُبطت الدعوى بالقضية ${nc.caseNo}`); } else e.target.disabled = false; };
 }
 async function filingMerge(fc, nc){
   const at = new Date().toISOString(); const f = fc.filing || {};
@@ -8154,10 +8157,16 @@ function nzFilingFor(code, v, E, live){
   const k = (x) => ckeyRaw(x || "");
   const both = cands.filter(d => d.plaintiff && d.defendant && k(d.plaintiff)===k(v.plaintiff) && k(d.defendant)===k(v.defendant));
   if (both.length===1) return both[0].id;
-  // (15/11) a filing written without the parties: by our client alone — only a filing already submitted, and only when it is the one for that client
-  const ours = v.client || (v.ourSide==="المدعى عليه" ? v.defendant : v.plaintiff);
-  const byClient = cands.filter(d => d.filing?.state==="submitted" && !(d.plaintiff && d.defendant) && d.client && k(d.client)===k(ours));
-  return byClient.length===1 ? byClient[0].id : null;
+  // (15/11, tightened 16/11 after the review) a filing written without the parties: by our client alone — only when our client is the
+  // plaintiff, the case was filed in Najiz on or after the day the filing was submitted, it is the one submitted filing for that client,
+  // and no other case of this same update has taken it (otherwise the lawyer links it by hand: «أدخل رقم القضية» → «اربطهما»)
+  if (v.ourSide!=="المدعي" || !v.client) return null;
+  const x = E.cases?.[code] || {}; const filedAt = String(x.detail?.caseDate || x.list?.caseDate || "").slice(0, 10);
+  const taken = E.__filingTaken || (E.__filingTaken = new Set());
+  const byClient = cands.filter(d => d.filing?.state==="submitted" && !(d.plaintiff && d.defendant) && d.client && k(d.client)===k(v.client)
+    && (!d.filing.submittedAt || (filedAt && filedAt >= String(d.filing.submittedAt).slice(0, 10))));
+  if (byClient.length!==1 || taken.has(byClient[0].id)) return null;
+  taken.add(byClient[0].id); return byClient[0].id;
 }
 
 // ---------- عملي والإضافة السريعة والفريق (v52): Abdullah, 27/10 — adding a task or a memo took many steps, «what is on me today and this
@@ -8412,11 +8421,14 @@ async function trackAfterCreate(id, doc){
 // its fees go with it: the fee contract, the invoices, the receipts paid against it and the open tasks (nothing is counted twice)
 async function trackCarryFees(p, id){
   const n = S.cases.get(id) || {id}; const hasFees = p.fees?.items?.length || (p.invoices||[]).length;
-  if (hasFees && !(n.fees?.items?.length)) {
+  // (16/11, review) the receipts go only with the fee contract they were paid against: if the target has a contract of its own, the
+  // contract stays here and so do its receipts (they used to move alone)
+  const feesMove = !!(hasFees && !(n.fees?.items?.length));
+  if (feesMove) {
     await patchCase(n, {fees:p.fees||null, feesNA:!!p.feesNA, invoices:[...(n.invoices||[]), ...(p.invoices||[])]}, `نُقلت إليه أتعاب الملف السابق ${p.caseNo||p.title||""}`);
     await patchCase(p, {fees:null, invoices:[], feesMovedTo:id}, `نُقلت أتعابه إلى الملف ${n.caseNo||n.title||id}`);
   }
-  for (const r of (S.receipts||[]).filter(r => r.caseId===p.id || (r.bill?.src==="case" && r.bill?.id===p.id)))
+  if (feesMove || !hasFees) for (const r of (S.receipts||[]).filter(r => r.caseId===p.id || (r.bill?.src==="case" && r.bill?.id===p.id)))
     try { await S.db.doc("receipts/"+r.id).update({caseId:id, ...(r.bill?.src==="case" && r.bill.id===p.id ? {bill:{...r.bill, id}} : {})}); } catch {}
   for (const t of (S.tasks||[]).filter(t => t.caseId===p.id && !t.done))
     try { await S.db.doc("tasks/"+t.id).update({caseId:id}); } catch {}
@@ -9669,12 +9681,14 @@ document.addEventListener("toggle", (e) => { if (e.target?.id === "dueMore") S.d
 // ---------- فحص النسخة الاحتياطية واسترجاعها (12/11): المالك يختار ملف النسخة (zip) فيقارنه الديوان بما في القاعدة الآن — مطابق، مختلف، ناقص
 // الآن — دون أن يكتب شيئاً؛ ثم يسترجع السجلات الناقصة كلها، أو سجلاً بعينه، بتأكيد. Nothing is ever overwritten in bulk.
 const bkStable = (v) => JSON.stringify(v, (k, x) => x && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.keys(x).sort().map(n => [n, x[n]])) : x);
+// (16/11, review) the office's accounts and settings and the usage counts are never restored from a file
+const BK_SKIP = /^(office|aiuse|meta)(\/|$)/;
 async function backupRead(file, onStep){
   const JSZip = await needZip(); const z = await JSZip.loadAsync(await file.arrayBuffer()); const recs = [];
-  for (const [name, f] of Object.entries(z.files)) { if (f.dir) continue; const m = /\/قاعدة البيانات\/(.+)\/([^/]+)\.json$/.exec(name.normalize("NFC")); if (!m) continue; recs.push({coll:m[1], id:m[2], f}); }
+  for (const [name, f] of Object.entries(z.files)) { if (f.dir) continue; const m = /\/قاعدة البيانات\/(.+)\/([^/]+)\.json$/.exec(name.normalize("NFC")); if (!m) continue; if (BK_SKIP.test(m[1]) || !/^[a-z][a-z0-9_-]*(\/[^/]+\/[a-z][a-z0-9_-]*)*$/i.test(m[1])) continue; recs.push({coll:m[1], id:m[2], f}); }
   if (!recs.length) throw {msg:"ليس ملف نسخة احتياطية من الديوان (لا مجلد «قاعدة البيانات» فيه)."};
   const colls = [...new Set(recs.map(r => r.coll))]; const now = new Map(); let i = 0;
-  for (const p of colls) { onStep?.(`يقرأ القاعدة الحالية (${++i} من ${colls.length})…`); try { const q = await S.db.collection(p).get(); for (const d of q.docs) now.set(p + "/" + d.id, d.data()); } catch {} }
+  for (const p of colls) { onStep?.(`يقرأ القاعدة الحالية (${++i} من ${colls.length})…`); let q; try { q = await S.db.collection(p).get(); } catch { throw {msg:`تعذّرت قراءة «${p}» من الديوان الآن، فتوقف الفحص (لئلا يُعدّ الموجود ناقصاً). أعد الفحص بعد قليل.`}; } for (const d of q.docs) now.set(p + "/" + d.id, d.data()); }
   const out = {total:recs.length, same:0, diff:[], missing:[], data:new Map(), name:file.name, colls:colls.length};
   for (const r of recs) { const path = r.coll + "/" + r.id; let data; try { data = JSON.parse(await r.f.async("string")); } catch { continue; }
     if (!now.has(path)) { out.missing.push(path); out.data.set(path, data); }
@@ -9692,9 +9706,11 @@ function backupCheckHtml(){
     ${r.diff.length ? `<details style="margin-top:8px"><summary>سجلات تغيّرت بعد النسخة (${r.diff.length}) — استرجاع سجل بعينه إلى حالته في النسخة</summary><div class="tasks" style="margin-top:6px">${r.diff.slice(0, 200).map(p => `<div class="ev" style="grid-template-columns:minmax(0,1fr) auto;align-items:center"><span class="sub">${label(p)}</span><button class="btn sm ghost" type="button" data-bkone="${esc(p)}">استرجاع هذا السجل</button></div>`).join("")}</div>
       <p class="sub">أغلب هذه تغييرات عملك الطبيعية بعد تاريخ النسخة؛ استرجاع سجل يُرجعه كما كان يوم النسخة ويُلغي ما عُدّل فيه بعدها.</p></details>` : ""}`;
 }
-async function backupRestore(paths){
-  const r = S.bkCheck; let ok = 0, bad = 0;
-  for (const p of paths) { const d = r.data.get(p); if (!d) continue; try { await S.db.doc(p).set(d); ok++; } catch { bad++; } }
+async function backupRestore(paths, onlyMissing){
+  const r = S.bkCheck; let ok = 0, bad = 0, kept = 0;
+  for (const p of paths) { const d = r.data.get(p); if (!d) continue;
+    try { if (onlyMissing && (await S.db.doc(p).get()).exists) { kept++; continue; }   // it came back since the check: the current one stays
+      await S.db.doc(p).set(d); ok++; } catch { bad++; } }
   await logAction(null, `استرجاع من النسخة الاحتياطية «${r.name}»: ${ok} سجل${bad ? `، وتعذّر ${bad}` : ""}`);
   return {ok, bad};
 }
@@ -9704,7 +9720,7 @@ function bindBackupCheck(){
     try { say("يفتح ملف النسخة…"); S.bkCheck = await backupRead(f, say); say("انتهى الفحص."); } catch (e) { S.bkCheck = null; say(e?.msg || "تعذّر قراءة ملف النسخة."); }
     render(); };
   const all = $("bkRestoreMissing"); if (all) all.onclick = async () => { if (!all.dataset.armed) { all.dataset.armed = "1"; all.textContent = "تأكيد: استرجاع الناقصة"; return; } all.disabled = true;
-    const x = await backupRestore(S.bkCheck.missing); toast(`استُرجع ${x.ok} سجل${x.bad ? `، وتعذّر ${x.bad}` : ""}`); S.bkCheck = null; say("استُرجعت السجلات الناقصة. افحص النسخة مرة أخرى للتأكد."); render(); };
+    const x = await backupRestore(S.bkCheck.missing, true); toast(`استُرجع ${x.ok} سجل${x.bad ? `، وتعذّر ${x.bad}` : ""}`); S.bkCheck = null; say("استُرجعت السجلات الناقصة. افحص النسخة مرة أخرى للتأكد."); render(); };
   document.querySelectorAll("[data-bkone]").forEach(b => b.onclick = async () => { if (!b.dataset.armed) { b.dataset.armed = "1"; b.textContent = "تأكيد: يرجع كما في النسخة"; return; } b.disabled = true;
     const p = b.dataset.bkone; const x = await backupRestore([p]); if (x.ok) { S.bkCheck.diff = S.bkCheck.diff.filter(q => q !== p); S.bkCheck.same++; toast("استُرجع السجل"); render(); } else { toast("تعذّر الاسترجاع"); b.disabled = false; } });
 }

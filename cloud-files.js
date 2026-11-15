@@ -173,7 +173,8 @@
   };
 
   // ---------------------------------------------------------------- identical files: one is kept, the others hidden (restorable)
-  F.duplicates = async () => { const {data, error} = await sb.rpc("files_duplicates", {lim: 200}); if (error) throw tErr(error); return data || []; };
+  const DUP_LIM = 500;   // (16/11) the office had 234 groups; the list shows the largest first and says when it is cut
+  F.duplicates = async () => { const {data, error} = await sb.rpc("files_duplicates", {lim: DUP_LIM}); if (error) throw tErr(error); return data || []; };
   // the copy to keep by default: the one in a client's folder (shared by the cases), else the one with the shortest path
   F.keepOf = (g) => { const items = g.items; const paper = items.find(it => { const parts = it.path.split("/"); return !parts.slice(0, -1).some(x => /^\s*\d{6,}/.test(x) || /^\s*\d{2}\s*-\s*القضايا\s*$/.test(x)); }); return (paper || items[0]).id; };
   F.dedupe = async (g, keepId, kindOf) => {
@@ -272,10 +273,10 @@
   async function aiPage(cv){
     const data = toJpeg(cv);
     for (let a = 0; ; a++) {
-      try { return ocrClean((await C.readPage(data, "image/jpeg")).text); }
+      try { const r = await C.readPage(data, "image/jpeg"); return ocrClean(r.text) + (r.truncated ? "\n[انتهى حد القراءة قبل آخر الصفحة]" : ""); }
       catch (e) {
         if (e?.code === "refused") return "[تعذّرت قراءة هذه الصفحة]";
-        if (e?.code === "not_configured" || e?.code === "not_granted" || a >= 3) throw e;
+        if (e?.code === "not_configured" || e?.code === "not_granted" || e?.code === "invalid_argument" || a >= 3) throw e;
         await wait(e?.code === "rate_limited" ? 20000 * (a + 1) : 3000 * (a + 1));
       }
     }
@@ -298,13 +299,17 @@
     const sel = "id,path,name,case_id,text_how,size";
     const [a, b, c] = await Promise.all([sb.from(T).select(sel).is("text_how", null).eq("is_folder", false).is("deleted_at", null).limit(1000), sb.from(T).select(sel).eq("text_how", "none").is("deleted_at", null).limit(1000),
       F.readMode === "free" ? {data: []} : sb.from(T).select(sel).eq("text_how", "ocr").is("deleted_at", null).limit(1000)]);   // what the old free reader read is read again by the model, last
-    const rows = [...(a.data || []), ...(b.data || []), ...(c.data || [])].filter(r => r.text_how === "none" || r.text_how === "ocr" || DIRECT.has(extOf(r.name)) || isImg(r.name));
+    // (16/11) a file that failed in an earlier run is tried again, after everything else (once per run): 289 failed on 15/11 only because the
+    // page reached the server before its update was published
+    const e = await sb.from(T).select(sel).eq("text_how", "error").is("deleted_at", null).limit(1000);
+    const err = (e.data || []).filter(r => extOf(r.name) === "pdf" || isImg(r.name));
+    const rows = [...(a.data || []), ...(b.data || []), ...(c.data || []), ...err].filter(r => r.text_how === "none" || r.text_how === "ocr" || r.text_how === "error" || DIRECT.has(extOf(r.name)) || isImg(r.name));
     const open = (r) => { const c = r.case_id && C.cache.get("cases/" + r.case_id); return c && OPEN.has(c.status) ? 0 : r.case_id ? 1 : 2; };
-    const rank = (r) => r.text_how == null ? 0 : r.text_how === "none" ? 1 : 2;
+    const rank = (r) => r.text_how == null ? 0 : r.text_how === "none" ? 1 : r.text_how === "ocr" ? 2 : 3;
     return rows.sort((x, y) => rank(x) - rank(y) || open(x) - open(y));
   }
   F.runReader = async (onChange) => {
-    const st = F.ocr; if (st.running) return; Object.assign(st, {running: true, stop: false, done: 0, pages: 0, failed: 0, started: Date.now()});
+    const st = F.ocr; if (st.running) return; Object.assign(st, {running: true, stop: false, done: 0, pages: 0, failed: 0, serverErr: null, started: Date.now()});
     const seen = new Set();   // tried in this run (a file the page cannot read yet stays as it is, and is not tried again)
     try {
       for (;;) {
@@ -318,7 +323,10 @@
               if (r.text_how === "ocr" && o.how === "ocr") { st.done++; continue; }   // nothing better to replace it with
               await sb.from(T).update({text: o.pages.join(PAGE_SEP), text_how: o.how, pages: o.pages.length, text_at: new Date().toISOString()}).eq("id", r.id); }
             st.done++;
-          } catch (e) { st.failed++; if (r.text_how !== "ocr") await sb.from(T).update({text_how: "error", text_at: new Date().toISOString()}).eq("id", r.id); }
+          } catch (e) {
+            // the server did not answer (no connection, busy, an error of its own): not this file's fault — stop, nothing is marked
+            if (e && e.code) { st.serverErr = e.message || e.code; st.stop = true; break; }
+            st.failed++; if (r.text_how !== "ocr") await sb.from(T).update({text_how: "error", text_at: new Date().toISOString()}).eq("id", r.id); }
           st.left = Math.max(0, st.left - 1); st.page = null; onChange?.();
         }
       }
@@ -409,12 +417,15 @@
       <section><h3>قراءة المستندات الممسوحة والصور</h3>
         <p class="sub">تُقرأ الصكوك والمستندات المصوّرة صفحةً صفحةً بالذكاء الاصطناعي (نموذج القراءة في المساعد)، فيُنسخ نصها كما هو ويجده البحث ويقرؤه المساعد. التكلفة نحو عُشر سنت للصفحة، وتظهر في «استخدام المساعد». تعمل ما دامت الصفحة مفتوحة، والقضايا المفتوحة أولاً، ثم يُعاد ما قرأه القارئ المجاني القديم.${F.readMode === "free" ? ` <b>المساعد غير مضبوط الآن، فتعمل القراءة بالقارئ المجاني الأضعف.</b>` : ""}</p>
         <p>${o.running ? `يقرأ: ${esc(o.current || "")}${o.page ? ` (صفحة ${esc(o.page)})` : ""} — أُنجز ${ar(o.done)} ملف، ${ar(o.pages)} صفحة${speed ? `، نحو ${ar(speed)} صفحة في الدقيقة` : ""}، بقي ${ar(o.left)}` : `بانتظار القراءة: ${ar(waitingScan)} ممسوح، و${ar(waitingText)} لم يُقرأ بعد${by.ocr ? `، و${ar(by.ocr)} تُعاد قراءتها` : ""}`}</p>
-        <div class="btns">${o.running ? `<button id="ocStop">إيقاف</button>` : `<button id="ocGo" class="pri" ${waitingText + waitingScan + (by.ocr || 0) ? "" : "disabled"}>ابدأ القراءة</button>`}</div></section>
+        <div class="btns">${o.running ? `<button id="ocStop">إيقاف</button>` : `<button id="ocGo" class="pri" ${waitingText + waitingScan + (by.ocr || 0) + (by.error || 0) ? "" : "disabled"}>ابدأ القراءة</button>`}</div>
+        ${o.serverErr && !o.running ? `<p class="sub" style="color:#b3261e">توقفت القراءة لأن خدمة القراءة لم تستجب (${esc(o.serverErr)}). لم يُعلَّم أي ملف بالفشل؛ أعد «ابدأ القراءة» بعد قليل.</p>` : ""}
+        ${by.error ? `<p class="sub">${ar(by.error)} ملف تعذّرت قراءته سابقاً — يُعاد تجريبها آخر الطابور.</p>` : ""}</section>
       <section><h3>الملفات المكررة</h3>
         <p class="sub">ملفات محتواها واحد حرفياً (مثل وكالة نُسخت في مجلد كل قضية). تُبقي نسخة واحدة — المقترحة هي التي في مجلد الموكل، فتظهر في كل قضاياه — وتُخفى الباقية: كل قضية كانت تعرض نسخة مخفية تعرض المحفوظة بدلها، ولا يُحذف شيء نهائياً (تُستعاد من «المخفية»).</p>
         ${dup?.groups ? (dup.groups.length ? dup.groups.map((g, gi) => `<div class="grp"><p><b>${esc(g.items[0].name)}</b> <span class="sub">${ar(g.n)} نسخ · ${fmtB(g.bytes)} لكل نسخة</span></p>
           ${g.items.map(it => `<label class="row"><input type="radio" name="dk${gi}" value="${esc(it.id)}" ${(dup.keep[g.sha256] || F.keepOf(g)) === it.id ? "checked" : ""}><span class="nm" title="${esc(it.path)}">${esc(it.path.replace(/^Law Firm\//, ""))}</span></label>`).join("")}
           <div class="btns"><button data-dkeep="${gi}">أبقِ المختارة وأخفِ ${ar(g.n - 1)}</button></div></div>`).join("") : `<p>لا ملفات مكررة.</p>`) : ""}
+        ${dup?.groups?.length >= DUP_LIM ? `<p class="sub">تُعرض أكبر ${ar(DUP_LIM)} مجموعة؛ بعد إخفاء بعضها اضغط «أعد البحث» لتظهر البقية.</p>` : ""}
         ${dup?.msg ? `<p class="sub">${esc(dup.msg)}</p>` : ""}
         <div class="btns"><button id="dupFind">${dup?.groups ? "أعد البحث" : "ابحث عن المكرر"}</button></div></section>
       <section><h3>المخفية</h3>
