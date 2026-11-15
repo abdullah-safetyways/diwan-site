@@ -8096,9 +8096,35 @@ function openFilingCaseNo(c){
   dr.querySelector("#fNoForm").onsubmit = async (e) => { e.preventDefault(); const no = fromHindi(e.target.elements.no.value).replace(/\D/g,"");
     if (no.length < 6) { toast("رقم القضية غير صحيح"); return; }
     const other = [...S.cases.values()].find(x => !x.deleted && x.id!==c.id && (String(x.caseNo||"")===no || (x.otherCaseNos||[]).map(String).includes(no) || x.id===no));
+    if (other && other.caseNo && !other.filing && !other.convertedTo) { closeDrawer(); openFilingMerge(c, other); return; }   // Najiz already brought it as its own file: join them
     if (other) { toast(`هذا الرقم مسجل في ملف آخر: ${other.title||other.id}`); return; }
     const filing = {...(c.filing||{}), state:"registered", registeredAt:new Date().toISOString()};
     if (await patchCase(c, {caseNo:no, stage:"قيد المرافعة", filing}, `أُضيف رقم القضية ${no} لملف رفع الدعوى`, {"رقم القضية":["—", no]})) { closeDrawer(); toast("حُفظ رقم القضية"); } };
+}
+// (15/11) the lawsuit filed in Najiz came back from Najiz as a separate file: the Najiz file is the case from now on, and the filing file
+// joins it — the filing record (now registered), its responsible lawyer and team, documents, fees, receipts, open tasks and the client
+// reports; the filing file goes to the deleted items (restorable), pointing to the case
+function openFilingMerge(fc, nc){
+  const dr = openDrawer(`<header><div><span class="lbl">رفع الدعوى</span><h2 style="margin-top:4px">قُيّدت الدعوى برقم ${esc(nc.caseNo)}</h2><div class="sub">${esc(fc.title||"")}</div></div><button class="btn sm" data-close>إغلاق</button></header>
+    <div class="body"><p style="margin-top:0">هذا الرقم قرأه الديوان من ناجز في ملف مستقل: <b>${esc(nc.title||nc.caseNo)}</b>${nc.court?` — ${esc(nc.court)}`:""}.</p>
+      <p class="sub">بالربط يصير ملف ناجز هو القضية، وينتقل إليه من ملف رفع الدعوى: سجل الرفع (مقيّدة)، والمحامي المسؤول والفريق، والمستندات، والأتعاب وسندات القبض، والمهام المفتوحة، وتقارير الموكل. وينتقل ملف رفع الدعوى إلى المحذوفات بسجله كاملاً.</p>
+      <div style="display:flex;gap:8px"><button class="btn primary" id="fMergeGo">اربطهما</button><button class="btn" data-close>إلغاء</button></div></div>`);
+  dr.querySelector("#fMergeGo").onclick = async (e) => { e.target.disabled = true; if (await filingMerge(fc, nc)) { closeDrawer(); toast(`رُبطت الدعوى بالقضية ${nc.caseNo}`); } else e.target.disabled = false; };
+}
+async function filingMerge(fc, nc){
+  const at = new Date().toISOString(); const f = fc.filing || {};
+  const lead = nc.lead || fc.lead || null; const assignees = [...new Set([...(lead?[lead]:[]), ...(nc.assignees||[]), ...(fc.assignees||[])])];
+  const fill = {}; for (const k of ["clientPhone","clientIdNo","clientCity","engagementId","conflict","poa"]) if (fc[k] && !nc[k]) fill[k] = fc[k];
+  const ok = await patchCase(nc, {...fill, filing:{...f, state:"registered", registeredAt:at, caseNo:String(nc.caseNo), fromFile:fc.id}, lead, assignees, related:[...new Set([...(nc.related||[]), fc.id])],
+    notes:[nc.notes, fc.notes].filter(Boolean).join("\n")}, `رُبط بها ملف رفع الدعوى${f.reqNo?` (طلب ${f.reqNo})`:""}: قُيّدت الدعوى بهذا الرقم`);
+  if (!ok) return false;
+  await trackCarryDocs(fc.id, nc.id);
+  await trackCarryFees(fc, nc.id);
+  for (const x of (S.comms||[]).filter(x => x.caseId===fc.id)) try { await S.db.doc("comms/"+x.id).update({caseId:nc.id}); } catch {}
+  for (const m of (S.memos||[]).filter(m => m.caseId===fc.id && !m.done)) try { await S.db.doc("memos/"+m.id).update({caseId:nc.id}); } catch {}
+  await patchCase(fc, {related:[...new Set([...(fc.related||[]), nc.id])], convertedTo:nc.id, filing:{...f, state:"registered", registeredAt:at, caseNo:String(nc.caseNo)}, deleted:true, deletedAt:at, deletedBy:S.uid||null,
+    deleteReason:`قُيّدت الدعوى برقم ${nc.caseNo} — رُبطت بملف القضية`}, `قُيّدت الدعوى برقم ${nc.caseNo}: نُقل سجله ومستنداته وأتعابه إلى ملف القضية، وانتقل هذا الملف إلى المحذوفات`);
+  return true;
 }
 function bindFiling(){
   document.querySelectorAll("[data-fmark]").forEach(b => b.onclick = async () => { const c = S.cases.get(b.dataset.fmark); if (!c) return; b.disabled = true;
@@ -8127,7 +8153,11 @@ function nzFilingFor(code, v, E, live){
   if (!v?.plaintiff || !v?.defendant) return null;
   const k = (x) => ckeyRaw(x || "");
   const both = cands.filter(d => d.plaintiff && d.defendant && k(d.plaintiff)===k(v.plaintiff) && k(d.defendant)===k(v.defendant));
-  return both.length===1 ? both[0].id : null;
+  if (both.length===1) return both[0].id;
+  // (15/11) a filing written without the parties: by our client alone — only a filing already submitted, and only when it is the one for that client
+  const ours = v.client || (v.ourSide==="المدعى عليه" ? v.defendant : v.plaintiff);
+  const byClient = cands.filter(d => d.filing?.state==="submitted" && !(d.plaintiff && d.defendant) && d.client && k(d.client)===k(ours));
+  return byClient.length===1 ? byClient[0].id : null;
 }
 
 // ---------- عملي والإضافة السريعة والفريق (v52): Abdullah, 27/10 — adding a task or a memo took many steps, «what is on me today and this
