@@ -6,7 +6,7 @@
 (() => {
   if (window.__diwanNajiz) { window.__diwanNajiz.show(); return; }
   if (!/najiz\.sa$/.test(location.hostname)) { alert("افتح هذه الأداة في صفحة najiz.sa بعد تسجيل الدخول."); return; }
-  const TOOL = "diwan-najiz-tool/3";
+  const TOOL = "diwan-najiz-tool/4";
   const BASE = "/applications/lawsuit//lawsuit/";
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   const getJ = async (u) => { for (let t = 0; t < 3; t++) { try { const r = await fetch(u, {credentials: "include"}); if (r.ok) return await r.json(); if (r.status === 404 || r.status === 403) return {__status: r.status}; } catch {} await sleep(800 * (t + 1)); } return {__err: 1}; };
@@ -50,7 +50,12 @@
       <input id="dnz-name" style="width:100%;box-sizing:border-box;border:1px solid #d9d8e2;border-radius:8px;padding:7px 10px;font:inherit" placeholder="اسم الحساب">
       <label style="display:flex;gap:6px;align-items:center;margin:8px 0 0;font-size:13px"><input type="checkbox" id="dnz-req" checked> جمع صحائف الدعاوى (الطلبات) أيضاً</label>
       <label style="display:flex;gap:6px;align-items:center;margin:4px 0 8px;font-size:13px"><input type="checkbox" id="dnz-exec" checked> جمع طلبات التنفيذ (السندات والمبالغ والقرارات)</label>
-      <button id="dnz-go" style="${BTN}">ابدأ الجمع</button></div>
+      <button id="dnz-go" style="${BTN}">ابدأ الجمع</button>
+      <details style="margin-top:10px;font-size:12px;color:#484a66"><summary style="cursor:pointer">تعرّف على صفحة الوكالات (لا يقرأ أي بيانات)</summary>
+        <div style="margin-top:6px">١) افتح «الوكالات» في ناجز كما تفتحها عادة واعرض قائمتها وتفاصيل وكالة واحدة. ٢) شغّل إشارة «تحديث الديوان» مرة أخرى إن اختفت هذه النافذة. ٣) اضغط الزر: يعرض <b>عناوين</b> الصفحات التي طلبتها صفحة ناجز نفسها فقط — بلا أسماء ولا أرقام ولا محتوى (الأرقام تُستبدل بـ#) — فتنسخها للديوان.</div>
+        <button id="dnz-learn" style="${BTN2};margin-top:6px">اعرض العناوين</button>
+        <textarea id="dnz-paths" hidden readonly style="width:100%;box-sizing:border-box;height:120px;margin-top:6px;font:12px monospace;direction:ltr"></textarea>
+        <button id="dnz-pcopy" hidden style="${BTN2};margin-top:6px">نسخ العناوين</button></details></div>
     <div id="dnz-prog" hidden><div id="dnz-msg" style="margin:6px 0">…</div><div style="height:6px;background:#ecebf0;border-radius:4px;overflow:hidden"><div id="dnz-bar" style="height:100%;width:0;background:#151547;transition:width .3s"></div></div></div>
     <div id="dnz-done" hidden><div id="dnz-sum" style="margin:6px 0"></div><div id="dnz-sent" style="margin:6px 0;color:#2f7d4f;font-weight:700" hidden></div>
       <div id="dnz-alt" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><button id="dnz-copy" style="${BTN}">نسخ البيانات للديوان</button><button id="dnz-dl" style="${BTN2}">تنزيل الملف</button></div>
@@ -62,6 +67,16 @@
   const api = {show: () => { box.hidden = false; }};
   window.__diwanNajiz = api;
   $("dnz-x").onclick = () => { box.hidden = true; };
+  // (17/11) learning the POA page: only the addresses (paths) of the requests the Najiz page itself made — no query values, no response,
+  // every run of 4+ digits masked — so the office can say which of Najiz's own pages hold its powers of attorney. Nothing is sent anywhere.
+  $("dnz-learn").onclick = () => {
+    const seen = new Set();
+    for (const e of performance.getEntriesByType("resource")) { let u; try { u = new URL(e.name); } catch { continue; }
+      if (u.origin !== location.origin || !["fetch", "xmlhttprequest"].includes(e.initiatorType)) continue;
+      seen.add(u.pathname.split("/").map(x => /\d{3,}|[0-9a-f]{8,}|^[0-9a-f-]{20,}$/i.test(x) || /[^\x00-\x7f]|%/.test(x) ? "#" : x).join("/") + (u.search ? "?…" : "")); }
+    const t = $("dnz-paths"); t.hidden = false; t.value = [location.pathname.replace(/\d{4,}/g, "#"), ...[...seen].sort()].join("\n") || "(لا عناوين — افتح صفحة الوكالات أولاً)";
+    $("dnz-pcopy").hidden = false; };
+  $("dnz-pcopy").onclick = async () => { try { await navigator.clipboard.writeText($("dnz-paths").value); $("dnz-pcopy").textContent = "نُسخت"; } catch { $("dnz-paths").select(); } };
   const guessName = () => { const t = (document.querySelector("[class*=user-name],[class*=username],.user-info,.profile-name") || {}).textContent || ""; return t.trim().slice(0, 40); };
   let remembered = ""; try { remembered = localStorage.getItem("diwan.najiz.name") || ""; } catch {}
   $("dnz-name").value = acct || remembered || guessName();
