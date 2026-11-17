@@ -6,7 +6,7 @@
 (() => {
   if (window.__diwanNajiz) { window.__diwanNajiz.show(); return; }
   if (!/najiz\.sa$/.test(location.hostname)) { alert("افتح هذه الأداة في صفحة najiz.sa بعد تسجيل الدخول."); return; }
-  const TOOL = "diwan-najiz-tool/4";
+  const TOOL = "diwan-najiz-tool/5";
   const BASE = "/applications/lawsuit//lawsuit/";
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   const getJ = async (u) => { for (let t = 0; t < 3; t++) { try { const r = await fetch(u, {credentials: "include"}); if (r.ok) return await r.json(); if (r.status === 404 || r.status === 403) return {__status: r.status}; } catch {} await sleep(800 * (t + 1)); } return {__err: 1}; };
@@ -62,7 +62,9 @@
         <textarea id="dnz-paths" hidden readonly style="width:100%;box-sizing:border-box;height:120px;margin-top:6px;font:12px monospace;direction:ltr"></textarea>
         <button id="dnz-pcopy" hidden style="${BTN2};margin-top:6px">نسخ العناوين</button>
         <div style="margin-top:10px">ثم: اضغط «ابدأ المراقبة»، وفي صفحة الوكالات اضغط البحث، وافتح وكالة، واضغط تنزيلها أو طباعتها كما تفعل عادة، ثم «أوقف وانسخ». تُسجَّل <b>أسماء الحقول وأنواعها فقط</b> في كل طلب ورد — لا قيمة ولا اسم ولا رقم.</div>
-        <button id="dnz-watch" style="${BTN2};margin-top:6px">ابدأ المراقبة</button> <span id="dnz-wn" style="font-size:12px"></span></details>
+        <button id="dnz-watch" style="${BTN2};margin-top:6px">ابدأ المراقبة</button> <span id="dnz-wn" style="font-size:12px"></span>
+        <div style="margin-top:10px;border-top:1px dashed #d9d8e2;padding-top:8px"><b>جمع الوكالات للديوان:</b> ابدأ المراقبة، واعرض في ناجز قائمة الوكالات التي أنت فيها <b>وكيل</b> واضغط البحث، ثم اضغط الزر. يكرر طلب الصفحة نفسه صفحةً صفحةً بتمهل (قراءة فقط)، ثم ينسخ القائمة فتلصقها في الديوان: المزامنة ← ربط ناجز ← «لصق من الحافظة».</div>
+        <button id="dnz-poas" style="${BTN};margin-top:6px">جمع الوكالات</button> <span id="dnz-pn" style="font-size:12px"></span></details>
     <button id="dnz-x" title="إغلاق" style="position:absolute;top:8px;left:10px;background:none;border:0;font-size:18px;cursor:pointer;color:#6f718a">×</button>`;
   document.body.appendChild(box);
   const $ = (id) => box.querySelector("#" + id);
@@ -83,21 +85,65 @@
   const shape = (v, d = 0) => { if (v === null) return "null"; if (Array.isArray(v)) return v.length ? [shape(v[0], d + 1)] : []; if (typeof v === "object") { if (d > 4) return "{…}"; const o = {}; for (const k of Object.keys(v).slice(0, 60)) o[k] = shape(v[k], d + 1); return o; } return typeof v; };
   const maskPath = (p) => p.split("/").map(x => /\d{3,}|[0-9a-f]{8,}|^[0-9a-f-]{20,}$|^[A-Za-z0-9+_=-]{8,}$/i.test(x) && !/^[a-z]+$|^[A-Z][a-z]+([A-Z][a-z]+)*$/.test(x) || /[^\x00-\x7f]|%/.test(x) ? "#" : x).join("/");
   const jshape = (t) => { try { return shape(JSON.parse(t)); } catch { return t ? "(" + typeof t + ", " + String(t).length + " حرفاً)" : ""; } };
-  const watched = []; let watching = false; const origFetch = window.fetch, origOpen = XMLHttpRequest.prototype.open, origSend = XMLHttpRequest.prototype.send;
-  const note = (method, url, body, status, ctype, resp) => { let u; try { u = new URL(url, location.href); } catch { return; } if (!watching || u.origin !== location.origin || !/^\/applications\/wekalat\//.test(u.pathname)) return;
-    watched.push({method, path: maskPath(u.pathname), query: [...u.searchParams.keys()], body: body == null ? null : typeof body === "string" ? jshape(body) : "(" + (body.constructor?.name || typeof body) + ")", status, type: (ctype || "").split(";")[0], reply: resp});
+  const watched = []; let watching = false; const origFetch = window.fetch, origOpen = XMLHttpRequest.prototype.open, origSend = XMLHttpRequest.prototype.send, origSetH = XMLHttpRequest.prototype.setRequestHeader;
+  // kept in this page's memory only, never shown or copied: the page's own list request (to repeat it page by page) and the last
+  // replies (to tell, by comparing values here, which list field a detail or download request uses — only the field's name is reported)
+  let lastSearch = null; const rawSeen = {search: [], user: null};
+  const b64 = (v) => { try { return btoa(unescape(encodeURIComponent(String(v)))); } catch { return null; } };
+  const relOf = (val) => { if (val == null || val === "") return []; const v = String(val); const out = new Set();
+    for (const it of rawSeen.search) for (const [k, x] of Object.entries(it)) if (x != null && x !== "" && typeof x !== "object") { if (String(x) === v) out.add("searchResult." + k); else if (b64(x) === v) out.add("base64(searchResult." + k + ")"); }
+    if (rawSeen.user) for (const [k, x] of Object.entries(rawSeen.user)) if (x != null && x !== "" && typeof x !== "object" && String(x) === v) out.add("UserInfo." + k);
+    return [...out]; };
+  const relations = (u, body) => { const r = {}; u.pathname.split("/").forEach((x, i) => { const m = relOf(decodeURIComponent(x)); if (m.length) r["path[" + i + "]"] = m; });
+    let j = null; try { j = typeof body === "string" ? JSON.parse(body) : null; } catch {}
+    if (j && typeof j === "object") for (const [k, x] of Object.entries(j)) { const m = relOf(x); if (m.length) r["body." + k] = m; }
+    return r; };
+  const rawNote = (method, u, body, headers, text) => {
+    if (/\/Procuration\/search$/.test(u.pathname) && method.toUpperCase() === "POST") { lastSearch = {url: u.pathname, body, headers: headers || {}};
+      try { rawSeen.search = (JSON.parse(text)?.data?.searchResult || []).slice(0, 200); } catch {} }
+    if (/\/api\/UserInfo$/.test(u.pathname)) { try { rawSeen.user = JSON.parse(text); } catch {} } };
+  const note = (method, url, body, status, ctype, resp, headers, text) => { try { const u = new URL(url, location.href); if (watching && u.origin === location.origin && /^\/applications\/wekalat\//.test(u.pathname)) rawNote(method, u, body, headers, text); } catch {}
+    noteShape(method, url, body, status, ctype, resp); };
+  const noteShape = (method, url, body, status, ctype, resp) => { let u; try { u = new URL(url, location.href); } catch { return; } if (!watching || u.origin !== location.origin || !/^\/applications\/wekalat\//.test(u.pathname)) return;
+    watched.push({method, path: maskPath(u.pathname), query: [...u.searchParams.keys()], relations: relations(u, body), body: body == null ? null : typeof body === "string" ? jshape(body) : "(" + (body.constructor?.name || typeof body) + ")", status, type: (ctype || "").split(";")[0], reply: resp});
     $("dnz-wn").textContent = `سُجّل ${watched.length} طلب`; };
   const startWatch = () => {
     window.fetch = async function (input, init) { const r = await origFetch.apply(this, arguments); try { const url = typeof input === "string" ? input : input.url; const ct = r.headers.get("content-type") || "";
-        note((init && init.method) || (input && input.method) || "GET", url, init && init.body, r.status, ct, /json/.test(ct) ? jshape(await r.clone().text()) : "(" + ct + ")"); } catch {} return r; };
-    XMLHttpRequest.prototype.open = function (m, u) { this.__dnz = {m, u}; return origOpen.apply(this, arguments); };
+        const txt = /json/.test(ct) ? await r.clone().text() : ""; let hd = {}; try { hd = Object.fromEntries(new Headers((init && init.headers) || {}).entries()); } catch {}
+        note((init && init.method) || (input && input.method) || "GET", url, init && init.body, r.status, ct, /json/.test(ct) ? jshape(txt) : "(" + ct + ")", hd, txt); } catch {} return r; };
+    XMLHttpRequest.prototype.open = function (m, u) { this.__dnz = {m, u, h: {}}; return origOpen.apply(this, arguments); };
+    XMLHttpRequest.prototype.setRequestHeader = function (k, v) { if (this.__dnz) this.__dnz.h[k] = v; return origSetH.apply(this, arguments); };
     XMLHttpRequest.prototype.send = function (body) { const x = this; x.addEventListener("loadend", () => { try { const ct = x.getResponseHeader("content-type") || "";
-        note(x.__dnz?.m || "GET", x.__dnz?.u || "", body, x.status, ct, /json/.test(ct) && (x.responseType === "" || x.responseType === "text") ? jshape(x.responseText) : "(" + ct + ")"); } catch {} }); return origSend.apply(this, arguments); };
+        const txt = /json/.test(ct) && (x.responseType === "" || x.responseType === "text") ? x.responseText : /json/.test(ct) && x.responseType === "json" ? JSON.stringify(x.response) : "";
+        note(x.__dnz?.m || "GET", x.__dnz?.u || "", body, x.status, ct, txt ? jshape(txt) : "(" + ct + ")", x.__dnz?.h, txt); } catch {} }); return origSend.apply(this, arguments); };
     watching = true; };
-  const stopWatch = () => { watching = false; window.fetch = origFetch; XMLHttpRequest.prototype.open = origOpen; XMLHttpRequest.prototype.send = origSend; };
+  const stopWatch = () => { watching = false; window.fetch = origFetch; XMLHttpRequest.prototype.open = origOpen; XMLHttpRequest.prototype.send = origSend; XMLHttpRequest.prototype.setRequestHeader = origSetH; };
   $("dnz-watch").onclick = async () => { if (!watching) { watched.length = 0; startWatch(); $("dnz-watch").textContent = "أوقف وانسخ"; $("dnz-wn").textContent = "يراقب… استعمل صفحة الوكالات الآن"; return; }
     stopWatch(); $("dnz-watch").textContent = "ابدأ المراقبة"; const t = $("dnz-paths"); t.hidden = false; t.value = JSON.stringify(watched, null, 1); $("dnz-pcopy").hidden = false;
     try { await navigator.clipboard.writeText(t.value); $("dnz-wn").textContent = `نُسخ ${watched.length} طلب — الصقها للديوان`; } catch { t.select(); } };
+  // «جمع الوكالات»: the page's own list request, repeated page by page with only pageIndex changed, one at a time with a pause;
+  // what goes to the Diwan is the list of POAs where the lawyer is a party (the page's filter): number, type, status, dates, the other party
+  const pickDate = (x, disp) => { const t = String(x || disp?.gregDate || ""); const m = /(\d{4})-(\d{2})-(\d{2})/.exec(t) || /(\d{2})\/(\d{2})\/(\d{4})/.exec(t); return m ? (m[1].length === 4 ? `${m[1]}-${m[2]}-${m[3]}` : `${m[3]}-${m[2]}-${m[1]}`) : null; };
+  const poaRow = (it) => ({code: it.code != null ? String(it.code) : null, type: it.procurationTypeName || null, status: it.status || null, statusId: it.statusId ?? null,
+    issued: pickDate(it.issueDateGreg, it.issueDateDisp), issuedHijri: it.issueDateDisp?.hijriDate || it.issueDate || null, expires: pickDate(it.expiryDate, it.expireDateDisp), expiresHijri: it.expireDateDisp?.hijriDate || null,
+    party: it.otherPartyName || null, partyType: it.partyType ?? null, requestType: it.requestType || null, source: it.issueSource || null, terminable: !!it.terminable});
+  $("dnz-poas").onclick = async () => {
+    const say = (t) => { $("dnz-pn").textContent = t; };
+    if (!lastSearch) { say("ابدأ المراقبة ثم اضغط البحث في صفحة الوكالات أولاً."); return; }
+    let base; try { base = JSON.parse(lastSearch.body); } catch { say("لم أفهم طلب البحث الذي أرسلته الصفحة."); return; }
+    const first = Number(base.pageIndex) || 0; const out = new Map(); let total = null;
+    const post = (body) => new Promise((res) => { const x = new XMLHttpRequest(); origOpen.call(x, "POST", lastSearch.url); for (const [k, v] of Object.entries(lastSearch.headers || {})) try { origSetH.call(x, k, v); } catch {}
+      x.onloadend = () => { let j = null; try { j = JSON.parse(x.responseText); } catch {} res({status: x.status, j}); }; origSend.call(x, JSON.stringify(body)); });
+    $("dnz-poas").disabled = true;
+    try { for (let i = 0; i < 100; i++) {
+        const r = await post({...base, pageIndex: first + i}); if (r.status !== 200 || !r.j?.data) { say(`توقف: ردّ ناجز ${r.status}. ما جُمع: ${out.size}.`); break; }
+        total = r.j.data.totalCount ?? total; const items = r.j.data.searchResult || []; for (const it of items) { const p = poaRow(it); if (p.code) out.set(p.code, p); }
+        say(`جُمعت ${out.size}${total ? " من " + total : ""} وكالة…`); if (!items.length || (total && out.size >= total)) break; await sleep(1500); }
+      const payload = {kind: "diwan-najiz-poas", tool: TOOL, exportedAt: new Date().toISOString(), total, items: [...out.values()]};
+      const t = JSON.stringify(payload); let ok = false; try { await navigator.clipboard.writeText(t); ok = true; } catch {}
+      if (!ok) { const ta = $("dnz-paths"); ta.hidden = false; ta.value = t; ta.select(); try { ok = document.execCommand("copy"); } catch {} }
+      say(ok ? `نُسخت ${out.size} وكالة — الصقها في الديوان: المزامنة ← ربط ناجز ← «لصق من الحافظة».` : `جُمعت ${out.size}؛ انسخ النص من المربع والصقه في الديوان.`); }
+    finally { $("dnz-poas").disabled = false; } };
   $("dnz-pcopy").onclick = async () => { try { await navigator.clipboard.writeText($("dnz-paths").value); $("dnz-pcopy").textContent = "نُسخت"; } catch { $("dnz-paths").select(); } };
   const guessName = () => { const t = (document.querySelector("[class*=user-name],[class*=username],.user-info,.profile-name") || {}).textContent || ""; return t.trim().slice(0, 40); };
   let remembered = ""; try { remembered = localStorage.getItem("diwan.najiz.name") || ""; } catch {}
