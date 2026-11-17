@@ -4273,11 +4273,30 @@ function nzMerge(E, live, opts){
 const NZ_KEYS = [...NZ_FIELDS, "engagementId", "exec", "execNo", "execAmount", "execCollected", "clientIdNo", "clientPhone", "title", "urgent", "fieldSources", "najiz", "source", "notInNajiz", "sessions", "judgment", "reviewNotes", "reviewDone", "needsReview", "nextSession", "nextRole", "lastSession", "sessionCount", "related", "assignees", "closedAt"];
 // the database hands records back with their keys sorted, so the comparison sorts too
 const nzCanon = (x) => Array.isArray(x) ? "[" + x.map(nzCanon).join(",") + "]" : x && typeof x === "object" ? "{" + Object.keys(x).filter(k => x[k] !== undefined).sort().map(k => JSON.stringify(k) + ":" + nzCanon(x[k])).join(",") + "}" : JSON.stringify(x === undefined ? null : x);
-function nzChanged(oldC, m){
-  if (!oldC) return true;
-  const pick = (c) => { const o = {}; for (const k of NZ_KEYS) if (c[k] !== undefined) o[k] = c[k]; if (o.najiz) o.najiz = {...o.najiz, syncedAt: null}; return o; };
-  return nzCanon(pick(oldC)) !== nzCanon(pick(m));
+// (17/11) what counts as a change. Each Najiz account shows the same case a little differently (the parties' representatives, the order of
+// the lists), and the office updates from several accounts — so the same closed cases came back «changed» at every update with nothing new.
+// Lists are compared in a fixed order; and a case closed before and after compares only what matters once closed: its status and stage,
+// its closing date and its judgments (by date, type and description).
+const NZ_CLOSED_KEYS = ["statusName", "finishedAt", "judgments"];
+function nzNorm(nz, closed){
+  if (!nz) return nz; const o = {...nz, syncedAt: null, accounts: null};
+  const by = (f) => (a, b) => f(a).localeCompare(f(b));
+  if (Array.isArray(o.parties)) o.parties = o.parties.map(p => ({...p, reps: [...(p.reps || [])].sort()})).sort(by(p => `${p.role || ""}|${p.name || ""}|${p.idNo || ""}`));
+  if (Array.isArray(o.judgments)) o.judgments = [...o.judgments].map(j => closed ? {date: j.date || null, type: j.type || null, desc: j.desc || null} : {...j, daysLeft: null}).sort(by(j => `${j.date || ""}|${j.code || ""}|${j.desc || ""}`));
+  if (closed) { const c = {}; for (const k of NZ_CLOSED_KEYS) c[k] = o[k] ?? null; return c; }
+  return o;
 }
+function nzDiff(oldC, m){
+  if (!oldC) return ["new"];
+  const closed = oldC.status === "closed" && m.status === "closed";
+  const keys = closed ? ["status", "stage", "najiz", "judgment"] : NZ_KEYS;
+  const val = (c, k) => k === "najiz" ? nzNorm(c.najiz, closed) : k === "judgment" && closed ? (c.judgment ? {date: c.judgment.date || null, type: c.judgment.type || null} : null) : c[k];
+  return keys.filter(k => (oldC[k] !== undefined || m[k] !== undefined) && nzCanon(val(oldC, k) ?? null) !== nzCanon(val(m, k) ?? null));
+}
+function nzChanged(oldC, m){ return nzDiff(oldC, m).length > 0; }
+const NZ_DIFF_AR = {najiz:"بيانات ناجز", sessions:"الجلسات", nextSession:"الجلسة القادمة", lastSession:"آخر جلسة", sessionCount:"عدد الجلسات", judgment:"الحكم", nextRole:"نوع الجلسة القادمة",
+  exec:"التنفيذ", execAmount:"مبلغ التنفيذ", execCollected:"المحصّل", title:"العنوان", urgent:"الاستعجال", needsReview:"المراجعة", reviewNotes:"ملاحظات المراجعة", fieldSources:"مصادر الحقول", notInNajiz:"الوجود في ناجز"};
+const nzDiffLabel = (o, m) => [...new Set(nzDiff(o, m).map(k => NZ_DIFF_AR[k] || FIELD_LBL[k] || k))].slice(0, 4).join("، ");
 // writing: new records are created, changed ones updated (long minutes go beside the case), then the office's Najiz summary
 async function nzApply(R, onProg){
   if (!S.db) throw {msg: "قاعدة البيانات غير متاحة في هذا العرض"};
@@ -4433,7 +4452,7 @@ function nzPreviewHtml(){
   const same = R.plan.length - news.length - changed.length;
   return `<div class="nz-prev" style="margin-top:10px"><div class="facts"><div><span>في الملفات:</span><b class="num">${R.plan.length}</b></div><div><span>جديدة:</span><b class="num">${news.length}</b></div><div><span>تتحدّث:</span><b class="num">${changed.length}</b></div><div><span>بلا تغيير:</span><b class="num">${same}</b></div>${R.plan.some(p => p.exec) ? `<div><span>منها طلبات تنفيذ:</span><b class="num">${R.plan.filter(p => p.exec).length}</b></div>` : ""}${R.partial ? `<div><span>تعذّرت تفاصيلها:</span><b class="num">${R.partial}</b></div>` : ""}</div>
     ${news.length ? `<details style="margin-top:8px" open><summary>القضايا الجديدة (${news.length})</summary><ul class="small" style="margin:6px 0 0;padding-inline-start:18px">${news.slice(0, 40).map(p => `<li><span class="mono">${esc(p.code)}</span> — ${esc(p.title || "")}</li>`).join("")}${news.length > 40 ? `<li>…و${news.length - 40} غيرها</li>` : ""}</ul></details>` : ""}
-    ${changed.length ? `<details style="margin-top:6px"><summary>القضايا التي تتحدّث (${changed.length})</summary><ul class="small" style="margin:6px 0 0;padding-inline-start:18px">${changed.slice(0, 60).map(p => `<li><span class="mono">${esc(p.code)}</span> — ${esc(p.title || "")}</li>`).join("")}${changed.length > 60 ? `<li>…و${changed.length - 60} غيرها</li>` : ""}</ul></details>` : ""}
+    ${changed.length ? `<details style="margin-top:6px"><summary>القضايا التي تتحدّث (${changed.length})</summary><ul class="small" style="margin:6px 0 0;padding-inline-start:18px">${changed.slice(0, 60).map(p => `<li><span class="mono">${esc(p.code)}</span> — ${esc(p.title || "")} <span class="sub">(${esc(nzDiffLabel(S.cases.get(p.cid), R.out.get(p.cid)))})</span></li>`).join("")}${changed.length > 60 ? `<li>…و${changed.length - 60} غيرها</li>` : ""}</ul></details>` : ""}
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn primary" id="nzApply" ${news.length + changed.length ? "" : "disabled"}>${icon("sync")}اعتماد التحديث</button><button class="btn" id="nzCancel">إلغاء</button></div></div>`;
 }
 function nzRerender(){ const p = $("nzPanel"); if (p) { const y = window.scrollY; const pol = $("nzPolicy"); if (pol) pol.remove(); p.outerHTML = najizSyncPanel(); bindNajizSync(); window.scrollTo({top: y}); return; } const o = $("nzOut"); if (o) { o.innerHTML = nzPreviewHtml(); bindNajizSync(); } }
