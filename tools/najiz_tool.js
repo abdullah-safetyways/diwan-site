@@ -50,17 +50,17 @@
       <input id="dnz-name" style="width:100%;box-sizing:border-box;border:1px solid #d9d8e2;border-radius:8px;padding:7px 10px;font:inherit" placeholder="اسم الحساب">
       <label style="display:flex;gap:6px;align-items:center;margin:8px 0 0;font-size:13px"><input type="checkbox" id="dnz-req" checked> جمع صحائف الدعاوى (الطلبات) أيضاً</label>
       <label style="display:flex;gap:6px;align-items:center;margin:4px 0 8px;font-size:13px"><input type="checkbox" id="dnz-exec" checked> جمع طلبات التنفيذ (السندات والمبالغ والقرارات)</label>
-      <button id="dnz-go" style="${BTN}">ابدأ الجمع</button>
-      <details style="margin-top:10px;font-size:12px;color:#484a66"><summary style="cursor:pointer">تعرّف على صفحة الوكالات (لا يقرأ أي بيانات)</summary>
-        <div style="margin-top:6px">١) افتح «الوكالات» في ناجز كما تفتحها عادة واعرض قائمتها وتفاصيل وكالة واحدة. ٢) شغّل إشارة «تحديث الديوان» مرة أخرى إن اختفت هذه النافذة. ٣) اضغط الزر: يعرض <b>عناوين</b> الصفحات التي طلبتها صفحة ناجز نفسها فقط — بلا أسماء ولا أرقام ولا محتوى (الأرقام تُستبدل بـ#) — فتنسخها للديوان.</div>
-        <button id="dnz-learn" style="${BTN2};margin-top:6px">اعرض العناوين</button>
-        <textarea id="dnz-paths" hidden readonly style="width:100%;box-sizing:border-box;height:120px;margin-top:6px;font:12px monospace;direction:ltr"></textarea>
-        <button id="dnz-pcopy" hidden style="${BTN2};margin-top:6px">نسخ العناوين</button></details></div>
+      <button id="dnz-go" style="${BTN}">ابدأ الجمع</button></div>
     <div id="dnz-prog" hidden><div id="dnz-msg" style="margin:6px 0">…</div><div style="height:6px;background:#ecebf0;border-radius:4px;overflow:hidden"><div id="dnz-bar" style="height:100%;width:0;background:#151547;transition:width .3s"></div></div></div>
     <div id="dnz-done" hidden><div id="dnz-sum" style="margin:6px 0"></div><div id="dnz-sent" style="margin:6px 0;color:#2f7d4f;font-weight:700" hidden></div>
       <div id="dnz-alt" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><button id="dnz-copy" style="${BTN}">نسخ البيانات للديوان</button><button id="dnz-dl" style="${BTN2}">تنزيل الملف</button></div>
       <div id="dnz-hint" style="color:#484a66;font-size:12px;margin-top:8px">في الديوان: المزامنة والإضافة ← ربط ناجز ← «لصق من الحافظة» (أو ارفع الملف).</div></div>
     <div id="dnz-err" hidden style="color:#b3261e;margin-top:6px"></div>
+      <details style="margin-top:10px;border-top:1px solid #ecebf0;padding-top:8px;font-size:12px;color:#484a66"><summary style="cursor:pointer">تعرّف على صفحة الوكالات (لا يقرأ أي بيانات)</summary>
+        <div style="margin-top:6px">١) افتح «الوكالات» في ناجز كما تفتحها عادة واعرض قائمتها وتفاصيل وكالة واحدة. ٢) شغّل إشارة «تحديث الديوان» مرة أخرى إن اختفت هذه النافذة. ٣) اضغط الزر: يعرض <b>عناوين</b> الصفحات التي طلبتها صفحة ناجز نفسها فقط — بلا أسماء ولا أرقام ولا محتوى (الأرقام تُستبدل بـ#) — فتنسخها للديوان.</div>
+        <button id="dnz-learn" style="${BTN2};margin-top:6px">اعرض العناوين</button>
+        <textarea id="dnz-paths" hidden readonly style="width:100%;box-sizing:border-box;height:120px;margin-top:6px;font:12px monospace;direction:ltr"></textarea>
+        <button id="dnz-pcopy" hidden style="${BTN2};margin-top:6px">نسخ العناوين</button></details>
     <button id="dnz-x" title="إغلاق" style="position:absolute;top:8px;left:10px;background:none;border:0;font-size:18px;cursor:pointer;color:#6f718a">×</button>`;
   document.body.appendChild(box);
   const $ = (id) => box.querySelector("#" + id);
