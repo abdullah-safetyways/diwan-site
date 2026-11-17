@@ -60,7 +60,9 @@
         <div style="margin-top:6px">١) افتح «الوكالات» في ناجز كما تفتحها عادة واعرض قائمتها وتفاصيل وكالة واحدة. ٢) شغّل إشارة «تحديث الديوان» مرة أخرى إن اختفت هذه النافذة. ٣) اضغط الزر: يعرض <b>عناوين</b> الصفحات التي طلبتها صفحة ناجز نفسها فقط — بلا أسماء ولا أرقام ولا محتوى (الأرقام تُستبدل بـ#) — فتنسخها للديوان.</div>
         <button id="dnz-learn" style="${BTN2};margin-top:6px">اعرض العناوين</button>
         <textarea id="dnz-paths" hidden readonly style="width:100%;box-sizing:border-box;height:120px;margin-top:6px;font:12px monospace;direction:ltr"></textarea>
-        <button id="dnz-pcopy" hidden style="${BTN2};margin-top:6px">نسخ العناوين</button></details>
+        <button id="dnz-pcopy" hidden style="${BTN2};margin-top:6px">نسخ العناوين</button>
+        <div style="margin-top:10px">ثم: اضغط «ابدأ المراقبة»، وفي صفحة الوكالات اضغط البحث، وافتح وكالة، واضغط تنزيلها أو طباعتها كما تفعل عادة، ثم «أوقف وانسخ». تُسجَّل <b>أسماء الحقول وأنواعها فقط</b> في كل طلب ورد — لا قيمة ولا اسم ولا رقم.</div>
+        <button id="dnz-watch" style="${BTN2};margin-top:6px">ابدأ المراقبة</button> <span id="dnz-wn" style="font-size:12px"></span></details>
     <button id="dnz-x" title="إغلاق" style="position:absolute;top:8px;left:10px;background:none;border:0;font-size:18px;cursor:pointer;color:#6f718a">×</button>`;
   document.body.appendChild(box);
   const $ = (id) => box.querySelector("#" + id);
@@ -73,9 +75,29 @@
     const seen = new Set();
     for (const e of performance.getEntriesByType("resource")) { let u; try { u = new URL(e.name); } catch { continue; }
       if (u.origin !== location.origin || !["fetch", "xmlhttprequest"].includes(e.initiatorType)) continue;
-      seen.add(u.pathname.split("/").map(x => /\d{3,}|[0-9a-f]{8,}|^[0-9a-f-]{20,}$/i.test(x) || /[^\x00-\x7f]|%/.test(x) ? "#" : x).join("/") + (u.search ? "?…" : "")); }
-    const t = $("dnz-paths"); t.hidden = false; t.value = [location.pathname.replace(/\d{4,}/g, "#"), ...[...seen].sort()].join("\n") || "(لا عناوين — افتح صفحة الوكالات أولاً)";
+      seen.add(u.pathname.split("/").map(x => /\d{3,}|[0-9a-f]{8,}|^[0-9a-f-]{20,}$|^[A-Za-z0-9+_=-]{8,}$/i.test(x) && !/^[a-z]+$|^[A-Z][a-z]+([A-Z][a-z]+)*$/.test(x) || /[^\x00-\x7f]|%/.test(x) ? "#" : x).join("/") + (u.search ? "?…" : "")); }
+    const t = $("dnz-paths"); t.hidden = false; t.value = [maskPath(location.pathname), ...[...seen].sort()].join("\n") || "(لا عناوين — افتح صفحة الوكالات أولاً)";
     $("dnz-pcopy").hidden = false; };
+  // (17/11) watch mode: while the lawyer uses the POA page himself, the shape of each request the page sends and of each reply — method,
+  // masked path, field names and types (string/number/…), never a value. Only addresses under /applications/wekalat/ are noted.
+  const shape = (v, d = 0) => { if (v === null) return "null"; if (Array.isArray(v)) return v.length ? [shape(v[0], d + 1)] : []; if (typeof v === "object") { if (d > 4) return "{…}"; const o = {}; for (const k of Object.keys(v).slice(0, 60)) o[k] = shape(v[k], d + 1); return o; } return typeof v; };
+  const maskPath = (p) => p.split("/").map(x => /\d{3,}|[0-9a-f]{8,}|^[0-9a-f-]{20,}$|^[A-Za-z0-9+_=-]{8,}$/i.test(x) && !/^[a-z]+$|^[A-Z][a-z]+([A-Z][a-z]+)*$/.test(x) || /[^\x00-\x7f]|%/.test(x) ? "#" : x).join("/");
+  const jshape = (t) => { try { return shape(JSON.parse(t)); } catch { return t ? "(" + typeof t + ", " + String(t).length + " حرفاً)" : ""; } };
+  const watched = []; let watching = false; const origFetch = window.fetch, origOpen = XMLHttpRequest.prototype.open, origSend = XMLHttpRequest.prototype.send;
+  const note = (method, url, body, status, ctype, resp) => { let u; try { u = new URL(url, location.href); } catch { return; } if (!watching || u.origin !== location.origin || !/^\/applications\/wekalat\//.test(u.pathname)) return;
+    watched.push({method, path: maskPath(u.pathname), query: [...u.searchParams.keys()], body: body == null ? null : typeof body === "string" ? jshape(body) : "(" + (body.constructor?.name || typeof body) + ")", status, type: (ctype || "").split(";")[0], reply: resp});
+    $("dnz-wn").textContent = `سُجّل ${watched.length} طلب`; };
+  const startWatch = () => {
+    window.fetch = async function (input, init) { const r = await origFetch.apply(this, arguments); try { const url = typeof input === "string" ? input : input.url; const ct = r.headers.get("content-type") || "";
+        note((init && init.method) || (input && input.method) || "GET", url, init && init.body, r.status, ct, /json/.test(ct) ? jshape(await r.clone().text()) : "(" + ct + ")"); } catch {} return r; };
+    XMLHttpRequest.prototype.open = function (m, u) { this.__dnz = {m, u}; return origOpen.apply(this, arguments); };
+    XMLHttpRequest.prototype.send = function (body) { const x = this; x.addEventListener("loadend", () => { try { const ct = x.getResponseHeader("content-type") || "";
+        note(x.__dnz?.m || "GET", x.__dnz?.u || "", body, x.status, ct, /json/.test(ct) && (x.responseType === "" || x.responseType === "text") ? jshape(x.responseText) : "(" + ct + ")"); } catch {} }); return origSend.apply(this, arguments); };
+    watching = true; };
+  const stopWatch = () => { watching = false; window.fetch = origFetch; XMLHttpRequest.prototype.open = origOpen; XMLHttpRequest.prototype.send = origSend; };
+  $("dnz-watch").onclick = async () => { if (!watching) { watched.length = 0; startWatch(); $("dnz-watch").textContent = "أوقف وانسخ"; $("dnz-wn").textContent = "يراقب… استعمل صفحة الوكالات الآن"; return; }
+    stopWatch(); $("dnz-watch").textContent = "ابدأ المراقبة"; const t = $("dnz-paths"); t.hidden = false; t.value = JSON.stringify(watched, null, 1); $("dnz-pcopy").hidden = false;
+    try { await navigator.clipboard.writeText(t.value); $("dnz-wn").textContent = `نُسخ ${watched.length} طلب — الصقها للديوان`; } catch { t.select(); } };
   $("dnz-pcopy").onclick = async () => { try { await navigator.clipboard.writeText($("dnz-paths").value); $("dnz-pcopy").textContent = "نُسخت"; } catch { $("dnz-paths").select(); } };
   const guessName = () => { const t = (document.querySelector("[class*=user-name],[class*=username],.user-info,.profile-name") || {}).textContent || ""; return t.trim().slice(0, 40); };
   let remembered = ""; try { remembered = localStorage.getItem("diwan.najiz.name") || ""; } catch {}
