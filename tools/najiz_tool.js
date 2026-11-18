@@ -6,7 +6,7 @@
 (() => {
   if (window.__diwanNajiz) { window.__diwanNajiz.show(); return; }
   if (!/najiz\.sa$/.test(location.hostname)) { alert("افتح هذه الأداة في صفحة najiz.sa بعد تسجيل الدخول."); return; }
-  const TOOL = "diwan-najiz-tool/5";
+  const TOOL = "diwan-najiz-tool/6";
   const BASE = "/applications/lawsuit//lawsuit/";
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   const getJ = async (u) => { for (let t = 0; t < 3; t++) { try { const r = await fetch(u, {credentials: "include"}); if (r.ok) return await r.json(); if (r.status === 404 || r.status === 403) return {__status: r.status}; } catch {} await sleep(800 * (t + 1)); } return {__err: 1}; };
@@ -36,7 +36,13 @@
   }
   const page = async (path) => { const out = []; for (let i = 0; i < 20; i++) { const r = await getJ(`${BASE}${path}?pageSize=500&pageIndex=${i}`); const list = Array.isArray(r) ? r : (r && r.list) || []; out.push(...list); if (list.length < 500) break; } return out; };
   // the Diwan that opened this tab names it «diwan-najiz:<token>»; the result goes back to it without a file
-  const nm = String(window.name || ""); const parts = nm.startsWith("diwan-najiz:") ? nm.slice(12).split(":") : []; const token = parts[0] || null;
+  const nmAll = String(window.name || ""); const nm = nmAll.split("|closed=")[0]; const parts = nm.startsWith("diwan-najiz:") ? nm.slice(12).split(":") : [];
+  // (18/11) the cases the Diwan has closed: sent by the Diwan when it opens this tab, and remembered here for a run from the bookmark
+  let knownClosed = new Set(); { const c = nmAll.includes("|closed=") ? nmAll.split("|closed=")[1] : null;
+    if (c != null) { knownClosed = new Set(c.split(",").filter(Boolean)); try { localStorage.setItem("diwan.najiz.closed", c); } catch {} }
+    else { try { knownClosed = new Set((localStorage.getItem("diwan.najiz.closed") || "").split(",").filter(Boolean)); } catch {} } }
+  const NZ_CLOSED = ["منتهية", "مشطوبة", "متروكة", "كأن لم تكن", "منتهية بالتنازل", "محكومة بحكم نهائي"];
+  const listClosed = (c) => { const st = String(c.caseStatusName || "").trim(); return !!st && !st.includes("غير نهائي") && NZ_CLOSED.some(w => st.includes(w)); }; const token = parts[0] || null;
   const dec = (x) => { try { return x ? decodeURIComponent(x) : ""; } catch { return x || ""; } };
   const acct = dec(parts[1]), acctLabel = dec(parts[2]) || dec(parts[1]);
   const diwan = token && window.opener && !window.opener.closed ? window.opener : null;
@@ -50,7 +56,8 @@
       <input id="dnz-name" style="width:100%;box-sizing:border-box;border:1px solid #d9d8e2;border-radius:8px;padding:7px 10px;font:inherit" placeholder="اسم الحساب">
       <label style="display:flex;gap:6px;align-items:center;margin:8px 0 0;font-size:13px"><input type="checkbox" id="dnz-req" checked> جمع صحائف الدعاوى (الطلبات) أيضاً</label>
       <label style="display:flex;gap:6px;align-items:center;margin:4px 0 0;font-size:13px"><input type="checkbox" id="dnz-exec" checked> جمع طلبات التنفيذ (السندات والمبالغ والقرارات)</label>
-      <label style="display:flex;gap:6px;align-items:center;margin:4px 0 8px;font-size:13px"><input type="checkbox" id="dnz-poa" checked> جمع الوكالات (رقمها وحالتها وتاريخ انتهائها)</label>
+      <label style="display:flex;gap:6px;align-items:center;margin:4px 0 0;font-size:13px"><input type="checkbox" id="dnz-poa" checked> جمع الوكالات (رقمها وحالتها وتاريخ انتهائها)</label>
+      <label style="display:flex;gap:6px;align-items:center;margin:4px 0 8px;font-size:13px"><input type="checkbox" id="dnz-all"> قراءة القضايا المنتهية كاملة أيضاً (أبطأ؛ مرة كل فترة)</label>
       <button id="dnz-go" style="${BTN}">ابدأ الجمع</button></div>
     <div id="dnz-prog" hidden><div id="dnz-msg" style="margin:6px 0">…</div><div style="height:6px;background:#ecebf0;border-radius:4px;overflow:hidden"><div id="dnz-bar" style="height:100%;width:0;background:#151547;transition:width .3s"></div></div></div>
     <div id="dnz-done" hidden><div id="dnz-sum" style="margin:6px 0"></div><div id="dnz-sent" style="margin:6px 0;color:#2f7d4f;font-weight:700" hidden></div>
@@ -91,7 +98,7 @@
     setTimeout(() => { if (!done) { window.removeEventListener("message", onAck); resolve(false); } }, 4000);
   });
   $("dnz-go").onclick = async () => {
-    const name = ($("dnz-name").value || "").trim() || "ناجز"; const withReq = $("dnz-req").checked; const withExec = $("dnz-exec").checked; const withPoa = $("dnz-poa").checked;
+    const name = ($("dnz-name").value || "").trim() || "ناجز"; const withReq = $("dnz-req").checked; const withExec = $("dnz-exec").checked; const withPoa = $("dnz-poa").checked; const readAll = $("dnz-all").checked;
     try { localStorage.setItem("diwan.najiz.name", name); } catch {}
     $("dnz-step1").hidden = true; $("dnz-prog").hidden = false; $("dnz-err").hidden = true;
     const msg = (t, pct) => { $("dnz-msg").textContent = t; if (pct != null) $("dnz-bar").style.width = Math.round(pct) + "%"; };
@@ -103,8 +110,10 @@
       if (!list.length && !Object.keys(execs).length) throw new Error("لم تُقرأ أي قضية ولا طلب تنفيذ. تأكد أنك مسجّل الدخول في ناجز بالحساب المطلوب، ثم أعد المحاولة.");
       let reqs = [];
       if (withReq) { msg("يقرأ صحائف الدعاوى…", 4); try { reqs = await page("requests/api/lawsuit-requests/my-requests"); } catch { reqs = []; } }
-      const cases = {}; let i = 0, done = 0, err = 0;
+      const cases = {}; let i = 0, done = 0, err = 0, skipped = 0;
       const worker = async () => { while (i < list.length) { const c = list[i++]; const k = c.objectKey; const base = BASE + "icms/api/cases/" + k;
+          // closed in the Diwan and still closed in Najiz's list: its details are not read again (the Diwan keeps it as it is)
+          if (!readAll && knownClosed.has(String(c.caseCode)) && listClosed(c)) { cases[String(c.caseCode)] = {accts: [name], list: c, skipped: true}; skipped++; done++; continue; }
           const [d, p, s, j] = await Promise.all([getJ(base), getJ(base + "/parties-details"), getJ(base + "/sessions"), getJ(base + "/judgments")]);
           cases[String(c.caseCode)] = {accts: [name], list: c, detail: d, parties: p, sess: s, judg: j};
           if (d && d.__err) err++; done++; msg(`يقرأ تفاصيل القضايا… ${done} من ${list.length}${err ? ` (تعذّر ${err})` : ""}`, 25 + 70 * done / list.length); } };
@@ -113,7 +122,7 @@
       result = {exportedAt: new Date().toISOString(), tool: TOOL, account: name, ...(poas ? {poas} : {}), cases, lists: {[name]: list.map(c => String(c.caseCode))}, reqs: {[name]: reqs}, execs, execLists: {[name]: Object.keys(execs)}};
       const nEx = Object.keys(execs).length;
       msg("اكتمل الجمع.", 100); $("dnz-prog").hidden = true; $("dnz-done").hidden = false;
-      $("dnz-sum").textContent = `${list.length} قضية${withReq ? ` و${reqs.length} صحيفة` : ""}${withExec ? ` و${nEx} طلب تنفيذ` : ""}${withPoa ? (poas ? ` و${poas.items.length} وكالة` : " (تعذّرت قراءة الوكالات)") : ""} من حساب «${name}»${err ? `، وتعذّرت قراءة تفاصيل ${err} منها (تُعاد في المرة القادمة)` : ""}.`;
+      $("dnz-sum").textContent = `${list.length} قضية${withReq ? ` و${reqs.length} صحيفة` : ""}${withExec ? ` و${nEx} طلب تنفيذ` : ""}${withPoa ? (poas ? ` و${poas.items.length} وكالة` : " (تعذّرت قراءة الوكالات)") : ""} من حساب «${name}»${err ? `، وتعذّرت قراءة تفاصيل ${err} منها (تُعاد في المرة القادمة)` : ""}${skipped ? `. قُرئت كاملة ${list.length - skipped}، ولم تُقرأ تفاصيل ${skipped} منتهية في الديوان وفي ناجز` : ""}.`;
       if (diwan) { msg("يسلّم البيانات إلى الديوان…", 100); const ok = await deliver();
         if (ok) { $("dnz-sent").hidden = false; $("dnz-sent").textContent = "وصلت البيانات إلى الديوان ✓ — ارجع إلى نافذته واضغط «اعتماد التحديث». يمكنك إغلاق هذه النافذة."; $("dnz-alt").hidden = true; $("dnz-alt").style.display = "none"; $("dnz-hint").hidden = true; return; } }
       $("dnz-hint").textContent = diwan ? "لم تصل البيانات إلى نافذة الديوان؛ انسخها ثم اضغط «لصق من الحافظة» هناك، أو نزّلها ملفاً وارفعه." : "في الديوان: المزامنة والإضافة ← ربط ناجز ← «لصق من الحافظة» (أو ارفع الملف).";
