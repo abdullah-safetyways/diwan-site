@@ -25,7 +25,9 @@
     tif: "image/tiff", tiff: "image/tiff", mp3: "audio/mpeg", m4a: "audio/mp4", mp4: "video/mp4", mov: "video/quicktime", wav: "audio/wav", zip: "application/zip"};
   const mimeOf = (name, given) => given && given !== "application/octet-stream" ? given : (MIME[extOf(name)] || "application/octet-stream");
   const isImg = (name) => ["jpg", "jpeg", "png", "gif", "webp", "tif", "tiff"].includes(extOf(name));
-  const cleanName = (n) => String(n || "").replace(/[\/\\\u0000-\u001f]/g, "-").replace(/\s+/g, " ").trim().slice(0, 200) || "ملف";
+  // (19/11) a name that arrives encoded («%D8%AA%D9%82….docx», as some downloads name Arabic files) is saved decoded
+  const unEnc = (n) => { n = String(n || ""); if (!/%[0-9A-Fa-f]{2}/.test(n)) return n; try { const d = decodeURIComponent(n); return /[^\x00-\x7f]/.test(d) ? d : n; } catch { return n; } };
+  const cleanName = (n) => unEnc(n).replace(/[\/\\\u0000-\u001f]/g, "-").replace(/\s+/g, " ").trim().slice(0, 200) || "ملف";
   const JUNK = (n) => /^(~\$|\.~lock)|^\.DS_Store$|^Thumbs\.db$|^desktop\.ini$|^\._/i.test(n);
   const tErr = (e) => ({code: e?.code && /^[a-z_]+$/.test(e.code) ? e.code : "tool_error", message: String(e?.message || e?.msg || e || "")});
   const COLS = "id,path,parent,name,is_folder,size,mime,case_id,internal,text_how,pages,modified_at,sha256,deleted_at";

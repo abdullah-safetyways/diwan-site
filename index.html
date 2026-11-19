@@ -1494,10 +1494,18 @@ const xre = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
 const ORD_AR = "أولاً|ثانياً|ثالثاً|رابعاً|خامساً|سادساً|سابعاً|ثامناً|تاسعاً|عاشراً|حادي عشر|ثاني عشر|ثالث عشر";
 const REVIEW_RX = /^\s*[—–-]{2,}\s*مراجعة المحامي[^\n]*$/m;
 const splitReview = (text) => { const m = REVIEW_RX.exec(text||""); return m ? [text.slice(0,m.index).trim(), text.slice(m.index).trim()] : [String(text||"").trim(), ""]; };
+// (19/11) the session report form (skill «alomar-session-report»): the date line, the address, «إشارة إلى…» and the report itself in bold;
+// the office's closing centred; the signature centred and bold. LP_REPORT is set while a report is being laid out (Word and PDF alike).
+let LP_REPORT = false;
+const isReportText = (t) => /كما ننوه إلى أن جميع أعمالكم محل عنايتنا/.test(t||"") && /^\s*إشارةً? إلى/m.test(t||"");
+const REPORT_LINE = (s) => /^التاريخ\s*:/.test(s) ? "date" : /^(سعادة الأستاذة?\s*\/|السادة\s*\/)/.test(s) ? "addr" : /^إشارةً? إلى/.test(s) ? "ref" : /^كما ننوه إلى أن جميع أعمالكم/.test(s) ? "close" : null;
 function lineToPara(raw){
   const t = raw.replace(/\*\*/g,"").replace(/^#+\s*/,"").replace(/\s+$/,"");
   if (!t.trim()) return "";
   const s = t.trim();
+  if (LP_REPORT) { const k = REPORT_LINE(s);
+    if (k === "close") return PARA(RUN(s),{jc:"center",keepNext:true});
+    if (k) return PARA(RUN(s,{b:true}),{after:k === "date" ? 160 : 80}); }
   if (/^(صاحب الفضيلة|أصحاب الفضيلة|أصحاب المعالي|صاحب المعالي|فضيلة رئيس|سعادة رئيس|معالي)/.test(s)) return PARA(RUN(s,{b:true,color:NAVY}),{after:80});
   let m = s.match(/^(الموضوع|طريقة الاعتراض)\s*[:：]\s*(.*)$/); if (m) return PARA(RUN(m[1]+": ",{b:true,color:NAVY})+RUN(m[2]));
   if (/^(الطلبات|سبب النقض|أسباب الاعتراض|الوقائع|التكييف النظامي|المستندات المؤيدة|أطراف الدعوى|وصف المحل|المرفقات|فهرس المرفقات)\s*[:：]?$/.test(s)) return PARA(RUN(s.replace(/[:：]$/,""),{b:true,color:NAVY,u:true}),{after:80,keepNext:true});
@@ -1508,7 +1516,7 @@ function lineToPara(raw){
   if (/^(والله ولي التوفيق|والله الموفق|وصلى الله|هذا والله|وتقبلوا)/.test(s)) return PARA(RUN(s,{b:true}),{jc:"center",keepNext:true});
   if (s.length < 60 && signRx().test(s)) return PARA(RUN(s,{b:true,color:NAVY}),{jc:"center",keepNext:true,after:40});
   if (s.length <= 45 && /^(لائحة|مذكرة|صحيفة|كشف|فهرس|بيان|عقد|تقرير|خطاب|إنذار)/.test(s) && !/[:.،]$/.test(s)) return PARA(RUN(s,{b:true,color:NAVY,sz:DOCF.headSz,u:true}),{jc:"center"});
-  return PARA(RUN(s));
+  return PARA(RUN(s,{b:LP_REPORT}),LP_REPORT ? {jc:"both"} : undefined);
 }
 const TABLE_RX = /\[جدول الاعتراض\]([\s\S]*?)\[\/جدول الاعتراض\]/;
 function parseTableBlock(text){
@@ -1564,7 +1572,7 @@ async function buildLetterheadDocx(text, opts={}){
   const doc = new DOMParser().parseFromString(await zip.file("word/document.xml").async("string"), "application/xml");
   let [main] = splitReview(text); let table = "";
   if (opts.objection) { const [f, rest] = parseTableBlock(main); if (f) { table = objectionTableXml(f, opts.route); main = rest; } }
-  const content = table + main.split(/\r?\n/).map(lineToPara).filter(Boolean).join("");
+  LP_REPORT = isReportText(main); let content; try { content = table + main.split(/\r?\n/).map(lineToPara).filter(Boolean).join(""); } finally { LP_REPORT = false; }
   const frag = new DOMParser().parseFromString(`<w:body xmlns:w="${W_NS}">${content}</w:body>`, "application/xml").documentElement;
   if (frag.localName==="parsererror" || frag.getElementsByTagName("parsererror").length) throw {msg:"تعذّر بناء ملف Word من هذا النص."};
   const body = doc.getElementsByTagNameNS(W_NS, "body")[0]; const kids = [...body.childNodes].filter(n => n.nodeType===1);
@@ -6536,17 +6544,32 @@ const rGreg = (d) => { const k = dkey(d); return `${k.slice(8,10)}/${k.slice(5,7
 const reportSign = () => (OFC().reportSign||"").trim() || officeSign();
 const reportOpp = (c) => ((c.ourSide==="المدعى عليه" ? c.plaintiff : c.defendant) || "").trim();
 function clientIsOrg(c){ const p = ourParty(c); const rx = /شركة|شركه|مؤسسة|مؤسسه|مجموعة|مصنع|جمعية|هيئة|وزارة|بنك|صندوق|وقف/; return p ? /شرك|مؤسس|منشأ|جهة/.test(p.type||"") || rx.test(p.name||"") : rx.test(c.client||""); }
-function reportAddress(c){ const name = (c.client||"").trim() || "موكلنا الكريم"; return clientIsOrg(c) ? `السادة / ${name} المحترمين.` : `سعادة الأستاذ / ${name} المحترم.`; }
+// (19/11) the address as the office's session-report form has it (skill «alomar-session-report»): a man «سعادة الأستاذ / … حفظه الله»,
+// a woman «سعادة الأستاذة / … حفظها الله», a company or body «السادة / ….». The lawyer's choice in the report window is kept on the case
+// (clientTitle); without it, a company by its name, a woman by «بنت» or a woman's first name.
+const AR_F_NAMES = new Set("مريم هند زينب سعاد نوال امل منى ريم دانه شهد جود لمى نوف غدير رهف عبير سحر وجدان ابتسام ايمان اريج اسماء رغد شوق ليان لين ميار نجلاء هيفاء وعد ولاء بشرى نجود العنود تهاني اماني خلود سلمى ليلى هدى رنا دلال ابرار حنان سهام اثير بدور شيماء غاده وفاء رحاب مها لولوه لولو جواهر نوره ساره فاطمه عائشه خديجه حصه منيره لطيفه موضي نوير الجوهره البندري".split(" "));
+const AR_M_TAH = new Set("حمزه اسامه طلحه عبيده معاويه عكرمه قتاده حذيفه عطيه خليفه جمعه عروه ثامره".split(" "));
+function clientTitle(c){
+  if (c?.clientTitle && ["m","f","org"].includes(c.clientTitle)) return c.clientTitle; if (clientIsOrg(c)) return "org";
+  const n = arNorm(String(c?.client||"").replace(/^(الاستاذه|الأستاذة|الاستاذ|الأستاذ|السيده|السيدة|المواطنه|المواطنة)\s+/, "")).replace(/ة/g,"ه").trim();
+  if (/(^|\s)بنت\s/.test(n)) return "f"; const first = n.split(/\s+/)[0] || "";
+  return AR_F_NAMES.has(first) || (/ه$/.test(first) && first.length > 2 && !AR_M_TAH.has(first) && !/^عبد/.test(first)) ? "f" : "m";
+}
+function reportAddress(c){ const name = (c.client||"").trim() || "موكلنا الكريم"; const t = clientTitle(c);
+  return t === "org" ? `السادة / ${name}.` : t === "f" ? `سعادة الأستاذة / ${name}  حفظها الله` : `سعادة الأستاذ / ${name}  حفظه الله`; }
+// «إشارة إلى الدعوى المقامة من قِبل: [اسم المدعي]،» — the office's line; the case number stays for a suit whose plaintiff is not recorded
 function reportRef(c){
+  const pl = (c.plaintiff || (c.ourSide==="المدعي" ? c.client : "") || "").trim();
+  if (pl) return isExec(c) ? `طلب التنفيذ المقدم من قِبل: ${pl}` : `الدعوى المقامة من قِبل: ${pl}`;
   const no = `(${c.caseNo||"—"})`; const opp = reportOpp(c); const exec = isExec(c);
   if (c.ourSide==="المدعي") return exec ? `طلب التنفيذ المقدم من قبلكم برقم ${no}${opp?` ضد ${opp}`:""}` : `الدعوى المقامة من قبلكم برقم ${no}${opp?` ضد ${opp}`:""}`;
   if (c.ourSide==="المدعى عليه") return exec ? `طلب التنفيذ المقدم ضدكم برقم ${no}${opp?` من قبل ${opp}`:""}` : `الدعوى المقامة ضدكم برقم ${no}${opp?` من قبل ${opp}`:""}`;
   return `${exec?"طلب التنفيذ":"الدعوى"} رقم ${no}${c.title?` (${c.title})`:""}`;
 }
 function reportOpening(c, s){ const what = isExec(c) ? "جلسة النظر في طلب التنفيذ" : "جلسة النظر في الدعوى"; if (!s?.start) return `نفيدكم بأنه قد عُقدت ${what}،`; return dkey(D(s.start))===todayKey() ? `نفيدكم بأنه قد عُقدت اليوم ${what}،` : `نفيدكم بأنه قد عُقدت بتاريخ ${rHij(D(s.start))}هـ الموافق ${rGreg(D(s.start))}م ${what}،`; }
-function reportFrame(c, body, at){ at = at || new Date(); return `التاريخ: ${rHij(at)}هـ\nالموافق: ${rGreg(at)}م\n\n${reportAddress(c)}\nالسلام عليكم ورحمة الله وبركاته، تحية طيبة وبعد،\nإشارة إلى ${reportRef(c)}،\n${String(body||"").trim()}\n${REPORT_CLOSE}\n${reportSign()}`; }
+function reportFrame(c, body, at){ at = at || new Date(); return `التاريخ: ${rHij(at)}هـ  /  الموافق: ${rGreg(at)}م\n\n${reportAddress(c)}\nالسلام عليكم ورحمة الله وبركاته، تحية طيبة وبعد،\nإشارة إلى ${reportRef(c)}،\n${String(body||"").trim()}\n${REPORT_CLOSE}\n${reportSign()}`; }
 // the model sometimes repeats a piece of the frame; the frame is the page's, so those lines go
-const REPORT_FRAME_RX = /^(التاريخ\s*:|الموافق\s*:|السادة\s*\/|سعادة\s|السلام عليكم|إشارة إلى|إشارةً إلى|كما ننوه إلى أن جميع|المحامي\s*\/|والله يحفظكم|وتفضلوا بقبول)/;
+const REPORT_FRAME_RX = /^(التاريخ\s*:|حفظه الله|حفظها الله|الموافق\s*:|السادة\s*\/|سعادة\s|السلام عليكم|إشارة إلى|إشارةً إلى|كما ننوه إلى أن جميع|المحامي\s*\/|والله يحفظكم|وتفضلوا بقبول)/;
 function reportBodyClean(t){ const lines = String(t||"").replace(/\*\*|^#+\s*/gm,"").split(/\r?\n/).map(x=>x.trim()).filter(Boolean); while (lines.length && REPORT_FRAME_RX.test(lines[0])) lines.shift(); while (lines.length && REPORT_FRAME_RX.test(lines.at(-1))) lines.pop(); return lines.join("\n"); }
 function reportFacts(c, s){
   const after = s?.start ? D(s.start) : new Date(); const next = (c.sessions||[]).filter(x => x.start && x.id!==s?.id && D(x.start) > after).sort((a,b)=>a.start.localeCompare(b.start))[0];
@@ -6555,11 +6578,11 @@ function reportFacts(c, s){
   const prev = (c.reports||[]).filter(r => r.text && r.sessionId!==s?.id).slice(-2).map(r => `— تقرير ${fmtDate.format(D(r.at))}:\n${r.text.slice(0,1200)}`).join("\n");
   return `الموكل: ${c.client||"—"} — صفته في الدعوى: ${c.ourSide||"غير محددة"}\nالخصم: ${reportOpp(c)||"—"}\nالقضية: ${c.caseNo||"—"} — ${c.title} — ${c.court||""} ${c.circuit||""}${c.caseType?" — "+c.caseType:""}${c.stage?" — المرحلة: "+c.stage:""}\n${sessTxt}\nالموعد القادم المسجل في الديوان: ${next?`${wd(next.start)} ${rHij(D(next.start))}هـ الموافق ${rGreg(D(next.start))}م — ${next.role||""}${next.required?" — "+next.required:""}`:"غير محدد"}${c.judgment?.result?`\nالحكم المسجل: ${c.judgment.result.slice(0,600)}${c.judgment.deadline?" — آخر موعد للاعتراض "+c.judgment.deadline:""}`:""}${prev?`\n\nتقارير سابقة أُرسلت للموكل في هذه القضية (للاتساق معها وعدم تكرارها):\n${prev}`:""}`;
 }
-function reportPrompt(c, s, style){
-  const facts = `تاريخ اليوم: ${rHij(new Date())}هـ الموافق ${rGreg(new Date())}م\n${reportFacts(c, s)}`;
+function reportPrompt(c, s, style, said){
+  const facts = `تاريخ اليوم: ${rHij(new Date())}هـ الموافق ${rGreg(new Date())}م\n${said && said.trim() ? `ما جرى في الجلسة كما كتبه المحامي (يُقدَّم على غيره): ${said.trim().slice(0, 3000)}\n` : ""}${reportFacts(c, s)}`;
   if (style==="short") return `اكتب رسالة واتساب قصيرة لموكل ${officeShort()} عن جلسة قضيته، لا تتجاوز 90 كلمة، بهذا الشكل:
 السلام عليكم ورحمة الله وبركاته
-<الأستاذ/ أو السادة/> <اسم الموكل> حفظه الله
+${clientTitle(c)==="org" ? `السادة/ ${c.client||""}` : clientTitle(c)==="f" ? `الأستاذة/ ${c.client||""} حفظها الله` : `الأستاذ/ ${c.client||""} حفظه الله`}
 بخصوص قضيتكم رقم (<الرقم>) ضد <الخصم باختصار>:
 - جلسة <التاريخ الهجري>: <ما قدّمه المكتب وما قدّمه الخصم وما قررته الدائرة، في سطرين>
 - القادم: <الموعد القادم وما سيفعله المكتب>
@@ -6569,9 +6592,14 @@ ${OFC().waSign||officeShort()}
 قواعد: الوقائع من الضبط وملاحظات المكتب فقط؛ لا تخترع قراراً أو موعداً؛ إن لم يُحدد موعد فاكتب «سنفيدكم بالموعد فور تحديده»؛ لا أسماء قضاة ولا أرقام هويات ولا إجراءات شكلية؛ نص عادي بلا ماركداون ولا نجوم.
 
 ${facts}`;
-  return `اكتب متن تقرير جلسة يُرسل إلى موكل ${officeShort()} بأسلوب خطابات المكتب الرسمية. لا تكتب التاريخ ولا المخاطبة ولا التحية ولا الإشارة إلى الدعوى ولا الخاتمة ولا التوقيع — تلك يضيفها النظام من نموذج المكتب؛ اكتب المتن وحده: فقرة إلى ثلاث فقرات (80 إلى 220 كلمة) بصيغة «نحن»، تبدأ حرفياً بـ: «${reportOpening(c, s)}» وتُكمل الجملة نفسها، ثم تسرد بترتيبه ما جرى في الجلسة: ما قدّمه المكتب (مرافعة، مذكرة، مستندات، طلبات)، وما قدّمه الخصم، وما طلبناه من الدائرة، وما قررته الدائرة أو أمر به فضيلة القاضي، ثم ما سيقوم به المكتب بعدها، ثم موعد الجلسة القادمة إن حُدد بصيغة «وتم تحديد الجلسة القادمة في يوم <اليوم> الموافق <التاريخ الهجري>هـ»، وإلا فاختم بـ«وسنوافيكم بموعد الجلسة القادمة فور تحديده من الدائرة».
-مثال على نبرة المكتب وصيغه (لا تنسخ وقائعه، فوقائع هذه الجلسة في البيانات أدناه): «${REPORT_SAMPLE}»
-قواعد: الوقائع من الضبط وملاحظات المكتب أدناه فقط، ولا تخترع قراراً أو موعداً أو مذكرة أو مستنداً؛ سمِّ الخصم بصفته (المدعى عليها / المدعية / المنفذ ضده) لا باسمه؛ لا تذكر أسماء القضاة ولا أرقام الهويات ولا الإجراءات الشكلية (التحقق من الهوية، الاتصال المرئي، افتتاح الجلسة، حضور الأطراف)؛ لا تنقل نص الضبط حرفياً بل صُغه بلغة الخطاب؛ إن كان في الضبط ما لا يسرّ الموكل (تأجيل بسببنا، رفض طلب، نقص مستند) فاذكره بوضوح ولباقة مع ما سيفعله المكتب حياله؛ إن طُلب من الموكل شيء (مستند، حضور، مبلغ) فاذكره صراحة في جملة تبدأ بـ«ونأمل منكم»؛ لا أرقام مواد نظامية من الذاكرة؛ نص عادي بلا ماركداون ولا ترقيم ولا عناوين.
+  // (19/11) the office's session-report form (skill «alomar-session-report»): the client wants the short of it — how the suit stands, what
+  // the circuit decided, the next hearing; one paragraph as a rule, in the office's voice («حضرنا»، «قدّمنا»، «قررت الدائرة»)
+  const g = clientTitle(c); const who = g === "org" ? "الموكل جهة (شركة أو مؤسسة): «موكلتنا» إن احتجت إلى ذكرها" : g === "f" ? "الموكلة امرأة: كل ما يعود إليها بالمؤنث (موكلتنا، حضرنا نيابةً عنها)" : "الموكل رجل";
+  return `اكتب متن تقرير جلسة يُرسل إلى موكل ${officeShort()} بنموذج المكتب الثابت. لا تكتب التاريخ ولا المخاطبة ولا التحية ولا سطر «إشارة إلى الدعوى» ولا الخاتمة ولا التوقيع — يضيفها النظام من النموذج؛ اكتب المتن وحده.
+المطلوب: **المختصر فقط** — سير الدعوى، وما قررته الدائرة، وموعد الجلسة القادمة. فقرة واحدة في الغالب (40 إلى 130 كلمة)، بلغة رسمية مهذبة وبصيغة المكتب («حضرنا نيابةً عنكم»، «قدّمنا»، «قررت الدائرة»)، تبدأ حرفياً بـ: «${reportOpening(c, s)}» وتُكمل الجملة نفسها. الخطاب للموكل بالجمع «نفيدكم/لكم» كما في خطابات المكتب. ${who}.
+إن حُدد موعد قادم فاختم بـ«وحُدّد موعد الجلسة القادمة يوم <اليوم> الموافق <التاريخ الهجري>هـ الساعة <الوقت>» (بلا الساعة إن لم تُعرف)، وإلا فبـ«وسنوافيكم بموعد الجلسة القادمة فور تحديده».
+مثال على الشكل (للأسلوب فقط، لا تنسخ وقائعه): «نفيدكم بأنه قد عُقدت جلسة الدعوى بتاريخ ...، وحضرنا فيها نيابةً عنكم، وقدّمنا ...، وقررت الدائرة ...، وحُدّد موعد الجلسة القادمة بتاريخ ... الساعة ....»
+قواعد صارمة: (1) الوقائع من «ما جرى في الجلسة كما كتبه المحامي» أولاً إن وُجد، ثم من الضبط وملاحظات المكتب أدناه — ولا شيء غيرها؛ لا تخترع حضوراً أو مذكرة أو قراراً أو موعداً، وإن لم يتضح ما قررته الدائرة فاكتب مكانه [قرار الدائرة: يُكمله المحامي] بدل التخمين؛ (2) لا تفاصيل إجرائية، ولا أرقام منشأة أو مخالفة أو سجل أو صك، ولا أسماء منصات أو أنظمة إلكترونية، ولا مصطلحات داخلية، ولا أسماء القضاة ولا أرقام الهويات؛ (3) سمِّ الخصم بصفته (المدعى عليها / المدعي) لا باسمه؛ (4) ما لا يسرّ الموكل (تأجيل، رفض طلب، نقص مستند) يُذكر بوضوح ولباقة؛ وما يُطلب من الموكل يُذكر في جملة «ونأمل منكم …»؛ (5) لا أرقام مواد نظامية من الذاكرة؛ نص عادي بلا ماركداون ولا ترقيم ولا عناوين.
 
 ${facts}`;
 }
@@ -6580,6 +6608,8 @@ async function openReport(c, s){
   S.repStyle = prev?.style || S.repStyle || "formal";
   const dr = openDrawer(`<header><div><span class="lbl">تقرير جلسة للموكل</span><h2 style="margin-top:4px">${esc(c.title)}</h2><div class="sub">${s?`جلسة ${fmtDate.format(D(s.start))} — ${fmtHijri.format(D(s.start))}`:""}${c.client?` · إلى ${esc(c.client)}`:""}</div></div><button class="btn sm" data-close aria-label="إغلاق">إغلاق</button></header>
     <div class="body"><div class="chips" role="group" aria-label="صيغة التقرير"><button class="chip" type="button" data-rstyle="formal" aria-pressed="${S.repStyle==="formal"}">خطاب رسمي بنموذج المكتب</button><button class="chip" type="button" data-rstyle="short" aria-pressed="${S.repStyle==="short"}">مختصر للواتساب</button></div>
+    <div class="chips" role="group" aria-label="مخاطبة الموكل" style="margin-top:6px">${[["m","سعادة الأستاذ"],["f","سعادة الأستاذة"],["org","السادة"]].map(([k,l])=>`<button class="chip" type="button" data-rtitle="${k}" aria-pressed="${clientTitle(c)===k}">${l}</button>`).join("")}</div>
+    <label class="f">ما جرى في الجلسة باختصار (اختياري — يُقدَّم على الضبط، واكتبه إن لم يكن الضبط كافياً)<textarea class="inp" id="repSaid" style="min-height:64px" placeholder="مثال: حضرنا وقدّمنا مذكرة الرد، وطلب الخصم مهلة، فأجّلت الدائرة إلى ...">${esc(prev?.said||"")}</textarea></label>
     <label class="f">نص التقرير (راجعه وعدّله قبل الإرسال)<textarea class="inp" id="repText" style="min-height:44vh;line-height:1.9">${esc(prev?.text || (S.repStyle==="formal" ? reportFrame(c, reportOpening(c, s)+" …") : ""))}</textarea></label>
     <div id="repState" class="sub">${prev?`آخر نسخة محفوظة ${fmtDate.format(D(prev.at))}${prev.file?.webUrl?` · <a href="${esc(href(prev.file.webUrl))}" target="_blank" rel="noopener">ملف Word</a>`:""}`:"اضغط «صياغة التقرير» ليكتب المساعد ما جرى في الجلسة داخل نموذج المكتب؛ التاريخ والمخاطبة والخاتمة والتوقيع من النموذج نفسه."}</div>
     <label class="f">جوال الموكل (للإرسال عبر واتساب)<input class="inp num" id="repPhone" inputmode="tel" placeholder="05xxxxxxxx" value="${esc(c.clientPhone||"")}"></label></div>
@@ -6600,7 +6630,13 @@ async function openReport(c, s){
   dr.querySelector("#repMail").onclick = () => { location.href = `mailto:?subject=${encodeURIComponent(`تقرير جلسة — ${c.caseNo || c.title}`)}&body=${encodeURIComponent(ta.value)}`; askS("email"); };
   dr.querySelector("#repCall").onclick = async () => { if (!ta.value.trim() || /…$/.test(ta.value.trim())) { toast("اكتب التقرير أولاً (أو اضغط «صياغة التقرير»)"); return; } if (await markS("phone")) closeDrawer(); };
   const fileName = () => safeName(`تقرير جلسة ${c.caseNo||c.title.slice(0,30)} ${rGreg(s?.start ? D(s.start) : new Date()).replace(/\//g,"-")}`) + ".docx";
-  const saveRep = async (extra={}) => { const patch = { reports: [...(c.reports||[]), {sessionId:s?.id||null, text:ta.value, at:new Date().toISOString(), by:S.uid||null, style:S.repStyle, ...extra}].slice(-30) };
+  const said = dr.querySelector("#repSaid");
+  // the address follows the lawyer's choice at once, and the choice stays with the case for every later letter
+  dr.querySelectorAll("[data-rtitle]").forEach(b => b.onclick = async () => { const k = b.dataset.rtitle; if (k === c.clientTitle) return;
+    if (await patchCase(c, {clientTitle:k}, `مخاطبة الموكل في التقارير: ${b.textContent}`)) { c = S.cases.get(c.id) || {...c, clientTitle:k};
+      dr.querySelectorAll("[data-rtitle]").forEach(x => x.setAttribute("aria-pressed", String(x.dataset.rtitle === k)));
+      ta.value = ta.value.split("\n").map(l => /^(سعادة الأستاذة?\s*\/|السادة\s*\/)/.test(l.trim()) ? reportAddress(c) : l).join("\n"); updWa(); } });
+  const saveRep = async (extra={}) => { const patch = { reports: [...(c.reports||[]), {sessionId:s?.id||null, text:ta.value, said:said?.value||null, at:new Date().toISOString(), by:S.uid||null, style:S.repStyle, ...extra}].slice(-30) };
     if (normPhone(ph.value) && ph.value !== (c.clientPhone||"")) patch.clientPhone = ph.value.trim();
     const ok = await patchCase(c, patch, extra.file ? `حفظ تقرير جلسة للموكل (Word في مجلد القضية)` : "حفظ تقرير جلسة للموكل"); if (ok) c = S.cases.get(c.id) || c; return ok; };
   dr.querySelector("#repCopy").onclick = () => { navigator.clipboard?.writeText(ta.value).then(()=>toast("نُسخ التقرير"),()=>{ ta.select(); toast("حدّد النص وانسخه"); }); };
@@ -6611,9 +6647,9 @@ async function openReport(c, s){
   dr.querySelector("#repGen").onclick = async (e) => {
     if (!S.sample) { toast("المساعد غير متاح في هذا العرض"); return; }
     e.target.disabled = true; st.innerHTML = `<span class="thinking"><span class="dot"></span>يقرأ ضبط الجلسة ويصوغ التقرير…</span>`; await ensureMinutes(c);
-    const style = S.repStyle; const prompt = reportPrompt(c, s, style);
+    const style = S.repStyle; const prompt = reportPrompt(c, s, style, said?.value);
     try { const ctl = new AbortController(); S.drawerCtl = ctl;
-      const {text} = await S.sample(prompt, { modelTier:"default", signal:ctl.signal, cache:false, onText:({text:t})=>{ ta.value = style==="formal" ? reportFrame(c, t) : t; updWa(); } });
+      const {text} = await S.sample(prompt, { modelTier: style==="formal" ? "complex" : "default", signal:ctl.signal, cache:false, onText:({text:t})=>{ ta.value = style==="formal" ? reportFrame(c, t) : t; updWa(); } });
       ta.value = style==="formal" ? reportFrame(c, reportBodyClean(text)) : text.trim(); updWa();
       st.textContent = style==="formal" ? "راجع متن التقرير — الوقائع من ضبط الجلسة — ثم أرسله أو أخرجه Word واحفظه في الملف." : "راجع الرسالة ثم أرسلها أو انسخها، واحفظها في الملف.";
     } catch(err){ if (err?.code!=="cancelled") st.innerHTML = `<span style="color:var(--crit)">${esc(aiErr(err))}</span>`; }
@@ -9455,7 +9491,7 @@ function crText(type, id){
       : "وسنوافيكم بما يستجد في الدعوى أولاً بأول بإذن الله.";
     return reportFrame(c, `نفيدكم بأنه قد تم بحمد الله وتوفيقه تقديم ${K.t || "المذكرة"}${court} بتاريخ ${crDay(m.filedAt)}${m.filedRef?`، برقم (${m.filedRef})`:""}، ${next}`); }
   const c = S.cases.get(id); if (!c) return ""; const f = c.filing || {}; const opp = reportOpp(c); const at = new Date();
-  return `التاريخ: ${rHij(at)}هـ\nالموافق: ${rGreg(at)}م\n\n${reportAddress(c)}\nالسلام عليكم ورحمة الله وبركاته، تحية طيبة وبعد،\nنفيدكم بأنه قد تم بحمد الله وتوفيقه رفع دعواكم${opp?` ضد ${opp}`:""} عبر منصة ناجز بتاريخ ${crDay(f.submittedAt || todayKey())}${f.reqNo?`، برقم الطلب (${f.reqNo})`:""}، وجارٍ قيدها لدى ${c.court || "المحكمة المختصة"}، وسنوافيكم برقم القضية وموعد الجلسة الأولى فور صدورهما بإذن الله.\n${REPORT_CLOSE}\n${reportSign()}`;
+  return `التاريخ: ${rHij(at)}هـ  /  الموافق: ${rGreg(at)}م\n\n${reportAddress(c)}\nالسلام عليكم ورحمة الله وبركاته، تحية طيبة وبعد،\nنفيدكم بأنه قد تم بحمد الله وتوفيقه رفع دعواكم${opp?` ضد ${opp}`:""} عبر منصة ناجز بتاريخ ${crDay(f.submittedAt || todayKey())}${f.reqNo?`، برقم الطلب (${f.reqNo})`:""}، وجارٍ قيدها لدى ${c.court || "المحكمة المختصة"}، وسنوافيكم برقم القضية وموعد الجلسة الأولى فور صدورهما بإذن الله.\n${REPORT_CLOSE}\n${reportSign()}`;
 }
 // a message is the letter without its date lines
 const crMsg = (t) => String(t||"").split("\n").filter(l => !/^(التاريخ|الموافق)\s*:/.test(l)).join("\n").replace(/^\n+/, "");
@@ -9568,9 +9604,13 @@ function pdfFontReady(){
 const pdfFamily = () => `"${String(DOCF.font||"").replace(/"/g, "")}", "Noto Naskh Arabic", "Traditional Arabic", "Arial", sans-serif`;
 // the paragraphs, as the Word export shapes them
 function pdfBlocks(text){
-  const navy = "#" + (DOCF.head || "1F3864"); const out = []; const R = (t, o={}) => ({t, b:!!o.b, c:o.c || null, u:!!o.u});
+  const navy = "#" + (DOCF.head || "1F3864"); const out = []; const R = (t, o={}) => ({t, b:!!o.b, c:o.c || null, u:!!o.u}); const rep = isReportText(text);
   for (const raw of String(text||"").split(/\r?\n/)) {
     const t = raw.replace(/\*\*/g, "").replace(/^#+\s*/, "").replace(/\s+$/, ""); const s = t.trim(); if (!s) continue; let m;
+    if (rep) { const k = REPORT_LINE(s);   // the session report form (19/11): as the Word export lays it out
+      if (k === "close") { out.push({runs:[R(s)], jc:"center", keepNext:true}); continue; }
+      if (k) { out.push({runs:[R(s,{b:1})], after:k === "date" ? 160 : 80}); continue; }
+      if (!(s.length < 60 && signRx().test(s))) { out.push({runs:[R(s,{b:1})]}); continue; } }
     if (/^(صاحب الفضيلة|أصحاب الفضيلة|أصحاب المعالي|صاحب المعالي|فضيلة رئيس|سعادة رئيس|معالي)/.test(s)) { out.push({runs:[R(s,{b:1,c:navy})], after:80}); continue; }
     if ((m = s.match(/^(الموضوع|طريقة الاعتراض)\s*[:：]\s*(.*)$/))) { out.push({runs:[R(m[1]+": ",{b:1,c:navy}), R(m[2])]}); continue; }
     if (/^(الطلبات|سبب النقض|أسباب الاعتراض|الوقائع|التكييف النظامي|المستندات المؤيدة|أطراف الدعوى|وصف المحل|المرفقات|فهرس المرفقات)\s*[:：]?$/.test(s)) { out.push({runs:[R(s.replace(/[:：]$/, ""),{b:1,c:navy,u:1})], after:80, keepNext:true}); continue; }

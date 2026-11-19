@@ -169,11 +169,13 @@
   // the browser alone would ask the site for «/_blob/…», which does not exist there
   document.addEventListener("click", async (e) => {
     const a = e.target.closest && e.target.closest('a[href*="/_blob/"]'); if (!a) return; const m = /\/_blob\/([0-9a-f]{32})/.exec(a.getAttribute("href") || ""); if (!m) return;
-    e.preventDefault(); const w = window.open("", "_blank"); if (w) { try { w.document.title = "يفتح الملف…"; w.document.body.textContent = "يفتح الملف…"; } catch {} }
-    try { await whenReady(); const name = a.getAttribute("title") || a.textContent.trim() || "ملف"; const view = /\.(pdf|txt|jpe?g|png|gif|webp)$/i.test(name);
-      const {data, error} = await sb.storage.from(BUCKET).createSignedUrl(m[1], 300, view ? undefined : {download: name}); if (error || !data?.signedUrl) throw error || new Error("no url");
-      if (w) w.location.replace(data.signedUrl); else location.href = data.signedUrl; }
-    catch { if (w) w.close(); if (typeof toast === "function") toast("تعذّر فتح الملف الآن. أعد المحاولة."); }
+    // (19/11) the file itself is saved under its own name — a storage link named it «%D8%…» or by its id
+    e.preventDefault();
+    try { await whenReady(); const name = (a.getAttribute("title") || a.textContent.trim() || "ملف").replace(/[\/\\]/g, "-");
+      const {data, error} = await sb.storage.from(BUCKET).download(m[1]); if (error || !data) throw error || new Error("no file");
+      const u = URL.createObjectURL(new File([data], name, {type: data.type || "application/octet-stream"})); const d = document.createElement("a"); d.href = u; d.download = name;
+      document.body.appendChild(d); d.click(); d.remove(); setTimeout(() => URL.revokeObjectURL(u), 60000); }
+    catch { if (typeof toast === "function") toast("تعذّر فتح الملف الآن. أعد المحاولة."); }
   }, true);
 
   // ---------------------------------------------------------------- the assistant («sample»): the «sample» function on the server holds the office's key

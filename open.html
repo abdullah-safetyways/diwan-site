@@ -4,20 +4,32 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
 <title>فتح مستند — ديوان القضايا</title>
 <style>
-  :root{color-scheme:light dark;--bg:#f4f3ef;--ink:#151547;--sub:#555}
-  @media (prefers-color-scheme: dark){:root{--bg:#0e0e24;--ink:#eee;--sub:#aaa}}
-  body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--ink);font:15px/1.7 'IBM Plex Sans Arabic','Segoe UI',Tahoma,sans-serif;padding:16px;box-sizing:border-box}
-  p{max-width:420px;text-align:center;margin:0} a{color:inherit}
+  :root{color-scheme:light dark;--bg:#f4f3ef;--ink:#151547;--sub:#555;--line:#d9d8e2;--card:#fff}
+  @media (prefers-color-scheme: dark){:root{--bg:#0e0e24;--ink:#eee;--sub:#aaa;--line:#33335a;--card:#17173a}}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.7 'IBM Plex Sans Arabic','Segoe UI',Tahoma,sans-serif;display:flex;flex-direction:column}
+  #bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--card)}
+  #nm{font-weight:700;flex:1 1 220px;min-width:0;overflow-wrap:anywhere}
+  button{font:inherit;border-radius:8px;padding:7px 16px;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+  button.pri{background:#151547;color:#fff;border-color:#151547}
+  #view{flex:1;min-height:0;display:grid;place-items:center;padding:0}
+  #view iframe{width:100%;height:100%;border:0;background:#fff}
+  #view img{max-width:100%;max-height:100%;object-fit:contain}
+  #msg{max-width:420px;text-align:center;margin:24px auto;padding:0 16px} a{color:inherit}
 </style>
 <script src="supabase.js"></script><script src="config.js"></script>
 </head>
 <body>
-<p id="msg">يفتح المستند…</p>
+<div id="bar" hidden><span id="nm"></span><button id="dl" class="pri" type="button">تنزيل</button><button id="sh" type="button" hidden>مشاركة</button></div>
+<div id="view"><p id="msg">يفتح المستند…</p></div>
 <script>
 /* «فتح» on a document in the Diwan: the link carries the file's path after «/Documents/» (as OneDrive links did); this page finds the
-   file with the signed-in session of this browser (the same one the Diwan uses) and hands over a link valid for five minutes. */
+   file with the signed-in session of this browser (the same one the Diwan uses).
+   (19/11) The file itself is read here and handed over under its own name: a link from the storage named the download «%D8%AA…»
+   (the Arabic name encoded) or by the storage id, and that is the name the client received. PDFs and pictures are shown here with
+   «تنزيل» (saved under the real name) and «مشاركة» (WhatsApp, mail… with the real name); other files are saved at once. */
 (async () => {
-  const msg = (t, html) => { const p = document.getElementById("msg"); if (html) p.innerHTML = t; else p.textContent = t; };
+  const msg = (t, html) => { const p = document.getElementById("msg"); if (!p) return; if (html) p.innerHTML = t; else p.textContent = t; };
   const C = window.__DIWAN_CLOUD || {};
   const sb = window.supabase.createClient(C.url, C.key, {auth: {persistSession: true, autoRefreshToken: true, storageKey: "diwan.cloud.auth"}});
   const raw = (location.hash.split("/Documents/")[1] || "");
@@ -25,13 +37,23 @@
   if (!path) { msg("رابط المستند غير صحيح."); return; }
   const {data: {session}} = await sb.auth.getSession();
   if (!session) { msg('سجّل الدخول في <a href="./">الديوان</a> أولاً، ثم افتح المستند مرة أخرى.', true); return; }
-  const {data: row, error} = await sb.from("files").select("id,name,is_folder").eq("path", path).maybeSingle();
+  const {data: row, error} = await sb.from("files").select("id,name,mime,is_folder").eq("path", path).maybeSingle();
   if (error || !row) { msg("المستند غير موجود، أو لا تملك صلاحية فتحه."); return; }
   if (row.is_folder) { msg("هذا مجلد؛ ملفاته في تبويب «المستندات» في صفحة القضية داخل الديوان."); return; }
-  const doc = /\.(pdf|txt|jpe?g|png|gif|webp)$/i.test(row.name);
-  const {data: s, error: e2} = await sb.storage.from("files").createSignedUrl(row.id, 300, doc ? undefined : {download: row.name});
-  if (e2 || !s?.signedUrl) { msg("تعذّر فتح المستند الآن. أعد المحاولة."); return; }
-  location.replace(s.signedUrl);
+  const {data: blob, error: e2} = await sb.storage.from("files").download(row.id);
+  if (e2 || !blob) { msg("تعذّر فتح المستند الآن. أعد المحاولة."); return; }
+  const name = row.name; const ext = (name.toLowerCase().match(/\.([a-z0-9]{1,5})$/) || [])[1] || "";
+  const type = blob.type && blob.type !== "application/octet-stream" ? blob.type : (row.mime || ({pdf: "application/pdf", jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", gif: "image/gif", webp: "image/webp", txt: "text/plain"}[ext] || "application/octet-stream"));
+  const file = new File([blob], name, {type}); const url = URL.createObjectURL(file);
+  const save = () => { const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); };
+  document.title = name; document.getElementById("nm").textContent = name; document.getElementById("bar").hidden = false;
+  document.getElementById("dl").onclick = save;
+  const sh = document.getElementById("sh");
+  if (navigator.canShare && navigator.canShare({files: [file]})) { sh.hidden = false; sh.onclick = async () => { try { await navigator.share({files: [file], title: name}); } catch {} }; }
+  const view = document.getElementById("view");
+  if (type === "application/pdf" || type === "text/plain") { view.innerHTML = ""; const f = document.createElement("iframe"); f.title = name; f.src = url; view.appendChild(f); }
+  else if (type.startsWith("image/")) { view.innerHTML = ""; const im = document.createElement("img"); im.alt = name; im.src = url; view.appendChild(im); }
+  else { save(); msg("نُزّل الملف باسمه: " + name); }
 })();
 </script>
 </body>
