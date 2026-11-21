@@ -10000,15 +10000,15 @@ function openVip(v){
     const sessions = [...f.querySelectorAll('[data-viprow="s"]')].map(r => ({date: r.querySelector('[name="sdate"]').value || "", time: r.querySelector('[name="stime"]').value || "", note: r.querySelector('[name="snote"]').value.trim()})).filter(s => s.date);
     const id = v.id || newId("V"); const now = new Date().toISOString();
     const doc = {clients, title: f.elements.title.value.trim(), sessions: sessions.sort((a, b) => a.date.localeCompare(b.date)), note: f.elements.note.value.trim(), deleted: false, createdAt: v.createdAt || now, updatedAt: now, by: S.uid || null};
-    try { await S.db.doc("vip/" + id).set(doc); await vipLoad(true); closeDrawer(); toast("حُفظت"); render(); } catch { toast("تعذّر الحفظ"); } };
+    try { await S.db.doc("vip/" + id).set(doc); await vipLoad(true); closeDrawer(); toast("حُفظت"); render(); } catch { toast("تعذّر الحفظ — تحقق من الاتصال ثم أعد المحاولة"); } };
 }
 function bindVip(){
   if (S.view !== "vip") return;
   const n = $("vipNew"); if (n) n.onclick = () => openVip(null);
   document.querySelectorAll("[data-vipedit]").forEach(b => b.onclick = () => openVip((S.vipUI.list || []).find(v => v.id === b.dataset.vipedit)));
   document.querySelectorAll("[data-vipdel]").forEach(b => b.onclick = async () => { if (!b.dataset.armed) { b.dataset.armed = "1"; b.textContent = "تأكيد الحذف"; return; }
-    try { await S.db.doc("vip/" + b.dataset.vipdel).update({deleted: true, deletedAt: new Date().toISOString()}); await vipLoad(true); toast("نُقلت إلى المحذوفة (تُسترجع منها)"); render(); } catch { toast("تعذّر الحذف"); } });
-  document.querySelectorAll("[data-viprestore]").forEach(b => b.onclick = async () => { try { await S.db.doc("vip/" + b.dataset.viprestore).update({deleted: false, deletedAt: null}); S.vipUI.showDel = true; await vipLoad(true); render(); } catch { toast("تعذّر الاسترجاع"); } });
+    try { await S.db.doc("vip/" + b.dataset.vipdel).update({deleted: true, deletedAt: new Date().toISOString()}); await vipLoad(true); toast("نُقلت إلى المحذوفة (تُسترجع منها)"); render(); } catch { toast("تعذّر الحذف — تحقق من الاتصال ثم أعد المحاولة"); } });
+  document.querySelectorAll("[data-viprestore]").forEach(b => b.onclick = async () => { try { await S.db.doc("vip/" + b.dataset.viprestore).update({deleted: false, deletedAt: null}); S.vipUI.showDel = true; await vipLoad(true); render(); } catch { toast("تعذّر الاسترجاع — تحقق من الاتصال ثم أعد المحاولة"); } });
 }
 // the owner's home page: one line, no name — that a large case has a hearing within a week
 function vipHomeNote(){
