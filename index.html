@@ -633,7 +633,7 @@ function renderNav(){
   const fc = S.loaded && viewAllowed("filing") ? filingCases().length : 0;
   const cc = S.loaded && viewAllowed("crm") ? (crmOwner() ? crmPendingApproval().length : 0) + crmFollowDue().length + (can("billing.view") ? crmInvoiceDue().length : 0) : 0;
   const badge = (k) => k==="crm" ? cc : k==="filing" ? fc : k==="review" ? rc : k==="memos" ? mc : k==="staff" ? jr : k==="portal" ? rq : 0;
-  const btn = (k,l,i) => `<button class="nav" data-nav="${k}" aria-current="${S.view===k || (k==="cases"&&S.view==="case") || (k==="clients"&&S.view==="client")}">${icon(i)}<span>${l}</span>${badge(k)?`<span class="count num">${badge(k)}</span>`:""}</button>`;
+  const btn = (k,l,i) => `<button class="nav" data-nav="${k}" aria-current="${S.view===k || (k==="cases"&&(S.view==="case"||S.view==="vip")) || (k==="clients"&&S.view==="client")}">${icon(i)}<span>${l}</span>${badge(k)?`<span class="count num">${badge(k)}</span>`:""}</button>`;
   const html = items.map(x => btn(...x)).join("");
   $("nav").innerHTML = navRailHtml(items, btn, badge); bindNavGroups(); $("mobNav").innerHTML = `<button class="nav mark" data-nav="home" aria-label="الرئيسية">${brandSvg("mark")}</button>` + html + `<button class="nav" data-nav="search" aria-current="${S.view==="search"}">${icon("search")}<span>بحث</span></button>`;
 }
@@ -675,7 +675,7 @@ const todayLine = () => { const n=new Date(); return `${fmtDay.format(n)} — ${
 function evRow(e){
   const what = e.caseNo ? `<span class="mono">${esc(e.caseNo)}</span> · ${esc(e.title)}` : esc(e.title);
   const req = e.required || (e.caseId ? "" : (e.note||"").split("\n").slice(1).join(" "));
-  return `<div class="ev" ${e.caseId?`data-case="${esc(e.caseId)}"${e.tab?` data-tab="${esc(e.tab)}"`:""}`:""}><span class="t num">${whenTxt(e)}</span><div style="min-width:0"><span class="role ${roleClass(e.role)}">${esc(e.role||"موعد")}</span> <span class="what">${what}</span></div>${req?`<div class="req">${esc(req)}</div>`:""}</div>`;
+  return `<div class="ev" ${e.vip?`data-nav="vip" role="button" tabindex="0" style="cursor:pointer"`:""} ${e.caseId?`data-case="${esc(e.caseId)}"${e.tab?` data-tab="${esc(e.tab)}"`:""}`:""}><span class="t num">${whenTxt(e)}</span><div style="min-width:0"><span class="role ${roleClass(e.role)}">${esc(e.role||"موعد")}</span> <span class="what">${what}</span></div>${req?`<div class="req">${esc(req)}</div>`:""}</div>`;
 }
 function agendaBlocks(evs){
   const by = new Map(); for (const e of evs){ const k=dkey(D(e.start)); if(!by.has(k)) by.set(k,[]); by.get(k).push(e); }
@@ -703,7 +703,7 @@ function briefHtml(t){
   return `<div class="brief">${esc(lines.slice(0,k).join("\n"))}</div><details class="brief-more"><summary>بقية الإحاطة</summary><div class="brief">${esc(lines.slice(k).join("\n"))}</div></details>`;
 }
 function vHome(){
-  const evs = allEvents().filter(e => isFuture(e.start));
+  const evs = withVip(allEvents()).filter(e => isFuture(e.start));
   const hear = evs.filter(e => daysUntil(e.start) <= 7 && !roleClass(e.role));
   const deadlines = evs.filter(e => roleClass(e.role)==="deadline" && daysUntil(e.start) <= 30);
   const open = allCases().filter(c=>OPEN.has(c.status) && trackOf(c)!=="exec" && !caseFinished(c)); const execOpen = allCases().filter(c=>trackOf(c)==="exec" && c.status!=="closed").length;
@@ -755,7 +755,7 @@ function vCases(){
   const F = [...(mineN?[["mine","قضاياي",mineN]]:[]),["open","المفتوحة",allCases().filter(c=>OPEN.has(c.status) && !caseFinished(c)).length],["active","قيد المرافعة",counts.active||0],["judged","صدر حكم",counts.judged||0],["appeal","استئناف",counts.appeal||0],["supreme","عليا",counts.supreme||0],["execution","تنفيذ",execN + (counts.execution||0)],["archive","غير محدّثة",counts.archive||0],["closed","منتهية",allCasesAll().filter(c=>caseFinished(c)).length],["all","الكل",allCasesAll().length]];
   return header("القضايا", `${allCases().length} قضية · ${execN} طلب تنفيذ قائم · ${engagements().length} عقود سنوية · ${perCaseContracts().length} عقود بالمعاملة`, `${can("cases.edit")?`<button class="btn" id="cfOpen">${icon("shield")}فحص تعارض</button> `:""}<button class="btn primary" id="caseNew" ${S.canWrite?"":"disabled"}>+ قضية جديدة</button>`) + `
   <div class="toolbar"><label class="search">${icon("search")}<input id="q" type="search" placeholder="رقم القضية، الخصم، الموكل، المحكمة، النوع…" value="${esc(S.q)}" autocomplete="off" aria-label="بحث في القضايا"></label></div>
-  <div class="chips" style="margin-bottom:14px">${F.filter(([k,,n]) => n || ["open","all","mine"].includes(k) || S.filter===k).map(([k,l,n])=>`<button class="chip" data-filter="${k}" aria-pressed="${S.filter===k}">${l} <span class="num muted">${n}</span></button>`).join("")}</div>
+  <div class="chips" style="margin-bottom:14px">${F.filter(([k,,n]) => n || ["open","all","mine"].includes(k) || S.filter===k).map(([k,l,n])=>`<button class="chip" data-filter="${k}" aria-pressed="${S.filter===k}">${l} <span class="num muted">${n}</span></button>`).join("")}${vipChip()}</div>
   ${trackUnclearPanel()}
   <div id="caseTable" class="tsecs">${caseTable()}</div>`;
 }
@@ -1700,7 +1700,7 @@ function monthGrid(){
   const ref = S.calMonth ? new Date(S.calMonth+"-15T12:00:00+03:00") : new Date();
   const ym = dkey(ref).slice(0,7); const [y,m] = ym.split("-").map(Number);
   const first = new Date(Date.UTC(y,m-1,1,9)); const start = new Date(first.getTime() - first.getUTCDay()*864e5);
-  const evs = allEvents(); const by = new Map(); for (const e of evs){ const k=dkey(D(e.start)); if(!by.has(k)) by.set(k,[]); by.get(k).push(e); }
+  const evs = withVip(allEvents()); const by = new Map(); for (const e of evs){ const k=dkey(D(e.start)); if(!by.has(k)) by.set(k,[]); by.get(k).push(e); }
   const today = todayKey(); const cells = [];
   for (let i=0;i<42;i++){ const d = new Date(start.getTime()+i*864e5); const k = dkey(d); const list = by.get(k)||[];
     const hp = Object.fromEntries(hijriParts.formatToParts(d).filter(p=>p.type!=="literal").map(p=>[p.type,+p.value]));
@@ -1749,7 +1749,7 @@ function invTable(list, withClient){
   return `<div style="overflow-x:auto"><table><thead><tr><th>الفاتورة</th>${withClient?"<th>العميل</th>":""}<th>التاريخ</th><th>الإجمالي</th><th>المتبقي</th><th>الحالة</th></tr></thead><tbody>${list.map(i=>{ const p = i.state==="draft"?["مسودة",""]:i.state==="cancel"?["ملغاة",""]:(PAY[i.pay]||[i.pay,""]); return `<tr ${i.caseId&&S.cases.has(i.caseId)?`class="clickable" data-case="${esc(i.caseId)}"`:""}><td class="mono">${esc(i.no)}</td>${withClient?`<td>${esc(i.client||"")}${i.caseId?"":' <span class="sub">(غير مربوطة بملف)</span>'}</td>`:""}<td class="num">${i.date?fmtDate.format(D(i.date)):"—"}</td><td class="num">${fmtMoney.format(i.total)}${i.type==="out_refund"?" (إشعار دائن)":""}</td><td class="num">${fmtMoney.format(i.residual)}</td><td><span class="pill ${p[1]}">${p[0]}</span></td></tr>`; }).join("")}</tbody></table></div>`;
 }
 function vAgenda(){
-  let evs = allEvents().filter(e => S.agendaPast ? !isFuture(e.start) : isFuture(e.start));
+  let evs = withVip(allEvents()).filter(e => S.agendaPast ? !isFuture(e.start) : isFuture(e.start));
   if (S.agendaPast) evs = evs.reverse().slice(0,150);
   if (S.agendaRole!=="all") evs = evs.filter(e => S.agendaRole==="deadline" ? roleClass(e.role)==="deadline" : S.agendaRole==="memo" ? roleClass(e.role)==="memo" : !roleClass(e.role));
   const R = [["all","الكل"],["hear","جلسات ومرافعات"],["deadline","مواعيد نهائية"],["memo","مذكرات"]];
@@ -2196,7 +2196,7 @@ function vFinanceBills(){
     <label class="search">${icon("search")}<input id="billQ" type="search" value="${esc(S.billQ||"")}" placeholder="العميل، رقم القضية، رقم الفاتورة" aria-label="بحث في الفوترة"></label></div>
   <section class="panel">${billRows(list.slice(0,300), true)}</section>`;
 }
-function homeBillingPanel(){ return vipHomeNote() + homeDuePanel(); }
+function homeBillingPanel(){ return homeDuePanel(); }
 function homeBillingPanel0(){
   const all = billingItems(); const isDue = (b) => b.state==="due"||b.state==="invoiced";
   const dueNow = all.filter(b=>isDue(b) && b.src!=="legacy").sort((a,b)=>(a.due||"").localeCompare(b.due||""));
@@ -2829,7 +2829,7 @@ function viewAllowed(v){
   if (v==="review") return can("cases.edit") || can("billing.edit");
   const p = VIEW_PERM[v]; return !p || can(p);
 }
-const NAV_ALL = [["home","الرئيسية","home"],["cases","القضايا","cases"],["vip","القضايا الكبيرة","shield"],["filing","رفع الدعوى","doc"],["crm","إدارة العملاء","people"],["clients","الموكلون","people"],["portal","متابعة الشركات","portal"],["review","استكمال البيانات","review"],["memos","المذكرات والمهام","memo"],["agenda","الأجندة","agenda"],["retainers","عقود الأتعاب","retainer"],["finance","الفوترة","money"],["kpi","مؤشرات الأداء","kpi"],["library","المكتبة القانونية","book"],["learn","التعلم من المحامي","learn"],["staff","الموظفون والصلاحيات","shield"],["sync","المزامنة","sync"]];
+const NAV_ALL = [["home","الرئيسية","home"],["cases","القضايا","cases"],["filing","رفع الدعوى","doc"],["crm","إدارة العملاء","people"],["clients","الموكلون","people"],["portal","متابعة الشركات","portal"],["review","استكمال البيانات","review"],["memos","المذكرات والمهام","memo"],["agenda","الأجندة","agenda"],["retainers","عقود الأتعاب","retainer"],["finance","الفوترة","money"],["kpi","مؤشرات الأداء","kpi"],["library","المكتبة القانونية","book"],["learn","التعلم من المحامي","learn"],["staff","الموظفون والصلاحيات","shield"],["sync","المزامنة","sync"]];
 const navItems = () => NAV_ALL.filter(([k]) => k!=="filing" && k!=="finance" && viewAllowed(k));
 // controls hidden from members without the permission (the screens stay readable)
 const PERM_UI = [
@@ -6515,7 +6515,7 @@ function brand(){ const el = $("brandBox"); if (el) el.innerHTML = `${brandSvg("
 // ---------- the rail: the day's work flat at the top, the rest in groups that open on demand — and open by themselves on their own pages.
 // A group with one visible page shows that page directly; a collapsed group carries the sum of its pages' counts.
 const NAV_GROUPS = [
-  {key:"work", items:["home","cases","vip","crm","agenda","memos","review"]},
+  {key:"work", items:["home","cases","crm","agenda","memos","review"]},
   {key:"clients", label:"الموكلون والشركات", icon:"people", items:["clients","portal"]},
   {key:"money", label:"الأتعاب والمالية", icon:"money", items:["retainers","finance"]},
   {key:"office", label:"إدارة المكتب", icon:"shield", items:["kpi","staff","sync"]},
@@ -6523,7 +6523,7 @@ const NAV_GROUPS = [
 ];
 try { S.navOpen = JSON.parse(localStorage.getItem("dq.navOpen")||"{}") || {}; } catch { S.navOpen = {}; }
 function navRailHtml(items, btn, badge){
-  const vis = new Map(items.map(x => [x[0], x])); const curView = S.view==="case" ? "cases" : S.view==="client" ? "clients" : S.view; let out = "";
+  const vis = new Map(items.map(x => [x[0], x])); const curView = S.view==="case" || S.view==="vip" ? "cases" : S.view==="client" ? "clients" : S.view; let out = "";
   for (const g of NAV_GROUPS) { const its = g.items.map(k => vis.get(k)).filter(Boolean); if (!its.length) continue;
     if (!g.label || its.length===1) { out += its.map(x => btn(...x)).join(""); continue; }
     const cur = its.some(x => x[0]===curView); const st = (S.navOpen||{})[g.key]; const open = st===undefined ? cur : !!st; const n = its.reduce((a,x) => a + (badge(x[0])||0), 0);
@@ -9972,7 +9972,8 @@ function vVip(){
       <div class="sub">${nx ? `الجلسة القادمة: ${esc(vipDay(nx))}${(v.sessions || []).find(s => s.date === nx)?.time ? " الساعة " + esc(v.sessions.find(s => s.date === nx).time) : ""}` : "لا جلسة قادمة مسجلة"}${past ? ` · ${past} جلسة سابقة` : ""}</div>
       ${v.note ? `<div class="sub" style="white-space:pre-wrap">${esc(v.note)}</div>` : ""}</div>
       <div style="display:flex;gap:6px"><button class="btn sm" type="button" data-vipedit="${esc(v.id)}">تعديل</button><button class="btn sm ghost" type="button" data-vipdel="${esc(v.id)}">حذف</button></div></div>`; };
-  return `<section class="panel"><header><h2>القضايا الكبيرة</h2><span class="sub">سرية — تراها وحدك، ولا تُنسخ إلى أي مكان آخر في الديوان</span></header>
+  return `<div class="chips" style="margin-bottom:14px"><button class="chip" type="button" data-nav="cases">كل القضايا</button>${vipChip()}</div>
+    <section class="panel"><header><h2>القضايا الكبيرة</h2><span class="sub">سرية — تراها وحدك، ولا تُنسخ إلى أي مكان آخر في الديوان</span></header>
     ${U.guard === false ? `<div class="notice warn">الحماية في قاعدة البيانات لم تُفعَّل بعد، فلا يُحفظ هنا شيء حتى تُفعَّل.</div>` : ""}
     ${U.err ? `<div class="notice warn">${esc(U.err)}</div>` : ""}
     <div style="display:flex;gap:8px;margin-bottom:10px"><button class="btn primary" type="button" id="vipNew" ${U.guard ? "" : "disabled"}>+ قضية كبيرة</button></div>
@@ -10016,6 +10017,24 @@ function vipHomeNote(){
   if (S.vipUI.list === null) { vipLoad().then(l => { if (l.length && S.view === "home") render(); }); return ""; }
   const soon = S.vipUI.list.filter(v => !v.deleted).map(vipNext).filter(d => d && d <= dkey(new Date(Date.now() + 7 * 864e5))).sort();
   return soon.length ? `<div class="notice" style="margin-bottom:10px">لديك ${soon.length === 1 ? "جلسة" : soon.length + " جلسات"} في القضايا الكبيرة خلال أسبوع، أقربها ${esc(fmtD(soon[0]))}. <button class="btn sm" type="button" data-nav="vip">افتح القضايا الكبيرة</button></div>` : "";
+}
+// (21/11, عبدالله: «حطها مع القضايا وخلها في فئة القضايا الكبيرة + ما ضهرت لي الجلسة مع جلساتي المعتادة في الصفحة الرئيسية»):
+// no menu item of its own — a category chip on the cases page; and its hearings join the owner's own lists (home, calendar, agenda) —
+// never allEvents() itself, which also feeds the assistant's brief and the performance figures.
+function vipEvents(){
+  if (!vipOwner()) return [];
+  if (S.vipUI.list === null) { vipLoad().then(l => { if (l.length && ["home", "agenda", "calendar"].includes(S.view)) render(); }); return []; }
+  const out = [];
+  for (const v of S.vipUI.list) { if (v.deleted) continue;
+    for (const s of v.sessions || []) if (s.date) out.push({start: s.time ? `${s.date}T${s.time}:00+03:00` : `${s.date}T08:00:00+03:00`, allDay: !s.time, role: "جلسة", vip: v.id,
+      title: `قضية كبيرة — ${(v.clients || []).join("، ")}${v.title ? " — " + v.title : ""}`, required: s.note || "", caseId: null}); }
+  return out;
+}
+const withVip = (evs) => vipOwner() ? [...evs, ...vipEvents()].sort((a, b) => a.start.localeCompare(b.start)) : evs;
+function vipChip(){
+  if (!vipOwner()) return "";
+  const n = S.vipUI.list ? S.vipUI.list.filter(v => !v.deleted).length : null; if (n === null) vipLoad().then(() => { if (S.view === "cases") render(); });
+  return `<button class="chip" type="button" data-nav="vip" aria-pressed="${S.view === "vip"}">القضايا الكبيرة <span class="num muted">${n ?? "…"}</span></button>`;
 }
 
 // ---------- events
