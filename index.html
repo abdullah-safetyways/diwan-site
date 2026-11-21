@@ -9959,7 +9959,7 @@ async function vipLoad(force){
   return S.vipUI.list;
 }
 const vipNext = (v) => (v.sessions || []).map(s => s.date).filter(d => d && d >= todayKey()).sort()[0] || null;
-const vipDay = (d) => d ? `${fmtD(d)} — ${hijriNum ? hijriNum(d) : ""}هـ` : "";
+const vipDay = (d) => d ? `${fmtD(d)} — ${String(hijriNum(d)).replace(/\s*هـ?$/, "")}هـ` : "";
 function vVip(){
   if (!vipOwner()) return vNoPerm();
   const U = S.vipUI;
