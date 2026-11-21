@@ -664,7 +664,7 @@ function render(){
   const v = S.view;
   const cv = v==="case" ? S.cases.get(S.caseId) : null;
   const blocked = (!["case","client","search"].includes(v) && !viewAllowed(v)) || (["case","client","search"].includes(v) && !can("cases.view")) || (cv && (!visibleCase(cv) || (cv.kind==="engagement" && !can("billing.view"))));
-  const html = blocked ? vNoPerm() : v==="home"?vHome(): v==="cases"?vCases(): v==="case"?vCase(): v==="review"?vReview(): v==="filing"?(S.view="memos", S.memoUI={...(S.memoUI||{}), tab:"filing"}, vMemos()): v==="crm"?vCrm(): v==="agenda"?vAgenda(): v==="retainers"?vRetainers(): v==="finance"?(S.view="home", vHome()): v==="clients"?vClients(): v==="client"?vClient(): v==="search"?vSearch(): v==="library"?vLibrary(): v==="learn"?vLearn(): v==="staff"?vStaff(): v==="memos"?vMemos(): v==="kpi"?vKpi(): v==="portal"?vPortal(): vSync();
+  const html = blocked ? vNoPerm() : v==="home"?vHome(): v==="cases"?vCases(): v==="case"?vCase(): v==="review"?vReview(): v==="filing"?(S.view="memos", S.memoUI={...(S.memoUI||{}), tab:"filing"}, vMemos()): v==="vip"?vVip(): v==="crm"?vCrm(): v==="agenda"?vAgenda(): v==="retainers"?vRetainers(): v==="finance"?(S.view="home", vHome()): v==="clients"?vClients(): v==="client"?vClient(): v==="search"?vSearch(): v==="library"?vLibrary(): v==="learn"?vLearn(): v==="staff"?vStaff(): v==="memos"?vMemos(): v==="kpi"?vKpi(): v==="portal"?vPortal(): vSync();
   $("main").innerHTML = html;
   afterRender();
 }
@@ -2196,7 +2196,7 @@ function vFinanceBills(){
     <label class="search">${icon("search")}<input id="billQ" type="search" value="${esc(S.billQ||"")}" placeholder="العميل، رقم القضية، رقم الفاتورة" aria-label="بحث في الفوترة"></label></div>
   <section class="panel">${billRows(list.slice(0,300), true)}</section>`;
 }
-function homeBillingPanel(){ return homeDuePanel(); }
+function homeBillingPanel(){ return vipHomeNote() + homeDuePanel(); }
 function homeBillingPanel0(){
   const all = billingItems(); const isDue = (b) => b.state==="due"||b.state==="invoiced";
   const dueNow = all.filter(b=>isDue(b) && b.src!=="legacy").sort((a,b)=>(a.due||"").localeCompare(b.due||""));
@@ -2819,7 +2819,8 @@ const can = (p) => !S.me || !!S.me.owner || !!S.me.legacy || !!S.me.perms?.has(p
 const visibleCase = (c) => !S.me || S.me.owner || S.me.legacy || (S.me.scope==="client" ? portalSet().has(c.id) : S.me.scope!=="assigned" || (c.assignees||[]).includes(S.me.uid));
 const VIEW_PERM = {crm:"crm.view", filing:"cases.view", cases:"cases.view", agenda:"cases.view", clients:"cases.view", review:"cases.edit", memos:"cases.view", retainers:"billing.view", finance:"billing.view", kpi:"kpi.view", learn:"learn.manage", sync:"sync.use"};
 function viewAllowed(v){
-  if (!S.me) return v!=="staff";
+  if (!S.me) return v!=="staff" && v!=="vip";
+  if (v==="vip") return !!(S.me.allowed && (S.me.owner || S.me.legacy));
   if (!S.me.allowed) return false;
   if (v==="staff") return !!(S.me.owner || S.me.legacy);
   if (S.me.role==="client") return v==="portal";
@@ -2828,7 +2829,7 @@ function viewAllowed(v){
   if (v==="review") return can("cases.edit") || can("billing.edit");
   const p = VIEW_PERM[v]; return !p || can(p);
 }
-const NAV_ALL = [["home","الرئيسية","home"],["cases","القضايا","cases"],["filing","رفع الدعوى","doc"],["crm","إدارة العملاء","people"],["clients","الموكلون","people"],["portal","متابعة الشركات","portal"],["review","استكمال البيانات","review"],["memos","المذكرات والمهام","memo"],["agenda","الأجندة","agenda"],["retainers","عقود الأتعاب","retainer"],["finance","الفوترة","money"],["kpi","مؤشرات الأداء","kpi"],["library","المكتبة القانونية","book"],["learn","التعلم من المحامي","learn"],["staff","الموظفون والصلاحيات","shield"],["sync","المزامنة","sync"]];
+const NAV_ALL = [["home","الرئيسية","home"],["cases","القضايا","cases"],["vip","القضايا الكبيرة","shield"],["filing","رفع الدعوى","doc"],["crm","إدارة العملاء","people"],["clients","الموكلون","people"],["portal","متابعة الشركات","portal"],["review","استكمال البيانات","review"],["memos","المذكرات والمهام","memo"],["agenda","الأجندة","agenda"],["retainers","عقود الأتعاب","retainer"],["finance","الفوترة","money"],["kpi","مؤشرات الأداء","kpi"],["library","المكتبة القانونية","book"],["learn","التعلم من المحامي","learn"],["staff","الموظفون والصلاحيات","shield"],["sync","المزامنة","sync"]];
 const navItems = () => NAV_ALL.filter(([k]) => k!=="filing" && k!=="finance" && viewAllowed(k));
 // controls hidden from members without the permission (the screens stay readable)
 const PERM_UI = [
@@ -6514,7 +6515,7 @@ function brand(){ const el = $("brandBox"); if (el) el.innerHTML = `${brandSvg("
 // ---------- the rail: the day's work flat at the top, the rest in groups that open on demand — and open by themselves on their own pages.
 // A group with one visible page shows that page directly; a collapsed group carries the sum of its pages' counts.
 const NAV_GROUPS = [
-  {key:"work", items:["home","cases","crm","agenda","memos","review"]},
+  {key:"work", items:["home","cases","vip","crm","agenda","memos","review"]},
   {key:"clients", label:"الموكلون والشركات", icon:"people", items:["clients","portal"]},
   {key:"money", label:"الأتعاب والمالية", icon:"money", items:["retainers","finance"]},
   {key:"office", label:"إدارة المكتب", icon:"shield", items:["kpi","staff","sync"]},
@@ -9937,6 +9938,86 @@ function bindPoa(){
   const x = $("poaX"); if (x) x.onclick = () => { S.nzUI.poa = S.nzUI.poaSrc = null; nzRerender(); };
 }
 
+// ---------- القضايا الكبيرة (21/11، طلب عبدالله: «لا تنسخ لأي مكان فهي سرية جدا جدا»): تصنيف قائم بذاته — اسم الموكل (أو أكثر من موكل)،
+// ومواعيد الجلسات، وملاحظة. يراه المالك وحده: القاعدة نفسها تمنع غيره (0012_vip: سياسات مقيِّدة على «vip/…» لغير المالك)، والصفحة لا تحفظ
+// شيئاً قبل أن تتأكد أن الحماية مفعّلة. ولا يدخل في: المساعد، البحث، الأجندة، النسخة الاحتياطية، بوابة الموكلين، التصدير، التقارير، الإشعارات —
+// إلا سطر تذكير بلا اسم في الرئيسية للمالك. لا يُحفظ في ذاكرة المتصفح الدائمة؛ يُقرأ من القاعدة عند الحاجة فقط.
+const vipOwner = () => !!(S.me?.owner || S.me?.legacy);
+S.vipUI = S.vipUI || {list: null, guard: null, err: null, showDel: false};
+async function vipGuard(){
+  if (S.vipUI.guard !== null) return S.vipUI.guard;
+  try { const sb = window.diwanCloud?.sb; if (!sb) return S.vipUI.guard = false; const {data, error} = await sb.rpc("vip_ok"); S.vipUI.guard = !error && data === true; }
+  catch { S.vipUI.guard = false; }
+  return S.vipUI.guard;
+}
+async function vipLoad(force){
+  if (!vipOwner() || !S.db) return [];
+  if (S.vipUI.list && !force) return S.vipUI.list;
+  if (!(await vipGuard())) { S.vipUI.list = []; return []; }   // without the protection in the database nothing is read or written
+  try { const q = await S.db.collection("vip").get(); S.vipUI.list = q.docs.map(d => ({...d.data(), id: d.id})); S.vipUI.err = null; }
+  catch { S.vipUI.err = "تعذّرت قراءة القضايا الكبيرة الآن."; S.vipUI.list = S.vipUI.list || []; }
+  return S.vipUI.list;
+}
+const vipNext = (v) => (v.sessions || []).map(s => s.date).filter(d => d && d >= todayKey()).sort()[0] || null;
+const vipDay = (d) => d ? `${fmtD(d)} — ${hijriNum ? hijriNum(d) : ""}هـ` : "";
+function vVip(){
+  if (!vipOwner()) return vNoPerm();
+  const U = S.vipUI;
+  if (U.list === null) { vipLoad().then(() => { if (S.view === "vip") render(); }); return `<section class="panel"><div class="thinking"><span class="dot"></span>يقرأ…</div></section>`; }
+  const live = U.list.filter(v => !v.deleted).sort((a, b) => (vipNext(a) || "9999").localeCompare(vipNext(b) || "9999"));
+  const gone = U.list.filter(v => v.deleted);
+  const card = (v) => { const nx = vipNext(v); const past = (v.sessions || []).filter(s => s.date && s.date < todayKey()).length;
+    return `<div class="ev" style="grid-template-columns:1fr auto;align-items:start"><div style="min-width:0">
+      <b>${(v.clients || []).map(esc).join("، ") || "—"}</b>${v.title ? ` <span class="sub">— ${esc(v.title)}</span>` : ""}
+      <div class="sub">${nx ? `الجلسة القادمة: ${esc(vipDay(nx))}${(v.sessions || []).find(s => s.date === nx)?.time ? " الساعة " + esc(v.sessions.find(s => s.date === nx).time) : ""}` : "لا جلسة قادمة مسجلة"}${past ? ` · ${past} جلسة سابقة` : ""}</div>
+      ${v.note ? `<div class="sub" style="white-space:pre-wrap">${esc(v.note)}</div>` : ""}</div>
+      <div style="display:flex;gap:6px"><button class="btn sm" type="button" data-vipedit="${esc(v.id)}">تعديل</button><button class="btn sm ghost" type="button" data-vipdel="${esc(v.id)}">حذف</button></div></div>`; };
+  return `<section class="panel"><header><h2>القضايا الكبيرة</h2><span class="sub">سرية — تراها وحدك، ولا تُنسخ إلى أي مكان آخر في الديوان</span></header>
+    ${U.guard === false ? `<div class="notice warn">الحماية في قاعدة البيانات لم تُفعَّل بعد، فلا يُحفظ هنا شيء حتى تُفعَّل.</div>` : ""}
+    ${U.err ? `<div class="notice warn">${esc(U.err)}</div>` : ""}
+    <div style="display:flex;gap:8px;margin-bottom:10px"><button class="btn primary" type="button" id="vipNew" ${U.guard ? "" : "disabled"}>+ قضية كبيرة</button></div>
+    ${live.length ? `<div class="tasks">${live.map(card).join("")}</div>` : `<div class="empty">لا قضايا كبيرة مسجلة.</div>`}
+    ${gone.length ? `<details style="margin-top:10px"${U.showDel ? " open" : ""}><summary>المحذوفة (${gone.length})</summary>${gone.map(v => `<div class="ev" style="grid-template-columns:1fr auto"><span>${(v.clients || []).map(esc).join("، ")}</span><button class="btn sm" type="button" data-viprestore="${esc(v.id)}">استرجاع</button></div>`).join("")}</details>` : ""}
+    </section>`;
+}
+function openVip(v){
+  v = v || {clients: [""], sessions: [{date: "", time: ""}], note: "", title: ""};
+  const row = (k, val, extra = "") => `<div class="row" data-viprow="${k}" style="align-items:end">${extra}<button class="btn sm ghost" type="button" data-viprm="1" aria-label="حذف السطر">×</button></div>`;
+  const cl = (n) => row("c", n, `<label class="f" style="flex:1">اسم الموكل<input class="inp" name="client" value="${esc(n || "")}" required></label>`);
+  const se = (s) => row("s", s, `<label class="f">تاريخ الجلسة<input class="inp" type="date" name="sdate" value="${esc(s.date || "")}"></label><label class="f">الساعة<input class="inp" type="time" name="stime" value="${esc(s.time || "")}"></label><label class="f" style="flex:1">ملاحظة<input class="inp" name="snote" value="${esc(s.note || "")}"></label>`);
+  const dr = openDrawer(`<header><div><span class="lbl">القضايا الكبيرة — سرية</span><h2 style="margin-top:4px">${v.id ? "تعديل" : "قضية كبيرة جديدة"}</h2></div><button class="btn sm" data-close>إغلاق</button></header>
+    <form class="body" id="vipForm"><div id="vipCl">${(v.clients?.length ? v.clients : [""]).map(cl).join("")}</div><button class="btn sm" type="button" id="vipAddCl">+ موكل آخر</button>
+      <label class="f">وصف مختصر (اختياري)<input class="inp" name="title" value="${esc(v.title || "")}"></label>
+      <div id="vipSe">${(v.sessions?.length ? v.sessions : [{date: "", time: ""}]).map(se).join("")}</div><button class="btn sm" type="button" id="vipAddSe">+ جلسة أخرى</button>
+      <label class="f">ملاحظات (اختياري)<textarea class="inp" name="note" style="min-height:70px">${esc(v.note || "")}</textarea></label>
+      <div style="display:flex;gap:8px"><button class="btn primary" type="submit">حفظ</button></div></form>`);
+  const wireRm = () => dr.querySelectorAll("[data-viprm]").forEach(b => b.onclick = () => { const r = b.closest("[data-viprow]"); const box = r.parentElement; if (box.children.length > 1) r.remove(); });
+  dr.querySelector("#vipAddCl").onclick = () => { dr.querySelector("#vipCl").insertAdjacentHTML("beforeend", cl("")); wireRm(); };
+  dr.querySelector("#vipAddSe").onclick = () => { dr.querySelector("#vipSe").insertAdjacentHTML("beforeend", se({})); wireRm(); }; wireRm();
+  dr.querySelector("#vipForm").onsubmit = async (e) => { e.preventDefault(); if (!(await vipGuard())) { toast("الحماية غير مفعّلة؛ لم يُحفظ شيء"); return; }
+    const f = e.target; const clients = [...f.querySelectorAll('[name="client"]')].map(x => x.value.trim()).filter(Boolean);
+    if (!clients.length) { toast("اكتب اسم موكل واحد على الأقل"); return; }
+    const sessions = [...f.querySelectorAll('[data-viprow="s"]')].map(r => ({date: r.querySelector('[name="sdate"]').value || "", time: r.querySelector('[name="stime"]').value || "", note: r.querySelector('[name="snote"]').value.trim()})).filter(s => s.date);
+    const id = v.id || newId("V"); const now = new Date().toISOString();
+    const doc = {clients, title: f.elements.title.value.trim(), sessions: sessions.sort((a, b) => a.date.localeCompare(b.date)), note: f.elements.note.value.trim(), deleted: false, createdAt: v.createdAt || now, updatedAt: now, by: S.uid || null};
+    try { await S.db.doc("vip/" + id).set(doc); await vipLoad(true); closeDrawer(); toast("حُفظت"); render(); } catch { toast("تعذّر الحفظ"); } };
+}
+function bindVip(){
+  if (S.view !== "vip") return;
+  const n = $("vipNew"); if (n) n.onclick = () => openVip(null);
+  document.querySelectorAll("[data-vipedit]").forEach(b => b.onclick = () => openVip((S.vipUI.list || []).find(v => v.id === b.dataset.vipedit)));
+  document.querySelectorAll("[data-vipdel]").forEach(b => b.onclick = async () => { if (!b.dataset.armed) { b.dataset.armed = "1"; b.textContent = "تأكيد الحذف"; return; }
+    try { await S.db.doc("vip/" + b.dataset.vipdel).update({deleted: true, deletedAt: new Date().toISOString()}); await vipLoad(true); toast("نُقلت إلى المحذوفة (تُسترجع منها)"); render(); } catch { toast("تعذّر الحذف"); } });
+  document.querySelectorAll("[data-viprestore]").forEach(b => b.onclick = async () => { try { await S.db.doc("vip/" + b.dataset.viprestore).update({deleted: false, deletedAt: null}); S.vipUI.showDel = true; await vipLoad(true); render(); } catch { toast("تعذّر الاسترجاع"); } });
+}
+// the owner's home page: one line, no name — that a large case has a hearing within a week
+function vipHomeNote(){
+  if (!vipOwner()) return "";
+  if (S.vipUI.list === null) { vipLoad().then(l => { if (l.length && S.view === "home") render(); }); return ""; }
+  const soon = S.vipUI.list.filter(v => !v.deleted).map(vipNext).filter(d => d && d <= dkey(new Date(Date.now() + 7 * 864e5))).sort();
+  return soon.length ? `<div class="notice" style="margin-bottom:10px">لديك ${soon.length === 1 ? "جلسة" : soon.length + " جلسات"} في القضايا الكبيرة خلال أسبوع، أقربها ${esc(fmtD(soon[0]))}. <button class="btn sm" type="button" data-nav="vip">افتح القضايا الكبيرة</button></div>` : "";
+}
+
 // ---------- events
 // the home page's third column exists on wide screens only: its panels move there, and back when the window narrows
 const WIDE = window.matchMedia ? window.matchMedia("(min-width:1500px)") : null;
@@ -9944,7 +10025,7 @@ if (WIDE) { try { WIDE.addEventListener("change", () => { if (S.view==="home") r
 function homeRail(){ const r = $("homeRail"); if (!r || !WIDE?.matches) return; [...document.querySelectorAll("[data-rail]")].sort((a,b)=>a.dataset.rail-b.dataset.rail).forEach(p => r.append(p)); }
 function afterRender(){
   homeRail();
-  uiTrim(); foldPanels(); bindLibrary(); bindLearn(); bindStaff(); bindBackup(); if (S.view==="sync") { bindNajizSync(); bindMoenSync(); } bindMemos(); bindKpi(); bindContracts2(); bindPortal(); bindConflict(); bindChecklists(); bindTrust(); bindTime(); bindComms(); bindTasks(); bindWork(); bindAssist(); bindNzPolicy(); bindOdLink(); bindStale(); bindRequests(); bindExtract(); bindLedger(); bindNzReqs(); bindFiling(); bindTracks(); bindCrm(); bindTrackSections(); nzEnforce();
+  uiTrim(); foldPanels(); bindVip(); bindLibrary(); bindLearn(); bindStaff(); bindBackup(); if (S.view==="sync") { bindNajizSync(); bindMoenSync(); } bindMemos(); bindKpi(); bindContracts2(); bindPortal(); bindConflict(); bindChecklists(); bindTrust(); bindTime(); bindComms(); bindTasks(); bindWork(); bindAssist(); bindNzPolicy(); bindOdLink(); bindStale(); bindRequests(); bindExtract(); bindLedger(); bindNzReqs(); bindFiling(); bindTracks(); bindCrm(); bindTrackSections(); nzEnforce();
   document.querySelectorAll("[data-ftab]").forEach(b=>b.onclick=()=>{ S.finTab=b.dataset.ftab; render(); });
   document.querySelectorAll("[data-onb]").forEach(b=>b.onclick=()=>{ const [v,t] = b.dataset.onb.split(":"); if (t) S.learnTab = t; go(v); });
   const ox = $("onbHide"); if (ox) ox.onclick = () => { try { localStorage.setItem("dq.onb", "1"); } catch {} S.onbHidden = true; render(); };
