@@ -9168,7 +9168,12 @@ function uxCaseStatus(main){
 // office's own appointments) follow under «مواعيد أخرى». A day with one court stays a plain list, since its rows already name it.
 const uxAgenda0 = agendaBlocks;
 const uxCourtOf = (e) => e.caseId && !roleClass(e.role) ? (S.cases.get(e.caseId)?.court || "") : "";
-function uxDayRows(list){
+function uxDayRows(all){
+  // (21/11) a large case's hearing opens its day, above the courts' groups (عبدالله: «خلها في بداية اليوم وبالخط الأحمر»)
+  const top = all.filter(e => e.vip).map(evRow).join(""); const list = all.filter(e => !e.vip);
+  return top + uxDayRows0(list);
+}
+function uxDayRows0(list){
   const courts = [...new Set(list.map(uxCourtOf).filter(Boolean))];
   if (courts.length < 2) return list.map(evRow).join("");
   const groups = courts.map(k => [k, list.filter(e => uxCourtOf(e) === k)]); const rest = list.filter(e => !uxCourtOf(e));
