@@ -675,7 +675,7 @@ const todayLine = () => { const n=new Date(); return `${fmtDay.format(n)} — ${
 function evRow(e){
   const what = e.caseNo ? `<span class="mono">${esc(e.caseNo)}</span> · ${esc(e.title)}` : esc(e.title);
   const req = e.required || (e.caseId ? "" : (e.note||"").split("\n").slice(1).join(" "));
-  return `<div class="ev" ${e.vip?`data-nav="vip" role="button" tabindex="0" style="cursor:pointer"`:""} ${e.caseId?`data-case="${esc(e.caseId)}"${e.tab?` data-tab="${esc(e.tab)}"`:""}`:""}><span class="t num">${whenTxt(e)}</span><div style="min-width:0"><span class="role ${roleClass(e.role)}">${esc(e.role||"موعد")}</span> <span class="what">${what}</span></div>${req?`<div class="req">${esc(req)}</div>`:""}</div>`;
+  return `<div class="ev${e.vip?" ev-vip":""}" ${e.vip?`data-nav="vip" role="button" tabindex="0" style="cursor:pointer"`:""} ${e.caseId?`data-case="${esc(e.caseId)}"${e.tab?` data-tab="${esc(e.tab)}"`:""}`:""}><span class="t num">${whenTxt(e)}</span><div style="min-width:0"><span class="role ${roleClass(e.role)}">${esc(e.role||"موعد")}</span> <span class="what">${what}</span></div>${req?`<div class="req">${esc(req)}</div>`:""}</div>`;
 }
 function agendaBlocks(evs){
   const by = new Map(); for (const e of evs){ const k=dkey(D(e.start)); if(!by.has(k)) by.set(k,[]); by.get(k).push(e); }
@@ -10030,7 +10030,10 @@ function vipEvents(){
       title: `قضية كبيرة — ${(v.clients || []).join("، ")}${v.title ? " — " + v.title : ""}`, required: s.note || "", caseId: null}); }
   return out;
 }
-const withVip = (evs) => vipOwner() ? [...evs, ...vipEvents()].sort((a, b) => a.start.localeCompare(b.start)) : evs;
+// (21/11, «خلها في بداية اليوم وبالخط الأحمر») a large case's hearing comes first in its day, whatever its hour, and in red (evRow)
+try { if (!document.getElementById("vipCss")) document.head.insertAdjacentHTML("beforeend", `<style id="vipCss">.ev.ev-vip,.ev.ev-vip .what,.ev.ev-vip .t,.ev.ev-vip .req,.ev.ev-vip .mono{color:#c62828!important;font-weight:700}.ev.ev-vip .role{background:#fdecea!important;color:#c62828!important}</style>`); } catch {}
+const withVip = (evs) => vipOwner() ? [...evs, ...vipEvents()].sort((a, b) => { const da = dkey(D(a.start)), db = dkey(D(b.start));
+  return da !== db ? da.localeCompare(db) : (b.vip ? 1 : 0) - (a.vip ? 1 : 0) || a.start.localeCompare(b.start); }) : evs;
 function vipChip(){
   if (!vipOwner()) return "";
   const n = S.vipUI.list ? S.vipUI.list.filter(v => !v.deleted).length : null; if (n === null) vipLoad().then(() => { if (S.view === "cases") render(); });
