@@ -9943,110 +9943,152 @@ function bindPoa(){
   const x = $("poaX"); if (x) x.onclick = () => { S.nzUI.poa = S.nzUI.poaSrc = null; nzRerender(); };
 }
 
-// ---------- القضايا الكبيرة (21/11، طلب عبدالله: «لا تنسخ لأي مكان فهي سرية جدا جدا»): تصنيف قائم بذاته — اسم الموكل (أو أكثر من موكل)،
-// ومواعيد الجلسات، وملاحظة. يراه المالك وحده: القاعدة نفسها تمنع غيره (0012_vip: سياسات مقيِّدة على «vip/…» لغير المالك)، والصفحة لا تحفظ
-// شيئاً قبل أن تتأكد أن الحماية مفعّلة. ولا يدخل في: المساعد، البحث، الأجندة، النسخة الاحتياطية، بوابة الموكلين، التصدير، التقارير، الإشعارات —
-// إلا سطر تذكير بلا اسم في الرئيسية للمالك. لا يُحفظ في ذاكرة المتصفح الدائمة؛ يُقرأ من القاعدة عند الحاجة فقط.
+// ---------- القضايا الكبيرة (21/11، طلب عبدالله: «لا تنسخ لأي مكان فهي سرية جدا جدا»): سجل قائم بذاته يراه المالك وحده. القاعدة نفسها تمنع
+// غيره (0012_vip: سياسات مقيِّدة على «vip/…» لغير المالك)، والصفحة لا تحفظ شيئاً قبل أن تتأكد أن الحماية مفعّلة. ولا يدخل في: المساعد،
+// البحث، النسخة الاحتياطية، بوابة الموكلين، التصدير، التقارير. لا يُحفظ في ذاكرة المتصفح الدائمة؛ يُقرأ من القاعدة عند الحاجة فقط.
+//
+// (22/11، بعد أن ضاع موعد بتشكاته حين كُتب فوقه موعد جديد في نموذج التعديل) البنية الآن:
+//   people[{id,name,idNo}] — لكل متهم صفحته؛ sessions[{id,date,time,note,memo, per:{<معرّف المتهم>:{poa,visit,print,attend,amount,paid}}}]
+//   الموعد يُضاف ويُعدَّل ويُحذف وحده (openVipSession) ولا يمسه نموذج القضية؛ وما سُجّل للمتهم في جلسة يبقى معها ولو تغيّر تاريخها.
+//   clients[] و ids[] تبقيان (أسماء وهويات بالترتيب) لما كُتب قبل ذلك.
 const vipOwner = () => !!(S.me?.owner || S.me?.legacy);
-S.vipUI = S.vipUI || {list: null, guard: null, err: null, showDel: false};
+S.vipUI = S.vipUI || {list: null, guard: null, err: null, showDel: false, week: 0, month: null};
 async function vipGuard(){
   if (S.vipUI.guard !== null) return S.vipUI.guard;
   try { const sb = window.diwanCloud?.sb; if (!sb) return S.vipUI.guard = false; const {data, error} = await sb.rpc("vip_ok"); S.vipUI.guard = !error && data === true; }
   catch { S.vipUI.guard = false; }
   return S.vipUI.guard;
 }
+// what was written in the first shape (names in clients[], ticks on the hearing itself) is read in the new one; nothing is lost
+function vipNorm(v){
+  const people = Array.isArray(v.people) && v.people.length ? v.people.map((p, i) => ({id: p.id || "p" + i, name: p.name || "", idNo: p.idNo || ""}))
+    : (v.clients || []).map((n, i) => ({id: "p" + i, name: n, idNo: (v.ids || [])[i] || ""}));
+  const sessions = (v.sessions || []).filter(x => x && x.date).map((x, i) => { const per = {...(x.per || {})};
+    if (!x.per && x.checks && Object.values(x.checks).some(Boolean)) for (const p of people) per[p.id] = {...x.checks};
+    return {id: x.id || "s" + x.date + (i ? "_" + i : ""), date: x.date, time: x.time || "", note: x.note || "", memo: !!x.memo, per}; }).sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+  return {...v, people, sessions, clients: people.map(p => p.name), ids: people.map(p => p.idNo)};
+}
 async function vipLoad(force){
   if (!vipOwner() || !S.db) return [];
   if (S.vipUI.list && !force) return S.vipUI.list;
   if (!(await vipGuard())) { S.vipUI.list = []; return []; }   // without the protection in the database nothing is read or written
-  try { const q = await S.db.collection("vip").get(); S.vipUI.list = q.docs.map(d => ({...d.data(), id: d.id})); S.vipUI.err = null; }
+  try { const q = await S.db.collection("vip").get(); S.vipUI.list = q.docs.map(d => vipNorm({...d.data(), id: d.id})); S.vipUI.err = null; }
   catch { S.vipUI.err = "تعذّرت قراءة القضايا الكبيرة الآن."; S.vipUI.list = S.vipUI.list || []; }
   return S.vipUI.list;
 }
+const vipGet = (vid) => (S.vipUI.list || []).find(v => v.id === vid) || null;
+// every write goes through here: the fields given, in the new shape, and the list in memory follows
+async function vipWrite(v, patch){
+  if (!(await vipGuard())) { toast("الحماية غير مفعّلة؛ لم يُحفظ شيء"); return false; }
+  const n = vipNorm({...v, ...patch}); const doc = {people: n.people, clients: n.clients, ids: n.ids, sessions: n.sessions, title: n.title || "", note: n.note || "", deleted: !!n.deleted, deletedAt: n.deletedAt || null,
+    createdAt: n.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString(), by: S.uid || null};
+  try { await S.db.doc("vip/" + v.id).set(doc); const i = (S.vipUI.list || []).findIndex(x => x.id === v.id); const full = {...doc, id: v.id}; if (i >= 0) S.vipUI.list[i] = full; else (S.vipUI.list = S.vipUI.list || []).push(full); return true; }
+  catch { toast("تعذّر الحفظ — تحقق من الاتصال ثم أعد المحاولة"); return false; }
+}
 const vipNext = (v) => (v.sessions || []).map(s => s.date).filter(d => d && d >= todayKey()).sort()[0] || null;
 const vipDay = (d) => d ? `${fmtD(d)} — ${String(hijriNum(d)).replace(/\s*هـ?$/, "")}هـ` : "";
+const VIP_CHECKS = [["poa", "التوكيل في جلسة علنية"], ["visit", "مقابلة السجين"], ["print", "البصمة"], ["attend", "مشهد حضور الجلسة"]];
+const VIP_AMOUNTS = [3000, 1500];
+const vipPer = (x, pid) => (x.per || {})[pid] || {};
+
+// ---------------------------------------------------------------- the page
 function vVip(){
   if (!vipOwner()) return vNoPerm();
   const U = S.vipUI;
   if (U.list === null) { vipLoad().then(() => { if (S.view === "vip") render(); }); return `<section class="panel"><div class="thinking"><span class="dot"></span>يقرأ…</div></section>`; }
   const live = U.list.filter(v => !v.deleted).sort((a, b) => (vipNext(a) || "9999").localeCompare(vipNext(b) || "9999"));
   const gone = U.list.filter(v => v.deleted);
-  const card = (v) => { const nx = vipNext(v); const past = (v.sessions || []).filter(s => s.date && s.date < todayKey()).length;
+  const card = (v) => { const nx = vipNext(v); const nxs = (v.sessions || []).find(s => s.date === nx);
     return `<div class="ev" style="grid-template-columns:1fr auto;align-items:start"><div style="min-width:0">
-      <b>${(v.clients || []).map(esc).join("، ") || "—"}</b>${v.title ? ` <span class="sub">— ${esc(v.title)}</span>` : ""}
-      <div class="sub">${nx ? `الجلسة القادمة: ${esc(vipDay(nx))}${(v.sessions || []).find(s => s.date === nx)?.time ? " الساعة " + esc(v.sessions.find(s => s.date === nx).time) : ""}` : "لا جلسة قادمة مسجلة"}${past ? ` · ${past} جلسة سابقة` : ""}</div>
-      ${(v.ids || []).some(Boolean) ? `<div class="sub">الهوية: ${(v.clients || []).map((n, i) => (v.ids || [])[i] ? `<span class="mono">${esc(v.ids[i])}</span>` : "—").join("، ")}</div>` : ""}
+      <div class="chips">${v.people.map(p => `<button class="chip" type="button" data-vipperson="${esc(v.id)}|${esc(p.id)}" title="افتح صفحة المتهم"><b>${esc(p.name)}</b>${p.idNo ? ` <span class="mono muted">${esc(p.idNo)}</span>` : ""}</button>`).join("")}</div>
+      ${v.title ? `<div class="sub">${esc(v.title)}</div>` : ""}
+      <div class="sub">${nx ? `الجلسة القادمة: ${esc(vipDay(nx))}${nxs?.time ? " الساعة " + esc(nxs.time) : ""}${nxs?.memo ? " — فيها مذكرة" : ""}` : "لا جلسة قادمة مسجلة"}</div>
       ${v.note ? `<div class="sub" style="white-space:pre-wrap">${esc(v.note)}</div>` : ""}
-      ${vipSessHtml(v)}</div>
-      <div style="display:flex;gap:6px"><button class="btn sm" type="button" data-vipedit="${esc(v.id)}">تعديل</button><button class="btn sm ghost" type="button" data-vipdel="${esc(v.id)}">حذف</button></div></div>`; };
+      <details style="margin-top:6px"><summary class="sub">المواعيد (${v.sessions.length})</summary>${v.sessions.map(x => `<div class="row" style="align-items:center;margin-top:4px"><span style="flex:1"><b>${esc(fmtD(x.date))}</b>${x.time ? ` <span class="sub">${esc(x.time)}</span>` : ""}${x.memo ? ` <span class="role deadline">فيها مذكرة</span>` : ""}${x.note ? ` <span class="sub">— ${esc(x.note)}</span>` : ""}</span>
+        <button class="btn sm ghost" type="button" data-vipsessedit="${esc(v.id)}|${esc(x.id)}">تعديل الموعد</button><button class="btn sm ghost" type="button" data-vipsessdel="${esc(v.id)}|${esc(x.id)}">حذف الموعد</button></div>`).join("") || `<div class="sub">لا مواعيد.</div>`}</details></div>
+      <div style="display:grid;gap:6px"><button class="btn sm primary" type="button" data-vipsessnew="${esc(v.id)}">+ موعد جديد</button><button class="btn sm" type="button" data-vipedit="${esc(v.id)}">تعديل</button><button class="btn sm ghost" type="button" data-vipdel="${esc(v.id)}">حذف</button></div></div>`; };
   return `<div class="chips" style="margin-bottom:14px"><button class="chip" type="button" data-nav="cases">كل القضايا</button>${vipChip()}</div>
-    <section class="panel"><header><h2>القضايا الكبيرة</h2><span class="sub">سرية — تراها وحدك، ولا تُنسخ إلى أي مكان آخر في الديوان</span></header>
+    <section class="panel"><header><h2>القضايا الكبيرة</h2><span class="sub">سرية — تراها وحدك، ولا تُنسخ إلى أي مكان آخر في الديوان. اضغط اسم المتهم لتفتح صفحته.</span></header>
     ${U.guard === false ? `<div class="notice warn">الحماية في قاعدة البيانات لم تُفعَّل بعد، فلا يُحفظ هنا شيء حتى تُفعَّل.</div>` : ""}
     ${U.err ? `<div class="notice warn">${esc(U.err)}</div>` : ""}
     <div style="display:flex;gap:8px;margin-bottom:10px"><button class="btn primary" type="button" id="vipNew" ${U.guard ? "" : "disabled"}>+ قضية كبيرة</button></div>
     ${live.length ? `<div class="tasks">${live.map(card).join("")}</div>` : `<div class="empty">لا قضايا كبيرة مسجلة.</div>`}
-    ${gone.length ? `<details style="margin-top:10px"${U.showDel ? " open" : ""}><summary>المحذوفة (${gone.length})</summary>${gone.map(v => `<div class="ev" style="grid-template-columns:1fr auto"><span>${(v.clients || []).map(esc).join("، ")}</span><button class="btn sm" type="button" data-viprestore="${esc(v.id)}">استرجاع</button></div>`).join("")}</details>` : ""}
+    ${gone.length ? `<details style="margin-top:10px"${U.showDel ? " open" : ""}><summary>المحذوفة (${gone.length})</summary>${gone.map(v => `<div class="ev" style="grid-template-columns:1fr auto"><span>${v.people.map(p => esc(p.name)).join("، ")}</span><button class="btn sm" type="button" data-viprestore="${esc(v.id)}">استرجاع</button></div>`).join("")}</details>` : ""}
     </section>
     ${live.length ? vipToolsHtml() : ""}`;
 }
-// (22/11, عبدالله: «خمس فقرات اشيك عليها») for every hearing: the four that repeat — التوكيل في جلسة علنية، مقابلة السجين، البصمة،
-// مشهد حضور الجلسة — ticked in place; and the fifth: the next hearing's date and whether it has a memo.
-const VIP_CHECKS = [["poa", "التوكيل في جلسة علنية"], ["visit", "مقابلة السجين"], ["print", "البصمة"], ["attend", "مشهد حضور الجلسة"]];
-function vipSessHtml(v){
-  const ss = (v.sessions || []).slice().sort((a, b) => a.date.localeCompare(b.date)); if (!ss.length) return "";
-  const cut = dkey(new Date(Date.now() - 45 * 864e5)); const row = (x) => { const i = ss.indexOf(x); const nx = ss[i + 1];
-    return `<div style="margin-top:8px;padding-top:6px;border-top:1px dashed var(--line)"><b>${esc(fmtD(x.date))}</b>${x.time ? ` <span class="sub">${esc(x.time)}</span>` : ""}${x.memo ? ` <span class="role deadline">فيها مذكرة</span>` : ""}${x.note ? ` <span class="sub">— ${esc(x.note)}</span>` : ""}
-      <div class="chips" style="margin-top:4px">${VIP_CHECKS.map(([k, l]) => `<button class="chip" type="button" data-vipchk="${esc(v.id)}|${esc(x.date)}|${k}" aria-pressed="${!!(x.checks || {})[k]}">${(x.checks || {})[k] ? "✓ " : ""}${l}</button>`).join("")}</div>
-      <div class="sub" style="margin-top:2px">الجلسة القادمة: ${nx ? `${esc(fmtD(nx.date))} — <button class="chip" type="button" data-vipmemo="${esc(v.id)}|${esc(nx.date)}" aria-pressed="${!!nx.memo}">${nx.memo ? "✓ فيها مذكرة" : "بلا مذكرة"}</button>` : `لم تُحدَّد — <button class="btn sm ghost" type="button" data-vipedit="${esc(v.id)}">أضف موعدها</button>`}</div></div>`; };
-  const recent = ss.filter(x => x.date >= cut), older = ss.filter(x => x.date < cut);
-  return recent.map(row).join("") + (older.length ? `<details style="margin-top:6px"><summary class="sub">جلسات أقدم (${older.length})</summary>${older.map(row).join("")}</details>` : "");
-}
-async function vipSessPatch(vid, date, fn){
-  const v = (S.vipUI.list || []).find(x => x.id === vid); if (!v) return; const sessions = (v.sessions || []).map(x => x.date === date ? fn({...x}) : x);
-  try { await S.db.doc("vip/" + vid).update({sessions, updatedAt: new Date().toISOString()}); v.sessions = sessions; render(); } catch { toast("تعذّر الحفظ — تحقق من الاتصال ثم أعد المحاولة"); }
-}
+// the case itself: the accused (name and ID number), a short description, a note — and, only when it is new, its first hearing.
+// The hearings of an existing case are never touched here.
 function openVip(v){
-  v = v || {clients: [""], sessions: [{date: "", time: ""}], note: "", title: ""};
-  const row = (k, val, extra = "") => `<div class="row" data-viprow="${k}" style="align-items:end">${extra}<button class="btn sm ghost" type="button" data-viprm="1" aria-label="حذف السطر">×</button></div>`;
-  const cl = (n, idNo) => row("c", n, `<label class="f" style="flex:1">اسم الموكل (المتهم) كاملاً<input class="inp" name="client" value="${esc(n || "")}" required placeholder="الاسم الرباعي"></label><label class="f">رقم الهوية<input class="inp mono" name="cid" inputmode="numeric" value="${esc(idNo || "")}"></label>`);
-  const se = (s) => row("s", s, `<label class="f">تاريخ الجلسة<input class="inp" type="date" name="sdate" value="${esc(s.date || "")}"></label><label class="f">الساعة<input class="inp" type="time" name="stime" value="${esc(s.time || "")}"></label><label class="f" style="flex:1">ملاحظة<input class="inp" name="snote" value="${esc(s.note || "")}"></label><label style="display:flex;gap:4px;align-items:center;white-space:nowrap"><input type="checkbox" name="smemo" ${s.memo ? "checked" : ""}> فيها مذكرة</label>`);
-  const dr = openDrawer(`<header><div><span class="lbl">القضايا الكبيرة — سرية</span><h2 style="margin-top:4px">${v.id ? "تعديل" : "قضية كبيرة جديدة"}</h2></div><button class="btn sm" data-close>إغلاق</button></header>
-    <form class="body" id="vipForm"><div id="vipCl">${(v.clients?.length ? v.clients : [""]).map((n, i) => cl(n, (v.ids || [])[i])).join("")}</div><button class="btn sm" type="button" id="vipAddCl">+ موكل آخر</button>
+  const isNew = !v?.id; v = vipNorm(v || {people: [{id: "", name: "", idNo: ""}], sessions: []}); if (!v.people.length) v.people = [{id: "", name: "", idNo: ""}];
+  const cl = (p) => `<div class="row" data-viprow="c" data-pid="${esc(p.id || "")}" style="align-items:end"><label class="f" style="flex:1">اسم المتهم كاملاً<input class="inp" name="client" value="${esc(p.name || "")}" required placeholder="الاسم الرباعي"></label><label class="f">رقم الهوية<input class="inp mono" name="cid" inputmode="numeric" value="${esc(p.idNo || "")}"></label><button class="btn sm ghost" type="button" data-viprm="1" aria-label="حذف السطر">×</button></div>`;
+  const dr = openDrawer(`<header><div><span class="lbl">القضايا الكبيرة — سرية</span><h2 style="margin-top:4px">${isNew ? "قضية كبيرة جديدة" : "تعديل"}</h2></div><button class="btn sm" data-close>إغلاق</button></header>
+    <form class="body" id="vipForm"><div id="vipCl">${v.people.map(cl).join("")}</div><button class="btn sm" type="button" id="vipAddCl">+ متهم آخر</button>
       <label class="f">وصف مختصر (اختياري)<input class="inp" name="title" value="${esc(v.title || "")}"></label>
-      <div id="vipSe">${(v.sessions?.length ? v.sessions : [{date: "", time: ""}]).map(se).join("")}</div><button class="btn sm" type="button" id="vipAddSe">+ جلسة أخرى</button>
+      ${isNew ? `<div class="row" style="align-items:end"><label class="f">تاريخ أول جلسة<input class="inp" type="date" name="sdate"></label><label class="f">الساعة<input class="inp" type="time" name="stime"></label><label style="display:flex;gap:4px;align-items:center;white-space:nowrap"><input type="checkbox" name="smemo"> فيها مذكرة</label></div>`
+        : `<p class="sub" style="margin:0">المواعيد لا تُعدَّل من هنا: أضف موعداً بزر «+ موعد جديد» في بطاقة القضية، وما سُجّل في المواعيد السابقة يبقى كما هو.</p>`}
       <label class="f">ملاحظات (اختياري)<textarea class="inp" name="note" style="min-height:70px">${esc(v.note || "")}</textarea></label>
       <div style="display:flex;gap:8px"><button class="btn primary" type="submit">حفظ</button></div></form>`);
-  const wireRm = () => dr.querySelectorAll("[data-viprm]").forEach(b => b.onclick = () => { const r = b.closest("[data-viprow]"); const box = r.parentElement; if (box.children.length > 1) r.remove(); });
-  dr.querySelector("#vipAddCl").onclick = () => { dr.querySelector("#vipCl").insertAdjacentHTML("beforeend", cl("")); wireRm(); };
-  dr.querySelector("#vipAddSe").onclick = () => { dr.querySelector("#vipSe").insertAdjacentHTML("beforeend", se({})); wireRm(); }; wireRm();
-  dr.querySelector("#vipForm").onsubmit = async (e) => { e.preventDefault(); if (!(await vipGuard())) { toast("الحماية غير مفعّلة؛ لم يُحفظ شيء"); return; }
-    const f = e.target; const people = [...f.querySelectorAll('[data-viprow="c"]')].map(r => ({n: r.querySelector('[name="client"]').value.trim(), id: fromHindi(r.querySelector('[name="cid"]').value).replace(/\D/g, "")})).filter(x => x.n);
-    const clients = people.map(x => x.n), ids = people.map(x => x.id);
-    if (!clients.length) { toast("اكتب اسم موكل واحد على الأقل"); return; }
-    const old = new Map((v.sessions || []).map(x => [x.date, x]));   // what was ticked for a hearing stays with its date
-    const sessions = [...f.querySelectorAll('[data-viprow="s"]')].map(r => { const date = r.querySelector('[name="sdate"]').value || "";
-      return {date, time: r.querySelector('[name="stime"]').value || "", note: r.querySelector('[name="snote"]').value.trim(), memo: r.querySelector('[name="smemo"]').checked, checks: old.get(date)?.checks || {}}; }).filter(s => s.date);
-    const id = v.id || newId("V"); const now = new Date().toISOString();
-    const doc = {clients, ids, title: f.elements.title.value.trim(), sessions: sessions.sort((a, b) => a.date.localeCompare(b.date)), note: f.elements.note.value.trim(), deleted: false, createdAt: v.createdAt || now, updatedAt: now, by: S.uid || null};
-    try { await S.db.doc("vip/" + id).set(doc); await vipLoad(true); closeDrawer(); toast("حُفظت في القضايا الكبيرة"); render(); } catch { toast("تعذّر الحفظ — تحقق من الاتصال ثم أعد المحاولة"); } };
+  const wireRm = () => dr.querySelectorAll("[data-viprm]").forEach(b => b.onclick = () => { const r = b.closest("[data-viprow]"); if (r.parentElement.children.length > 1) r.remove(); });
+  dr.querySelector("#vipAddCl").onclick = () => { dr.querySelector("#vipCl").insertAdjacentHTML("beforeend", cl({})); wireRm(); }; wireRm();
+  dr.querySelector("#vipForm").onsubmit = async (e) => { e.preventDefault(); const f = e.target; let k = 0; const used = new Set(v.people.map(p => p.id).filter(Boolean)); const fresh = () => { let id; do { id = "p" + Date.now().toString(36) + (k++); } while (used.has(id)); used.add(id); return id; };
+    const people = [...f.querySelectorAll('[data-viprow="c"]')].map(r => ({id: r.dataset.pid || fresh(), name: r.querySelector('[name="client"]').value.trim(), idNo: fromHindi(r.querySelector('[name="cid"]').value).replace(/\D/g, "")})).filter(x => x.name);
+    if (!people.length) { toast("اكتب اسم متهم واحد على الأقل"); return; }
+    const patch = {people, title: f.elements.title.value.trim(), note: f.elements.note.value.trim()};
+    if (isNew && f.elements.sdate.value) patch.sessions = [{id: "s" + Date.now().toString(36), date: f.elements.sdate.value, time: f.elements.stime.value || "", note: "", memo: f.elements.smemo.checked, per: {}}];
+    if (await vipWrite({...v, id: v.id || newId("V")}, patch)) { closeDrawer(); toast("حُفظت في القضايا الكبيرة"); render(); } };
+}
+// one hearing: added, or its date/time/note/memo changed — what is recorded in it for each accused stays with it; no other hearing is touched
+function openVipSession(vid, sid){
+  const v = vipGet(vid); if (!v) return; const x = sid ? v.sessions.find(s => s.id === sid) : null;
+  const dr = openDrawer(`<header><div><span class="lbl">القضايا الكبيرة — ${esc(v.people.map(p => p.name).join("، "))}</span><h2 style="margin-top:4px">${x ? "تعديل الموعد" : "موعد جديد"}</h2></div><button class="btn sm" data-close>إغلاق</button></header>
+    <form class="body" id="vipSessForm"><div class="row"><label class="f">تاريخ الجلسة<input class="inp" type="date" name="sdate" required value="${esc(x?.date || "")}"></label><label class="f">الساعة<input class="inp" type="time" name="stime" value="${esc(x?.time || "")}"></label></div>
+      <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" name="smemo" ${x?.memo ? "checked" : ""}> في هذه الجلسة مذكرة</label>
+      <label class="f">ملاحظة (اختياري)<input class="inp" name="snote" value="${esc(x?.note || "")}"></label>
+      <p class="sub" style="margin:0">${x ? "ما سُجّل لهذه الجلسة (التشكات والمبالغ) يبقى معها." : "يُضاف موعداً جديداً؛ المواعيد السابقة وما سُجّل فيها لا يتغير."}</p>
+      <div style="display:flex;gap:8px"><button class="btn primary" type="submit">حفظ</button></div></form>`);
+  dr.querySelector("#vipSessForm").onsubmit = async (e) => { e.preventDefault(); const f = e.target.elements; const date = f.sdate.value; if (!date) return;
+    if (v.sessions.some(s => s.date === date && s.id !== x?.id)) { toast("لهذه القضية موعد مسجل في هذا التاريخ"); return; }
+    const one = {id: x?.id || "s" + Date.now().toString(36), date, time: f.stime.value || "", note: f.snote.value.trim(), memo: f.smemo.checked, per: x?.per || {}};
+    const sessions = x ? v.sessions.map(s => s.id === x.id ? one : s) : [...v.sessions, one];
+    if (await vipWrite(v, {sessions})) { closeDrawer(); toast(x ? "حُفظ الموعد" : "أُضيف الموعد"); render(); } };
+}
+// one accused: every hearing with his four checks, the fee of the hearing (3000 or 1500) and whether it was received, and the next hearing
+function openVipPerson(vid, pid){
+  const v = vipGet(vid); const p = v?.people.find(q => q.id === pid); if (!p) return; const ss = v.sessions; const today = todayKey();
+  const row = (x, i) => { const r = vipPer(x, pid); const nx = ss[i + 1];
+    return `<div style="padding:10px 0;border-top:1px solid var(--line)"><b>${esc(vipDay(x.date))}</b>${x.time ? ` <span class="sub">${esc(x.time)}</span>` : ""}${x.date > today ? ` <span class="role">قادمة</span>` : ""}${x.memo ? ` <span class="role deadline">فيها مذكرة</span>` : ""}${x.note ? `<div class="sub">${esc(x.note)}</div>` : ""}
+      <div class="chips" style="margin-top:6px">${VIP_CHECKS.map(([k, l]) => `<button class="chip" type="button" data-vpk="${esc(x.id)}|${k}" aria-pressed="${!!r[k]}">${r[k] ? "✓ " : ""}${l}</button>`).join("")}</div>
+      <div class="chips" style="margin-top:6px"><span class="sub" style="align-self:center">المبلغ:</span>${VIP_AMOUNTS.map(a => `<button class="chip" type="button" data-vpa="${esc(x.id)}|${a}" aria-pressed="${r.amount === a}">${a.toLocaleString("en-US")}</button>`).join("")}
+        <button class="chip" type="button" data-vpk="${esc(x.id)}|paid" aria-pressed="${!!r.paid}">${r.paid ? "✓ استُلم المبلغ" : "لم يُستلم المبلغ"}</button></div>
+      <div class="sub" style="margin-top:4px">الجلسة القادمة: ${nx ? `${esc(fmtD(nx.date))} — ${nx.memo ? "فيها مذكرة" : "بلا مذكرة"}` : "لم تُحدَّد"}</div></div>`; };
+  const dr = openDrawer(`<header><div><span class="lbl">القضايا الكبيرة — سرية</span><h2 style="margin-top:4px">${esc(p.name)}</h2><div class="sub">${p.idNo ? `رقم الهوية: <span class="mono">${esc(p.idNo)}</span>` : "رقم الهوية غير مسجل"}${v.people.length > 1 ? ` · مع: ${esc(v.people.filter(q => q.id !== pid).map(q => q.name).join("، "))}` : ""}</div></div><button class="btn sm" data-close>إغلاق</button></header>
+    <div class="body" id="vipPersonBody" data-vid="${esc(vid)}" data-pid="${esc(pid)}"><div style="display:flex;gap:8px;margin-bottom:6px"><button class="btn sm primary" type="button" id="vpNewSess">+ موعد جديد</button></div>
+      ${ss.length ? ss.map(row).reverse().join("") : `<div class="empty">لا مواعيد بعد.</div>`}</div>`);
+  const keep = () => { const y = dr.querySelector(".body")?.scrollTop || 0; openVipPerson(vid, pid); const b = document.getElementById("vipPersonBody"); if (b) b.scrollTop = y; if (S.view === "vip") render(); };
+  const patch = async (sid, fn) => { const cur = vipGet(vid); const sessions = cur.sessions.map(s => s.id === sid ? {...s, per: {...(s.per || {}), [pid]: fn({...vipPer(s, pid)})}} : s); if (await vipWrite(cur, {sessions})) keep(); };
+  dr.querySelectorAll("[data-vpk]").forEach(b => b.onclick = () => { const [sid, k] = b.dataset.vpk.split("|"); patch(sid, r => ({...r, [k]: !r[k]})); });
+  dr.querySelectorAll("[data-vpa]").forEach(b => b.onclick = () => { const [sid, a] = b.dataset.vpa.split("|"); patch(sid, r => ({...r, amount: r.amount === Number(a) ? null : Number(a)})); });
+  dr.querySelector("#vpNewSess").onclick = () => openVipSession(vid, null);
 }
 function bindVip(){
   if (S.view !== "vip") return;
   const n = $("vipNew"); if (n) n.onclick = () => openVip(null);
-  document.querySelectorAll("[data-vipedit]").forEach(b => b.onclick = () => openVip((S.vipUI.list || []).find(v => v.id === b.dataset.vipedit)));
-  document.querySelectorAll("[data-vipchk]").forEach(b => b.onclick = () => { const [vid, date, k] = b.dataset.vipchk.split("|"); vipSessPatch(vid, date, (x) => ({...x, checks: {...(x.checks || {}), [k]: !(x.checks || {})[k]}})); });
-  document.querySelectorAll("[data-vipmemo]").forEach(b => b.onclick = () => { const [vid, date] = b.dataset.vipmemo.split("|"); vipSessPatch(vid, date, (x) => ({...x, memo: !x.memo})); });
-  bindVipSheets();
+  document.querySelectorAll("[data-vipedit]").forEach(b => b.onclick = () => openVip(vipGet(b.dataset.vipedit)));
+  document.querySelectorAll("[data-vipperson]").forEach(b => b.onclick = () => { const [vid, pid] = b.dataset.vipperson.split("|"); openVipPerson(vid, pid); });
+  document.querySelectorAll("[data-vipsessnew]").forEach(b => b.onclick = () => openVipSession(b.dataset.vipsessnew, null));
+  document.querySelectorAll("[data-vipsessedit]").forEach(b => b.onclick = () => { const [vid, sid] = b.dataset.vipsessedit.split("|"); openVipSession(vid, sid); });
+  document.querySelectorAll("[data-vipsessdel]").forEach(b => b.onclick = async () => { const [vid, sid] = b.dataset.vipsessdel.split("|"); const v = vipGet(vid); const x = v?.sessions.find(s => s.id === sid); if (!x) return;
+    const has = Object.values(x.per || {}).some(r => Object.values(r || {}).some(Boolean));
+    if (!b.dataset.armed) { b.dataset.armed = "1"; b.textContent = has ? "تأكيد: يُحذف الموعد وما سُجّل فيه" : "تأكيد حذف الموعد"; return; }
+    if (await vipWrite(v, {sessions: v.sessions.filter(s => s.id !== sid)})) { toast("حُذف الموعد"); render(); } });
   document.querySelectorAll("[data-vipdel]").forEach(b => b.onclick = async () => { if (!b.dataset.armed) { b.dataset.armed = "1"; b.textContent = "تأكيد الحذف"; return; }
-    try { await S.db.doc("vip/" + b.dataset.vipdel).update({deleted: true, deletedAt: new Date().toISOString()}); await vipLoad(true); toast("نُقلت إلى المحذوفة (تُسترجع منها)"); render(); } catch { toast("تعذّر الحذف — تحقق من الاتصال ثم أعد المحاولة"); } });
-  document.querySelectorAll("[data-viprestore]").forEach(b => b.onclick = async () => { try { await S.db.doc("vip/" + b.dataset.viprestore).update({deleted: false, deletedAt: null}); S.vipUI.showDel = true; await vipLoad(true); render(); } catch { toast("تعذّر الاسترجاع — تحقق من الاتصال ثم أعد المحاولة"); } });
-}
-// the owner's home page: one line, no name — that a large case has a hearing within a week
-function vipHomeNote(){
-  if (!vipOwner()) return "";
-  if (S.vipUI.list === null) { vipLoad().then(l => { if (l.length && S.view === "home") render(); }); return ""; }
-  const soon = S.vipUI.list.filter(v => !v.deleted).map(vipNext).filter(d => d && d <= dkey(new Date(Date.now() + 7 * 864e5))).sort();
-  return soon.length ? `<div class="notice" style="margin-bottom:10px">لديك ${soon.length === 1 ? "جلسة" : soon.length + " جلسات"} في القضايا الكبيرة خلال أسبوع، أقربها ${esc(fmtD(soon[0]))}. <button class="btn sm" type="button" data-nav="vip">افتح القضايا الكبيرة</button></div>` : "";
+    const v = vipGet(b.dataset.vipdel); if (v && await vipWrite(v, {deleted: true, deletedAt: new Date().toISOString()})) { toast("نُقلت إلى المحذوفة (تُسترجع منها)"); render(); } });
+  document.querySelectorAll("[data-viprestore]").forEach(b => b.onclick = async () => { const v = vipGet(b.dataset.viprestore); if (v && await vipWrite(v, {deleted: false, deletedAt: null})) { S.vipUI.showDel = true; render(); } });
+  // the two lists: one press records it for that accused in that hearing
+  document.querySelectorAll("[data-viplist]").forEach(b => b.onclick = async () => { const [vid, sid, pid, k] = b.dataset.viplist.split("|"); const v = vipGet(vid); if (!v) return;
+    const sessions = v.sessions.map(s => s.id === sid ? {...s, per: {...(s.per || {}), [pid]: {...vipPer(s, pid), [k]: true}}} : s); if (await vipWrite(v, {sessions})) render(); });
+  bindVipSheets();
 }
 // (21/11, عبدالله: «حطها مع القضايا وخلها في فئة القضايا الكبيرة + ما ضهرت لي الجلسة مع جلساتي المعتادة في الصفحة الرئيسية»):
 // no menu item of its own — a category chip on the cases page; and its hearings join the owner's own lists (home, calendar, agenda) —
@@ -10057,7 +10099,7 @@ function vipEvents(){
   const out = [];
   for (const v of S.vipUI.list) { if (v.deleted) continue;
     for (const s of v.sessions || []) if (s.date) out.push({start: s.time ? `${s.date}T${s.time}:00+03:00` : `${s.date}T08:00:00+03:00`, allDay: !s.time, role: "جلسة", vip: v.id,
-      title: `قضية كبيرة — ${(v.clients || []).join("، ")}${v.title ? " — " + v.title : ""}`, required: s.note || "", caseId: null}); }
+      title: `قضية كبيرة — ${(v.clients || []).join("، ")}${v.title ? " — " + v.title : ""}`, required: [s.memo ? "فيها مذكرة" : "", s.note || ""].filter(Boolean).join(" — "), caseId: null}); }
   return out;
 }
 // (21/11, «خلها في بداية اليوم وبالخط الأحمر») a large case's hearing comes first in its day, whatever its hour, and in red (evRow)
@@ -10077,53 +10119,75 @@ function vipInNewCase(dr){
   sel.insertAdjacentHTML("beforeend", `<option value="vip">قضية كبيرة (سرية)</option>`);
   sel.addEventListener("change", (e) => { if (sel.value !== "vip") return; e.stopImmediatePropagation();   // the ordinary form's own track handler must not run for it
     const name = (dr.querySelector('#caseNewForm [name="client"]')?.value || "").trim();
-    closeDrawer(); openVip({clients: [name], sessions: [{date: "", time: ""}], note: "", title: ""}); }, true);
+    closeDrawer(); openVip({people: [{id: "", name, idNo: ""}], sessions: [], note: "", title: ""}); }, true);
 }
-// (22/11) the weekly sheet — the accused's full name and ID number, then the four checks and the next hearing, one row per accused per
-// hearing of the week (Sunday to Saturday) — printed from this browser; nothing is saved or sent anywhere. And the month's hearings
-// already held for which no attendance certificate («مشهد حضور الجلسة») was taken.
-S.vipUI.week = S.vipUI.week || 0; S.vipUI.month = S.vipUI.month || null;
+// ---------------------------------------------------------------- the weekly sheet and the two lists
+// One row per accused per hearing. The sheet is printed on the office's own paper (the letterhead's art, as the Diwan's PDFs carry it)
+// from this browser; nothing is saved or sent anywhere.
 const vipWeek = (off) => { const d = D(todayKey()); const sun = new Date(d.getTime() - d.getDay() * 864e5 + off * 7 * 864e5); return [dkey(sun), dkey(new Date(sun.getTime() + 6 * 864e5))]; };
 const vipRows = (from, to) => { const out = [];
-  for (const v of (S.vipUI.list || []).filter(x => !x.deleted)) { const ss = (v.sessions || []).slice().sort((a, b) => a.date.localeCompare(b.date));
-    ss.forEach((x, i) => { if (x.date >= from && x.date <= to) out.push({v, x, nx: ss[i + 1] || null}); }); }
-  return out.sort((a, b) => (a.x.date + (a.x.time || "")).localeCompare(b.x.date + (b.x.time || ""))); };
-function vipSheetHtml(off){
-  const [from, to] = vipWeek(off); const rows = vipRows(from, to); const box = (on) => `<span class="bx">${on ? "✓" : ""}</span>`; let n = 0;
-  const body = rows.map(({v, x, nx}) => (v.clients || []).map((name, i) => `<tr><td>${++n}</td><td class="nm">${esc(name)}</td><td class="num">${esc((v.ids || [])[i] || "")}</td><td>${esc(fmtD(x.date))}${x.time ? "<br>" + esc(x.time) : ""}</td>
-    ${VIP_CHECKS.map(([k]) => `<td>${box((x.checks || {})[k])}</td>`).join("")}<td>${nx ? `${esc(fmtD(nx.date))}<br>${nx.memo ? "فيها مذكرة" : "بلا مذكرة"}` : ""}</td></tr>`).join("")).join("");
-  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>الورقة الأسبوعية — القضايا الكبيرة</title><style>
-    @page{size:A4 landscape;margin:12mm} body{font:13px/1.6 'Traditional Arabic','IBM Plex Sans Arabic',Tahoma,sans-serif;color:#000;margin:0}
-    h1{font-size:17px;margin:0 0 2px} p{margin:0 0 8px;font-size:12px} table{width:100%;border-collapse:collapse} th,td{border:1px solid #000;padding:5px 6px;text-align:center;vertical-align:middle}
-    th{background:#eee;font-size:12px} td.nm{text-align:right;font-weight:700} .num{direction:ltr;font-family:monospace} .bx{display:inline-block;width:16px;height:16px;border:1.5px solid #000;line-height:15px;font-weight:700}
-    </style></head><body><h1>القضايا الكبيرة — الورقة الأسبوعية</h1><p>من ${esc(fmtD(from))} إلى ${esc(fmtD(to))} — سرية</p>
-    <table><thead><tr><th>م</th><th>اسم المتهم كاملاً</th><th>رقم الهوية</th><th>الجلسة</th>${VIP_CHECKS.map(([, l]) => `<th>${l}</th>`).join("")}<th>الجلسة القادمة وهل فيها مذكرة</th></tr></thead>
-    <tbody>${body || `<tr><td colspan="9">لا جلسات في هذا الأسبوع.</td></tr>`}</tbody></table></body></html>`;
+  for (const v of (S.vipUI.list || []).filter(x => !x.deleted)) v.sessions.forEach((x, i) => { if (x.date >= from && x.date <= to) for (const p of v.people) out.push({v, x, p, r: vipPer(x, p.id), nx: v.sessions[i + 1] || null}); });
+  return out.sort((a, b) => (a.x.date + a.x.time + a.p.name).localeCompare(b.x.date + b.x.time + b.p.name)); };
+async function vipPaperArt(){   // the letterhead page as one picture, with its margins (in mm); null when the office has no paper set
+  try { const P = await pdfPaper(); if (!P?.art?.length) return null; const cv = document.createElement("canvas"); cv.width = P.w; cv.height = P.h; const g = cv.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, P.w, P.h);
+    for (const a of P.art) g.drawImage(a.img, a.x, a.y, a.w, a.h); const mm = (px) => Math.round(px / P.w * 2100) / 10;
+    return {img: cv.toDataURL("image/jpeg", 0.9), top: mm(P.mar.top), right: mm(P.mar.right), bottom: mm(P.mar.bottom), left: mm(P.mar.left)}; }
+  catch { return null; }
 }
-function vipPrintSheet(off){
+function vipSheetHtml(off, art){
+  const [from, to] = vipWeek(off); const rows = vipRows(from, to); const box = (on) => `<span class="bx">${on ? "✓" : ""}</span>`; const navy = "#" + (DOCF.head || "151547"); const o = OFC();
+  const font = `"${String(DOCF.font || "Traditional Arabic").replace(/"/g, "")}", "Traditional Arabic", "IBM Plex Sans Arabic", Tahoma, sans-serif`;
+  const body = rows.map(({x, p, r, nx}, i) => `<tr><td>${i + 1}</td><td class="nm">${esc(p.name)}<div class="num">${esc(p.idNo || "")}</div></td><td>${esc(fmtD(x.date))}${x.time ? "<br>" + esc(x.time) : ""}</td>
+    ${VIP_CHECKS.map(([k]) => `<td>${box(r[k])}</td>`).join("")}<td>${r.amount ? r.amount.toLocaleString("en-US") : "3000 ☐<br>1500 ☐"}<br>${box(r.paid)} استُلم</td><td>${nx ? `${esc(fmtD(nx.date))}<br>${nx.memo ? "فيها مذكرة" : "بلا مذكرة"}` : ""}</td></tr>`).join("");
+  const m = art || {top: 18, right: 14, bottom: 16, left: 14};
+  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>الورقة الأسبوعية — القضايا الكبيرة</title><style>
+    @page{size:A4 portrait;margin:0} html,body{margin:0;padding:0} body{font:13px/1.5 ${font};color:#000;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .paper{position:fixed;inset:0;width:210mm;height:297mm;z-index:-1} .paper img{width:100%;height:100%;display:block}
+    table.wrap{width:100%;border-collapse:collapse} table.wrap>thead>tr>td{height:${m.top}mm;padding:0;border:0} table.wrap>tfoot>tr>td{height:${m.bottom}mm;padding:0;border:0} table.wrap>tbody>tr>td{padding:0 ${m.left}mm 0 ${m.right}mm;border:0}
+    h1{font-size:19px;margin:0;color:${navy};text-align:center} .sub{margin:2px 0 10px;font-size:13px;text-align:center;color:#333}
+    table.t{width:100%;border-collapse:collapse;font-size:12.5px} table.t th,table.t td{border:1px solid ${navy};padding:4px 4px;text-align:center;vertical-align:middle}
+    table.t th{background:${navy};color:#fff;font-weight:700;font-size:12px} table.t tr{break-inside:avoid} td.nm{text-align:right;font-weight:700;font-size:13.5px} .num{direction:ltr;text-align:right;font:12px monospace;font-weight:400}
+    .bx{display:inline-block;width:15px;height:15px;border:1.5px solid ${navy};line-height:14px;font-weight:700;vertical-align:middle} .sign{margin-top:14px;text-align:center;font-weight:700;color:${navy}}
+    </style></head><body>${art ? `<div class="paper"><img src="${art.img}" alt=""></div>` : ""}
+    <table class="wrap"><thead><tr><td></td></tr></thead><tfoot><tr><td></td></tr></tfoot><tbody><tr><td>
+    ${art ? "" : `<div style="text-align:center;font-weight:700;color:${navy};font-size:15px;margin-bottom:6px">${esc(o.name || "")}</div>`}
+    <h1>متابعة جلسات القضايا الكبيرة</h1><div class="sub">الأسبوع من ${esc(fmtD(from))} إلى ${esc(fmtD(to))} — ${esc(String(hijriNum(from)).replace(/\s*هـ?$/, ""))}هـ إلى ${esc(String(hijriNum(to)).replace(/\s*هـ?$/, ""))}هـ — سري</div>
+    <table class="t"><thead><tr><th>م</th><th>اسم المتهم ورقم هويته</th><th>الجلسة</th>${VIP_CHECKS.map(([, l]) => `<th>${l}</th>`).join("")}<th>المبلغ</th><th>الجلسة القادمة والمذكرة</th></tr></thead>
+    <tbody>${body || `<tr><td colspan="9">لا جلسات في هذا الأسبوع.</td></tr>`}</tbody></table>
+    <div class="sign">${esc((typeof reportSign === "function" ? reportSign() : "") || "")}</div>
+    </td></tr></tbody></table></body></html>`;
+}
+async function vipPrintSheet(off){
+  const art = await vipPaperArt();
   document.getElementById("vipPrintFrame")?.remove(); const f = document.createElement("iframe"); f.id = "vipPrintFrame"; f.style.cssText = "position:fixed;width:0;height:0;border:0;left:-9999px"; f.setAttribute("aria-hidden", "true");
-  f.srcdoc = vipSheetHtml(off); f.onload = () => { try { f.contentWindow.focus(); f.contentWindow.print(); } catch { toast("تعذّرت الطباعة من هذا المتصفح"); } }; document.body.appendChild(f);
+  f.srcdoc = vipSheetHtml(off, art); f.onload = () => { try { f.contentWindow.focus(); f.contentWindow.print(); } catch { toast("تعذّرت الطباعة من هذا المتصفح"); } }; document.body.appendChild(f);
 }
 const vipMonthOf = () => S.vipUI.month || todayKey().slice(0, 7);
-const vipNoAttend = (ym) => vipRows(ym + "-01", ym + "-31").filter(r => r.x.date <= todayKey() && !(r.x.checks || {}).attend);
+const vipNoAttend = (ym) => vipRows(ym + "-01", ym + "-31").filter(q => q.x.date <= todayKey() && !q.r.attend);
+const vipUnpaid = () => vipRows("0000-00-00", todayKey()).filter(q => !q.r.paid);   // every hearing held so far whose fee was not received
 function vipToolsHtml(){
-  const ym = vipMonthOf(); const miss = vipNoAttend(ym); const [wf, wt] = vipWeek(S.vipUI.week); const wn = vipRows(wf, wt).length;
-  return `<section class="panel"><header><h2>الورقة الأسبوعية</h2><span class="sub">اسم المتهم ورقم هويته والتشكات الأربع والجلسة القادمة — للطباعة</span></header>
+  const ym = vipMonthOf(); const miss = vipNoAttend(ym); const [wf, wt] = vipWeek(S.vipUI.week); const wn = new Set(vipRows(wf, wt).map(q => q.v.id + q.x.id)).size;
+  const un = vipUnpaid(); const sum = un.reduce((a, q) => a + (q.r.amount || 0), 0); const unset = un.filter(q => !q.r.amount).length;
+  const line = (q, k, label) => `<div class="ev" style="grid-template-columns:1fr auto"><div><b>${esc(q.p.name)}</b> <span class="sub">— جلسة ${esc(fmtD(q.x.date))}${k === "paid" ? ` — ${q.r.amount ? q.r.amount.toLocaleString("en-US") + " ريال" : "لم يُحدَّد المبلغ"}` : ""}</span></div><div style="display:flex;gap:6px"><button class="btn sm ghost" type="button" data-vipperson="${esc(q.v.id)}|${esc(q.p.id)}">صفحته</button><button class="btn sm" type="button" data-viplist="${esc(q.v.id)}|${esc(q.x.id)}|${esc(q.p.id)}|${k}">${label}</button></div></div>`;
+  return `<section class="panel"><header><h2>الورقة الأسبوعية</h2><span class="sub">على ورق المكتب: اسم المتهم ورقم هويته والتشكات الأربع والمبلغ والجلسة القادمة</span></header>
       <div class="chips" style="margin-bottom:8px">${[[0, "هذا الأسبوع"], [1, "الأسبوع القادم"], [-1, "الأسبوع الماضي"]].map(([o, l]) => `<button class="chip" type="button" data-vipweek="${o}" aria-pressed="${S.vipUI.week === o}">${l}</button>`).join("")}</div>
       <p class="sub" style="margin:0 0 8px">من ${esc(fmtD(wf))} إلى ${esc(fmtD(wt))}: ${wn} جلسة.</p><button class="btn primary" type="button" id="vipPrint">${icon("report")}اطبع الورقة</button></section>
-    <section class="panel" id="vipMiss"><header><h2>جلسات بلا مشهد حضور${miss.length ? ` (${miss.length})` : ""}</h2><span class="sub">ما انعقد في الشهر ولم يُؤشَّر عليه «مشهد حضور الجلسة»</span></header>
+    <section class="panel" id="vipMiss"><header><h2>جلسات بلا مشهد حضور${miss.length ? ` (${miss.length})` : ""}</h2><span class="sub">ما انعقد في الشهر ولم يُؤشَّر للمتهم «مشهد حضور الجلسة»</span></header>
       <label class="f" style="max-width:220px">الشهر<input class="inp" type="month" id="vipMonth" value="${esc(ym)}"></label>
-      ${miss.length ? `<div class="tasks" style="margin-top:8px">${miss.map(({v, x}) => `<div class="ev" style="grid-template-columns:1fr auto"><div><b>${(v.clients || []).map(esc).join("، ")}</b> <span class="sub">— جلسة ${esc(fmtD(x.date))}</span></div><button class="btn sm" type="button" data-vipchk="${esc(v.id)}|${esc(x.date)}|attend">أُخذ المشهد</button></div>`).join("")}</div>` : `<div class="empty" style="margin-top:8px">كل جلسات هذا الشهر المنعقدة أُخذ مشهد حضورها.</div>`}</section>`;
+      ${miss.length ? `<div class="tasks" style="margin-top:8px">${miss.map(q => line(q, "attend", "أُخذ المشهد")).join("")}</div>` : `<div class="empty" style="margin-top:8px">كل جلسات هذا الشهر المنعقدة أُخذ مشهد حضورها.</div>`}</section>
+    <section class="panel" id="vipUnpaid"><header><h2>مبالغ غير مستلمة${un.length ? ` (${un.length})` : ""}</h2><span class="sub">كل جلسة انعقدت ولم يُؤشَّر للمتهم «استُلم المبلغ»</span></header>
+      ${un.length ? `<p style="margin:0 0 8px"><b>المجموع: ${sum.toLocaleString("en-US")} ريال</b>${unset ? ` <span class="sub">— و${unset} بلا مبلغ محدد (حدّده من صفحة المتهم)</span>` : ""}</p><div class="tasks">${un.map(q => line(q, "paid", "استُلم")).join("")}</div>` : `<div class="empty">لا مبالغ غير مستلمة.</div>`}</section>`;
 }
 function bindVipSheets(){
   document.querySelectorAll("[data-vipweek]").forEach(b => b.onclick = () => { S.vipUI.week = Number(b.dataset.vipweek); render(); });
   const p = $("vipPrint"); if (p) p.onclick = () => vipPrintSheet(S.vipUI.week);
   const m = $("vipMonth"); if (m) m.onchange = () => { S.vipUI.month = m.value || null; render(); };
 }
-// the owner's home page, in the last five days of the month: hearings of the month with no attendance certificate
+// the owner's home page, in the last five days of the month: hearings of the month with no attendance certificate, and fees not received
 function vipMonthNote(){
   if (!vipOwner() || S.vipUI.list === null) return ""; const t = D(todayKey()); const last = new Date(t.getFullYear(), t.getMonth() + 1, 0).getDate(); if (t.getDate() < last - 4) return "";
-  const n = vipNoAttend(todayKey().slice(0, 7)).length; return n ? `<div class="notice warn" style="margin-bottom:10px">نهاية الشهر: ${n === 1 ? "جلسة واحدة" : n + " جلسات"} في القضايا الكبيرة لم يُؤخذ فيها مشهد الحضور. <button class="btn sm" type="button" data-nav="vip">افتحها</button></div>` : "";
+  const n = vipNoAttend(todayKey().slice(0, 7)).length, u = vipUnpaid().length; if (!n && !u) return "";
+  return `<div class="notice warn" style="margin-bottom:10px">نهاية الشهر في القضايا الكبيرة: ${[n ? `${n} بلا مشهد حضور` : "", u ? `${u} مبلغاً غير مستلم` : ""].filter(Boolean).join("، و")}. <button class="btn sm" type="button" data-nav="vip">افتحها</button></div>`;
 }
 
 // ---------- طلبات المتابعة من موقع المكتب (22/11، عبدالله: «رابط احطة في الموقع… ويجيني طلب بأسم العميل ومن يمثل والبريد… وانا اقبل او ارفض»):
