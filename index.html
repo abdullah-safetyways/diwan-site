@@ -10061,7 +10061,8 @@ function openVipPerson(vid, pid){
       <div class="chips" style="margin-top:6px">${VIP_CHECKS.map(([k, l]) => `<button class="chip" type="button" data-vpk="${esc(x.id)}|${k}" aria-pressed="${!!r[k]}">${r[k] ? "✓ " : ""}${l}</button>`).join("")}</div>
       <div class="chips" style="margin-top:6px"><span class="sub" style="align-self:center">المبلغ:</span>${VIP_AMOUNTS.map(a => `<button class="chip" type="button" data-vpa="${esc(x.id)}|${a}" aria-pressed="${r.amount === a}">${a.toLocaleString("en-US")}</button>`).join("")}
         <button class="chip" type="button" data-vpk="${esc(x.id)}|paid" aria-pressed="${!!r.paid}">${r.paid ? "✓ استُلم المبلغ" : "لم يُستلم المبلغ"}</button></div>
-      <div class="sub" style="margin-top:4px">الجلسة القادمة: ${nx ? `${esc(fmtD(nx.date))} — ${nx.memo ? "فيها مذكرة" : "بلا مذكرة"}` : "لم تُحدَّد"}</div></div>`; };
+      <div class="sub" style="margin-top:4px">الجلسة القادمة: ${nx ? `${esc(fmtD(nx.date))} — ${nx.memo ? "فيها مذكرة" : "بلا مذكرة"}` : "لم تُحدَّد"}</div>
+      <label class="f" style="margin-top:6px">ملاحظات المتهم في هذه الجلسة<input class="inp" data-vpn="${esc(x.id)}" value="${esc(r.note || "")}" placeholder="تظهر في خانة الملاحظات في الورقة"></label></div>`; };
   const dr = openDrawer(`<header><div><span class="lbl">القضايا الكبيرة — سرية</span><h2 style="margin-top:4px">${esc(p.name)}</h2><div class="sub">${p.idNo ? `رقم الهوية: <span class="mono">${esc(p.idNo)}</span>` : "رقم الهوية غير مسجل"}${v.people.length > 1 ? ` · مع: ${esc(v.people.filter(q => q.id !== pid).map(q => q.name).join("، "))}` : ""}</div></div><button class="btn sm" data-close>إغلاق</button></header>
     <div class="body" id="vipPersonBody" data-vid="${esc(vid)}" data-pid="${esc(pid)}"><div style="display:flex;gap:8px;margin-bottom:6px"><button class="btn sm primary" type="button" id="vpNewSess">+ موعد جديد</button></div>
       ${ss.length ? ss.map(row).reverse().join("") : `<div class="empty">لا مواعيد بعد.</div>`}</div>`);
@@ -10069,6 +10070,7 @@ function openVipPerson(vid, pid){
   const patch = async (sid, fn) => { const cur = vipGet(vid); const sessions = cur.sessions.map(s => s.id === sid ? {...s, per: {...(s.per || {}), [pid]: fn({...vipPer(s, pid)})}} : s); if (await vipWrite(cur, {sessions})) keep(); };
   dr.querySelectorAll("[data-vpk]").forEach(b => b.onclick = () => { const [sid, k] = b.dataset.vpk.split("|"); patch(sid, r => ({...r, [k]: !r[k]})); });
   dr.querySelectorAll("[data-vpa]").forEach(b => b.onclick = () => { const [sid, a] = b.dataset.vpa.split("|"); patch(sid, r => ({...r, amount: r.amount === Number(a) ? null : Number(a)})); });
+  dr.querySelectorAll("[data-vpn]").forEach(inp => inp.onchange = () => patch(inp.dataset.vpn, r => ({...r, note: inp.value.trim()})));
   dr.querySelector("#vpNewSess").onclick = () => openVipSession(vid, null);
 }
 function bindVip(){
@@ -10134,44 +10136,60 @@ async function vipPaperArt(){   // the letterhead page as one picture, with its 
     return {img: cv.toDataURL("image/jpeg", 0.9), top: mm(P.mar.top), right: mm(P.mar.right), bottom: mm(P.mar.bottom), left: mm(P.mar.left)}; }
   catch { return null; }
 }
-function vipSheetHtml(off, art){
-  const [from, to] = vipWeek(off); const rows = vipRows(from, to); const box = (on) => `<span class="bx">${on ? "✓" : ""}</span>`; const navy = "#" + (DOCF.head || "151547"); const o = OFC();
+// (22/11، عبدالله: «مساحة لملاحظات المتهم… ورقة شهرية لما لم يتم تنفيذة وكلا الورقتين فيها حرية تحديد الاوقات») two sheets over any period:
+// «follow» — every accused in every hearing of the period, with room for notes; «todo» — only what was not done in the hearings already
+// held in the period (a check not ticked, a fee not received), named in words, with room for notes.
+const vipRange = () => { const U = S.vipUI; if (!U.from || !U.to) { const [a, b] = vipWeek(0); U.from = a; U.to = b; } return U.from <= U.to ? [U.from, U.to] : [U.to, U.from]; };
+const vipTodoOf = (q) => [...VIP_CHECKS.filter(([k]) => !q.r[k]).map(([, l]) => l), ...(q.r.paid ? [] : [`المبلغ لم يُستلم${q.r.amount ? " (" + q.r.amount.toLocaleString("en-US") + ")" : ""}`])];
+function vipSheetHtml(kind, from, to, art){
+  const todo = kind === "todo"; let rows = vipRows(from, to); if (todo) rows = rows.filter(q => q.x.date <= todayKey() && vipTodoOf(q).length);
+  const box = (on) => `<span class="bx">${on ? "✓" : ""}</span>`; const navy = "#" + (DOCF.head || "151547"); const o = OFC(); const hj = (d) => String(hijriNum(d)).replace(/\s*هـ?$/, "");
   const font = `"${String(DOCF.font || "Traditional Arabic").replace(/"/g, "")}", "Traditional Arabic", "IBM Plex Sans Arabic", Tahoma, sans-serif`;
-  const body = rows.map(({x, p, r, nx}, i) => `<tr><td>${i + 1}</td><td class="nm">${esc(p.name)}<div class="num">${esc(p.idNo || "")}</div></td><td>${esc(fmtD(x.date))}${x.time ? "<br>" + esc(x.time) : ""}</td>
-    ${VIP_CHECKS.map(([k]) => `<td>${box(r[k])}</td>`).join("")}<td>${r.amount ? r.amount.toLocaleString("en-US") : "3000 ☐<br>1500 ☐"}<br>${box(r.paid)} استُلم</td><td>${nx ? `${esc(fmtD(nx.date))}<br>${nx.memo ? "فيها مذكرة" : "بلا مذكرة"}` : ""}</td></tr>`).join("");
+  const who = (q) => `<td class="nm">${esc(q.p.name)}<div class="num">${esc(q.p.idNo || "")}</div></td><td>${esc(fmtD(q.x.date))}${q.x.time ? "<br>" + esc(q.x.time) : ""}</td>`;
+  const body = rows.map((q, i) => todo
+    ? `<tr><td>${i + 1}</td>${who(q)}<td class="td">${vipTodoOf(q).map(t => `${box(false)} ${esc(t)}`).join("<br>")}</td><td class="nt">${esc(q.r.note || "")}</td></tr>`
+    : `<tr><td>${i + 1}</td>${who(q)}${VIP_CHECKS.map(([k]) => `<td>${box(q.r[k])}</td>`).join("")}<td>${q.r.amount ? q.r.amount.toLocaleString("en-US") : "3000 ☐<br>1500 ☐"}<br>${box(q.r.paid)} استُلم</td><td>${q.nx ? `${esc(fmtD(q.nx.date))}<br>${q.nx.memo ? "فيها مذكرة" : "بلا مذكرة"}` : ""}</td><td class="nt">${esc(q.r.note || "")}</td></tr>`).join("");
+  const head = todo ? `<th style="width:5%">م</th><th style="width:27%">اسم المتهم ورقم هويته</th><th style="width:13%">الجلسة</th><th style="width:27%">ما لم يُنفَّذ</th><th>ملاحظات</th>`
+    : `<th>م</th><th style="width:21%">اسم المتهم ورقم هويته</th><th>الجلسة</th>${VIP_CHECKS.map(([, l]) => `<th>${l}</th>`).join("")}<th>المبلغ</th><th>الجلسة القادمة والمذكرة</th><th style="width:20%">ملاحظات</th>`;
   const m = art || {top: 18, right: 14, bottom: 16, left: 14};
-  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>الورقة الأسبوعية — القضايا الكبيرة</title><style>
-    @page{size:A4 portrait;margin:0} html,body{margin:0;padding:0} body{font:13px/1.5 ${font};color:#000;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>${todo ? "ما لم يُنفَّذ" : "متابعة الجلسات"} — القضايا الكبيرة</title><style>
+    @page{size:A4 portrait;margin:0} html,body{margin:0;padding:0} body{font:12.5px/1.5 ${font};color:#000;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .paper{position:fixed;inset:0;width:210mm;height:297mm;z-index:-1} .paper img{width:100%;height:100%;display:block}
-    table.wrap{width:100%;border-collapse:collapse} table.wrap>thead>tr>td{height:${m.top}mm;padding:0;border:0} table.wrap>tfoot>tr>td{height:${m.bottom}mm;padding:0;border:0} table.wrap>tbody>tr>td{padding:0 ${m.left}mm 0 ${m.right}mm;border:0}
+    table.wrap{width:100%;border-collapse:collapse} table.wrap>thead>tr>td{height:${m.top}mm;padding:0;border:0} table.wrap>tfoot>tr>td{height:${m.bottom}mm;padding:0;border:0} table.wrap>tbody>tr>td{padding:0 ${Math.min(m.left, 12)}mm 0 ${Math.min(m.right, 12)}mm;border:0}
     h1{font-size:19px;margin:0;color:${navy};text-align:center} .sub{margin:2px 0 10px;font-size:13px;text-align:center;color:#333}
-    table.t{width:100%;border-collapse:collapse;font-size:12.5px} table.t th,table.t td{border:1px solid ${navy};padding:4px 4px;text-align:center;vertical-align:middle}
-    table.t th{background:${navy};color:#fff;font-weight:700;font-size:12px} table.t tr{break-inside:avoid} td.nm{text-align:right;font-weight:700;font-size:13.5px} .num{direction:ltr;text-align:right;font:12px monospace;font-weight:400}
-    .bx{display:inline-block;width:15px;height:15px;border:1.5px solid ${navy};line-height:14px;font-weight:700;vertical-align:middle} .sign{margin-top:14px;text-align:center;font-weight:700;color:${navy}}
+    table.t{width:100%;border-collapse:collapse;font-size:11.5px} table.t th,table.t td{border:1px solid ${navy};padding:4px 3px;text-align:center;vertical-align:middle}
+    table.t th{background:${navy};color:#fff;font-weight:700;font-size:11px} table.t tr{break-inside:avoid} table.t tbody td{height:15mm} td.nm{text-align:right;font-weight:700;font-size:13px} .num{direction:ltr;text-align:right;font:11.5px monospace;font-weight:400}
+    td.nt{text-align:right;vertical-align:top;font-size:11.5px} td.td{text-align:right;line-height:1.9}
+    .bx{display:inline-block;width:14px;height:14px;border:1.5px solid ${navy};line-height:13px;font-weight:700;vertical-align:middle} .sign{margin-top:14px;text-align:center;font-weight:700;color:${navy}}
     </style></head><body>${art ? `<div class="paper"><img src="${art.img}" alt=""></div>` : ""}
     <table class="wrap"><thead><tr><td></td></tr></thead><tfoot><tr><td></td></tr></tfoot><tbody><tr><td>
     ${art ? "" : `<div style="text-align:center;font-weight:700;color:${navy};font-size:15px;margin-bottom:6px">${esc(o.name || "")}</div>`}
-    <h1>متابعة جلسات القضايا الكبيرة</h1><div class="sub">الأسبوع من ${esc(fmtD(from))} إلى ${esc(fmtD(to))} — ${esc(String(hijriNum(from)).replace(/\s*هـ?$/, ""))}هـ إلى ${esc(String(hijriNum(to)).replace(/\s*هـ?$/, ""))}هـ — سري</div>
-    <table class="t"><thead><tr><th>م</th><th>اسم المتهم ورقم هويته</th><th>الجلسة</th>${VIP_CHECKS.map(([, l]) => `<th>${l}</th>`).join("")}<th>المبلغ</th><th>الجلسة القادمة والمذكرة</th></tr></thead>
-    <tbody>${body || `<tr><td colspan="9">لا جلسات في هذا الأسبوع.</td></tr>`}</tbody></table>
+    <h1>${todo ? "القضايا الكبيرة — ما لم يُنفَّذ" : "متابعة جلسات القضايا الكبيرة"}</h1><div class="sub">من ${esc(fmtD(from))} إلى ${esc(fmtD(to))} — ${esc(hj(from))}هـ إلى ${esc(hj(to))}هـ — سري</div>
+    <table class="t"><thead><tr>${head}</tr></thead>
+    <tbody>${body || `<tr><td colspan="${todo ? 5 : 10}">${todo ? "لا شيء غير منفَّذ في هذه المدة." : "لا جلسات في هذه المدة."}</td></tr>`}</tbody></table>
     <div class="sign">${esc((typeof reportSign === "function" ? reportSign() : "") || "")}</div>
     </td></tr></tbody></table></body></html>`;
 }
-async function vipPrintSheet(off){
-  const art = await vipPaperArt();
+async function vipPrintSheet(kind){
+  const [from, to] = vipRange(); const art = await vipPaperArt();
   document.getElementById("vipPrintFrame")?.remove(); const f = document.createElement("iframe"); f.id = "vipPrintFrame"; f.style.cssText = "position:fixed;width:0;height:0;border:0;left:-9999px"; f.setAttribute("aria-hidden", "true");
-  f.srcdoc = vipSheetHtml(off, art); f.onload = () => { try { f.contentWindow.focus(); f.contentWindow.print(); } catch { toast("تعذّرت الطباعة من هذا المتصفح"); } }; document.body.appendChild(f);
+  f.srcdoc = vipSheetHtml(kind, from, to, art); f.onload = () => { try { f.contentWindow.focus(); f.contentWindow.print(); } catch { toast("تعذّرت الطباعة من هذا المتصفح"); } }; document.body.appendChild(f);
 }
 const vipMonthOf = () => S.vipUI.month || todayKey().slice(0, 7);
 const vipNoAttend = (ym) => vipRows(ym + "-01", ym + "-31").filter(q => q.x.date <= todayKey() && !q.r.attend);
 const vipUnpaid = () => vipRows("0000-00-00", todayKey()).filter(q => !q.r.paid);   // every hearing held so far whose fee was not received
 function vipToolsHtml(){
-  const ym = vipMonthOf(); const miss = vipNoAttend(ym); const [wf, wt] = vipWeek(S.vipUI.week); const wn = new Set(vipRows(wf, wt).map(q => q.v.id + q.x.id)).size;
+  const ym = vipMonthOf(); const miss = vipNoAttend(ym); 
   const un = vipUnpaid(); const sum = un.reduce((a, q) => a + (q.r.amount || 0), 0); const unset = un.filter(q => !q.r.amount).length;
   const line = (q, k, label) => `<div class="ev" style="grid-template-columns:1fr auto"><div><b>${esc(q.p.name)}</b> <span class="sub">— جلسة ${esc(fmtD(q.x.date))}${k === "paid" ? ` — ${q.r.amount ? q.r.amount.toLocaleString("en-US") + " ريال" : "لم يُحدَّد المبلغ"}` : ""}</span></div><div style="display:flex;gap:6px"><button class="btn sm ghost" type="button" data-vipperson="${esc(q.v.id)}|${esc(q.p.id)}">صفحته</button><button class="btn sm" type="button" data-viplist="${esc(q.v.id)}|${esc(q.x.id)}|${esc(q.p.id)}|${k}">${label}</button></div></div>`;
-  return `<section class="panel"><header><h2>الورقة الأسبوعية</h2><span class="sub">على ورق المكتب: اسم المتهم ورقم هويته والتشكات الأربع والمبلغ والجلسة القادمة</span></header>
-      <div class="chips" style="margin-bottom:8px">${[[0, "هذا الأسبوع"], [1, "الأسبوع القادم"], [-1, "الأسبوع الماضي"]].map(([o, l]) => `<button class="chip" type="button" data-vipweek="${o}" aria-pressed="${S.vipUI.week === o}">${l}</button>`).join("")}</div>
-      <p class="sub" style="margin:0 0 8px">من ${esc(fmtD(wf))} إلى ${esc(fmtD(wt))}: ${wn} جلسة.</p><button class="btn primary" type="button" id="vipPrint">${icon("report")}اطبع الورقة</button></section>
+  const [rf, rt] = vipRange(); const inR = vipRows(rf, rt); const nS = new Set(inR.map(q => q.v.id + q.x.id)).size; const nT = inR.filter(q => q.x.date <= todayKey() && vipTodoOf(q).length).length;
+  const mo = (k) => { const t = D(todayKey()); const a = new Date(t.getFullYear(), t.getMonth() + k, 1), b = new Date(t.getFullYear(), t.getMonth() + k + 1, 0); return [dkey(a), dkey(b)]; };
+  const quick = [["هذا الأسبوع", vipWeek(0)], ["الأسبوع القادم", vipWeek(1)], ["الأسبوع الماضي", vipWeek(-1)], ["هذا الشهر", mo(0)], ["الشهر الماضي", mo(-1)]];
+  return `<section class="panel" id="vipSheets"><header><h2>أوراق المتابعة</h2><span class="sub">على ورق المكتب، لأي مدة تختارها — تُطبع من متصفحك ولا تُحفظ</span></header>
+      <div class="chips" style="margin-bottom:8px">${quick.map(([l, [a, b]]) => `<button class="chip" type="button" data-viprange="${a}|${b}" aria-pressed="${rf === a && rt === b}">${l}</button>`).join("")}</div>
+      <div class="row" style="align-items:end;max-width:460px"><label class="f">من<input class="inp" type="date" id="vipFrom" value="${esc(rf)}"></label><label class="f">إلى<input class="inp" type="date" id="vipTo" value="${esc(rt)}"></label></div>
+      <p class="sub" style="margin:8px 0">في هذه المدة: ${nS} جلسة، و${nT} سطراً فيه ما لم يُنفَّذ.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" type="button" id="vipPrint">${icon("report")}اطبع ورقة المتابعة</button><button class="btn" type="button" id="vipPrintTodo">${icon("report")}اطبع ورقة ما لم يُنفَّذ</button></div></section>
     <section class="panel" id="vipMiss"><header><h2>جلسات بلا مشهد حضور${miss.length ? ` (${miss.length})` : ""}</h2><span class="sub">ما انعقد في الشهر ولم يُؤشَّر للمتهم «مشهد حضور الجلسة»</span></header>
       <label class="f" style="max-width:220px">الشهر<input class="inp" type="month" id="vipMonth" value="${esc(ym)}"></label>
       ${miss.length ? `<div class="tasks" style="margin-top:8px">${miss.map(q => line(q, "attend", "أُخذ المشهد")).join("")}</div>` : `<div class="empty" style="margin-top:8px">كل جلسات هذا الشهر المنعقدة أُخذ مشهد حضورها.</div>`}</section>
@@ -10179,8 +10197,9 @@ function vipToolsHtml(){
       ${un.length ? `<p style="margin:0 0 8px"><b>المجموع: ${sum.toLocaleString("en-US")} ريال</b>${unset ? ` <span class="sub">— و${unset} بلا مبلغ محدد (حدّده من صفحة المتهم)</span>` : ""}</p><div class="tasks">${un.map(q => line(q, "paid", "استُلم")).join("")}</div>` : `<div class="empty">لا مبالغ غير مستلمة.</div>`}</section>`;
 }
 function bindVipSheets(){
-  document.querySelectorAll("[data-vipweek]").forEach(b => b.onclick = () => { S.vipUI.week = Number(b.dataset.vipweek); render(); });
-  const p = $("vipPrint"); if (p) p.onclick = () => vipPrintSheet(S.vipUI.week);
+  document.querySelectorAll("[data-viprange]").forEach(b => b.onclick = () => { [S.vipUI.from, S.vipUI.to] = b.dataset.viprange.split("|"); render(); });
+  const f = $("vipFrom"), t = $("vipTo"); if (f) f.onchange = () => { if (f.value) { S.vipUI.from = f.value; render(); } }; if (t) t.onchange = () => { if (t.value) { S.vipUI.to = t.value; render(); } };
+  const p = $("vipPrint"); if (p) p.onclick = () => vipPrintSheet("follow"); const p2 = $("vipPrintTodo"); if (p2) p2.onclick = () => vipPrintSheet("todo");
   const m = $("vipMonth"); if (m) m.onchange = () => { S.vipUI.month = m.value || null; render(); };
 }
 // the owner's home page, in the last five days of the month: hearings of the month with no attendance certificate, and fees not received
