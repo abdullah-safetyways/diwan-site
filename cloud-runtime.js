@@ -368,6 +368,6 @@
     if (name === "sample") return (WHO?.staff && await sampleReady()) ? sample : null;
     if (name === "mcp") return WHO?.staff ? (window.diwanCloudFiles?.mcp || null) : null;   // the office's files (cloud-files.js)
     return null; } };
-  window.diwanCloud = {sb, db, cache, whoami: () => WHO, readPage};
+  window.diwanCloud = {sb, db, cache, whoami: () => WHO, readPage, admin};
   whenReady().catch((e) => { console.error(e); });
 })();

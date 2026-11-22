@@ -2196,7 +2196,7 @@ function vFinanceBills(){
     <label class="search">${icon("search")}<input id="billQ" type="search" value="${esc(S.billQ||"")}" placeholder="العميل، رقم القضية، رقم الفاتورة" aria-label="بحث في الفوترة"></label></div>
   <section class="panel">${billRows(list.slice(0,300), true)}</section>`;
 }
-function homeBillingPanel(){ return homeDuePanel(); }
+function homeBillingPanel(){ return arHomeNote() + homeDuePanel(); }
 function homeBillingPanel0(){
   const all = billingItems(); const isDue = (b) => b.state==="due"||b.state==="invoiced";
   const dueNow = all.filter(b=>isDue(b) && b.src!=="legacy").sort((a,b)=>(a.due||"").localeCompare(b.due||""));
@@ -2889,7 +2889,7 @@ function vStaff(){
   const reqs = (S.joinReqs||[]).filter(r => !(S.office?.staff?.members||{})[r.uid] || (S.office.staff.members[r.uid].active===false));
   const assigned = (uid) => [...S.cases.values()].filter(c => isCase(c) && !c.deleted && (c.assignees||[]).includes(uid)).length;
   const UI = S.staffUI = S.staffUI || {};
-  return header("الموظفون والصلاحيات", "من يدخل الديوان، وأي القضايا يرى، وماذا يستطيع أن يفعل", S.me?.owner ? `<button class="btn primary" id="staffAcc" type="button">حسابات الدخول</button>` : "") + `
+  return header("الموظفون والصلاحيات", "من يدخل الديوان، وأي القضايا يرى، وماذا يستطيع أن يفعل", S.me?.owner ? `<button class="btn primary" id="staffAcc" type="button">حسابات الدخول</button>` : "") + arPanel() + `
   <div class="cols">
     <section class="panel"><header><h2>فريق المكتب</h2><span class="sub">${arN(members.filter(m=>m.active!==false).length+1,"عضو واحد","عضوان","أعضاء","عضواً")}</span></header>
       <div class="staff-row"><span class="av" style="background:var(--accent);color:var(--accent-ink)">${esc((S.me?.name||"م").slice(0,1))}</span><div style="min-width:0"><b>${esc(S.me?.name||"أنت")}</b> <span class="pill ok">مالك المكتب</span><div class="sub">كل الصلاحيات · ${SCOPES.all}</div></div></div>
@@ -10055,6 +10055,66 @@ function vipInNewCase(dr){
     closeDrawer(); openVip({clients: [name], sessions: [{date: "", time: ""}], note: "", title: ""}); }, true);
 }
 
+// ---------- طلبات المتابعة من موقع المكتب (22/11، عبدالله: «رابط احطة في الموقع… ويجيني طلب بأسم العميل ومن يمثل والبريد… وانا اقبل او ارفض»):
+// الصفحة العامة request.html تُرسل الطلب عبر access_request() (0013)، وهنا — للمالك وحده — تُعرض الطلبات المنتظرة: «قبول» يختار الموكل أو
+// الشركة التي يمثّلها الطالب، فيُنشأ له حساب بوابة (دالة admin القائمة) ويُضاف ممثلاً بصلاحية «متابعة الشركات» وحدها، وتظهر كلمة المرور
+// المؤقتة ليرسلها المالك له؛ «رفض» يغلق الطلب. لا يُمنح أي دخول قبل القبول.
+const arOwner = () => !!(S.me?.owner || S.me?.legacy);
+S.arUI = S.arUI || {list: null, err: null, done: null, pick: null};
+const arLink = () => new URL("request.html", location.href).href;
+async function arLoad(force){
+  if (!arOwner()) return []; if (S.arUI.list && !force) return S.arUI.list;
+  try { const sb = window.diwanCloud?.sb; const {data, error} = await sb.from("access_requests").select("id,name,represents,email,phone,status,created_at").eq("status", "pending").order("created_at", {ascending: false}).limit(200);
+    if (error) throw error; S.arUI.list = data || []; S.arUI.err = null; }
+  catch (e) { S.arUI.list = []; S.arUI.err = /access_requests|42P01|PGRST205/.test(String(e?.message || e?.code)) ? "setup" : "تعذّرت قراءة الطلبات الآن."; }
+  return S.arUI.list;
+}
+function arPanel(){
+  if (!arOwner()) return ""; const U = S.arUI;
+  if (U.list === null) { arLoad().then(() => { if (S.view === "staff") render(); }); }
+  const rows = (U.list || []).map(r => `<div class="ev" style="grid-template-columns:1fr auto;align-items:start" data-arrow="${esc(r.id)}"><div style="min-width:0"><b>${esc(r.name)}</b> <span class="sub">— يمثّل: ${esc(r.represents)}</span>
+      <div class="sub"><span dir="ltr">${esc(r.email)}</span>${r.phone ? ` · <span dir="ltr">${esc(r.phone)}</span>` : ""} · ${esc(fmtDate.format(D(r.created_at)))}</div>
+      ${U.pick === r.id ? `<div class="row" style="margin-top:6px;align-items:end"><label class="f" style="flex:1">الموكل أو الشركة التي يمثّلها في الديوان<select class="inp" data-arco><option value="">اختر…</option>${portalCompanies().map(x => `<option value="${esc(x.id)}">${esc(x.name)}${x.eng ? " (عقد سنوي)" : ""}</option>`).join("")}</select></label><button class="btn primary sm" type="button" data-arok="${esc(r.id)}">إنشاء الحساب</button><button class="btn sm" type="button" data-arcancel>إلغاء</button></div>` : ""}</div>
+      ${U.pick === r.id ? "" : `<div style="display:flex;gap:6px"><button class="btn primary sm" type="button" data-araccept="${esc(r.id)}">قبول</button><button class="btn sm ghost" type="button" data-arreject="${esc(r.id)}">رفض</button></div>`}</div>`).join("");
+  const done = U.done ? `<div class="notice" style="margin-bottom:10px"><b>أُنشئ حساب ${esc(U.done.name)}</b> ممثلاً لـ«${esc(U.done.company)}». أرسل له ما يدخل به — كلمة المرور مؤقتة ويغيّرها عند أول دخول، ولن تظهر مرة أخرى:
+      <div class="mono" dir="ltr" style="margin:6px 0;user-select:all">${esc(U.done.email)} — ${esc(U.done.password)}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" type="button" id="arCopy">نسخ رسالة الدخول</button><a class="btn sm" id="arMail" href="${esc(arMailto(U.done))}">فتح رسالة بريد جاهزة</a><button class="btn sm ghost" type="button" id="arDoneX">تم</button></div></div>` : "";
+  return `<section class="panel" id="arPanel"><header><h2>طلبات المتابعة من موقع المكتب${(U.list || []).length ? ` (${U.list.length})` : ""}</h2><span class="sub">يطلبها الموكلون من الرابط العام، ولا يدخل أحد قبل قبولك</span></header>
+    ${U.err === "setup" ? `<div class="notice warn">هذه الخدمة تحتاج تحديث قاعدة البيانات (0013) قبل أن تعمل.</div>` : U.err ? `<div class="notice warn">${esc(U.err)}</div>` : ""}
+    <p class="sub" style="margin:0 0 8px">الرابط الذي تضعه في موقعك: <span class="mono" dir="ltr" style="user-select:all">${esc(arLink())}</span> <button class="btn sm" type="button" id="arLinkCopy">نسخ الرابط</button> <button class="btn sm ghost" type="button" id="arRefresh">تحديث</button></p>
+    ${done}${rows ? `<div class="tasks">${rows}</div>` : (U.list ? `<div class="empty">لا طلبات منتظرة.</div>` : `<div class="thinking"><span class="dot"></span>يقرأ…</div>`)}</section>`;
+}
+const arMsg = (d) => `السلام عليكم ورحمة الله وبركاته\nتم قبول طلبكم لمتابعة قضاياكم لدى المكتب.\nرابط الدخول: ${new URL("./", location.href).href}\nالبريد: ${d.email}\nكلمة المرور المؤقتة: ${d.password}\nعند أول دخول تختارون كلمة مرور جديدة وتضبطون رمز التحقق في تطبيق المصادقة.`;
+const arMailto = (d) => `mailto:${encodeURIComponent(d.email)}?subject=${encodeURIComponent("بيانات الدخول لمتابعة قضاياكم")}&body=${encodeURIComponent(arMsg(d))}`;
+function bindAccessReq(){
+  if (S.view !== "staff" || !arOwner()) return; const U = S.arUI; const sb = window.diwanCloud?.sb;
+  const copy = (t, msg) => navigator.clipboard?.writeText(t).then(() => toast(msg), () => toast("حدّد النص وانسخه"));
+  const lc = $("arLinkCopy"); if (lc) lc.onclick = () => copy(arLink(), "نُسخ الرابط");
+  const rf = $("arRefresh"); if (rf) rf.onclick = async () => { await arLoad(true); render(); };
+  const cp = $("arCopy"); if (cp) cp.onclick = () => copy(arMsg(U.done), "نُسخت رسالة الدخول");
+  const dx = $("arDoneX"); if (dx) dx.onclick = () => { U.done = null; render(); };
+  document.querySelectorAll("[data-araccept]").forEach(b => b.onclick = () => { U.pick = b.dataset.araccept; render(); });
+  document.querySelectorAll("[data-arcancel]").forEach(b => b.onclick = () => { U.pick = null; render(); });
+  document.querySelectorAll("[data-arreject]").forEach(b => b.onclick = async () => { if (!b.dataset.armed) { b.dataset.armed = "1"; b.textContent = "تأكيد الرفض"; return; }
+    const {error} = await sb.from("access_requests").update({status: "rejected", decided_at: new Date().toISOString(), decided_by: S.uid || null}).eq("id", b.dataset.arreject).eq("status", "pending");
+    if (error) { toast("تعذّر الرفض — تحقق من الاتصال ثم أعد المحاولة"); return; } await arLoad(true); toast("رُفض الطلب"); render(); });
+  document.querySelectorAll("[data-arok]").forEach(b => b.onclick = async () => { const r = (U.list || []).find(x => x.id === b.dataset.arok); const sel = b.closest("[data-arrow]").querySelector("[data-arco]");
+    const co = portalCompanies().find(x => x.id === sel.value); if (!r) return; if (!co) { toast("اختر الموكل أو الشركة التي يمثّلها"); return; }
+    b.disabled = true;
+    try { const a = await window.diwanCloud.admin({action: "create", name: r.name, email: r.email});   // owner only, on the server
+      const members = {...(S.office?.staff?.members || {})};
+      members[a.uid] = {role: "client", scope: "client", label: r.name, phone: r.phone || null, active: true, perms: ["portal.view"], clientKey: co.key, engagementId: co.eng || null, addedAt: new Date().toISOString(), via: "request"};
+      if (!(await saveStaff(members, null))) throw new Error("staff");
+      await sb.from("access_requests").update({status: "accepted", decided_at: new Date().toISOString(), decided_by: S.uid || null, uid: a.uid, company: co.name}).eq("id", r.id);
+      U.done = {name: r.name, email: r.email, password: a.password, company: co.name}; U.pick = null; await arLoad(true); toast("أُنشئ الحساب"); render(); }
+    catch (e) { b.disabled = false; toast(/مسجل بحساب آخر/.test(String(e?.message)) ? "هذا البريد له حساب في الديوان من قبل — أضفه من «حسابات الدخول»" : "تعذّر إنشاء الحساب — تحقق من الاتصال ثم أعد المحاولة"); } });
+}
+// the owner's home page: that requests are waiting
+function arHomeNote(){
+  if (!arOwner()) return ""; if (S.arUI.list === null) { arLoad().then(l => { if (l.length && S.view === "home") render(); }); return ""; }
+  const n = S.arUI.list.length; return n ? `<div class="notice" style="margin-bottom:10px">${n === 1 ? "طلب متابعة واحد" : n + " طلبات متابعة"} من موقع المكتب بانتظار قرارك. <button class="btn sm" type="button" data-nav="staff">افتح الطلبات</button></div>` : "";
+}
+
 // ---------- events
 // the home page's third column exists on wide screens only: its panels move there, and back when the window narrows
 const WIDE = window.matchMedia ? window.matchMedia("(min-width:1500px)") : null;
@@ -10062,7 +10122,7 @@ if (WIDE) { try { WIDE.addEventListener("change", () => { if (S.view==="home") r
 function homeRail(){ const r = $("homeRail"); if (!r || !WIDE?.matches) return; [...document.querySelectorAll("[data-rail]")].sort((a,b)=>a.dataset.rail-b.dataset.rail).forEach(p => r.append(p)); }
 function afterRender(){
   homeRail();
-  uiTrim(); foldPanels(); bindVip(); bindLibrary(); bindLearn(); bindStaff(); bindBackup(); if (S.view==="sync") { bindNajizSync(); bindMoenSync(); } bindMemos(); bindKpi(); bindContracts2(); bindPortal(); bindConflict(); bindChecklists(); bindTrust(); bindTime(); bindComms(); bindTasks(); bindWork(); bindAssist(); bindNzPolicy(); bindOdLink(); bindStale(); bindRequests(); bindExtract(); bindLedger(); bindNzReqs(); bindFiling(); bindTracks(); bindCrm(); bindTrackSections(); nzEnforce();
+  uiTrim(); foldPanels(); bindAccessReq(); bindVip(); bindLibrary(); bindLearn(); bindStaff(); bindBackup(); if (S.view==="sync") { bindNajizSync(); bindMoenSync(); } bindMemos(); bindKpi(); bindContracts2(); bindPortal(); bindConflict(); bindChecklists(); bindTrust(); bindTime(); bindComms(); bindTasks(); bindWork(); bindAssist(); bindNzPolicy(); bindOdLink(); bindStale(); bindRequests(); bindExtract(); bindLedger(); bindNzReqs(); bindFiling(); bindTracks(); bindCrm(); bindTrackSections(); nzEnforce();
   document.querySelectorAll("[data-ftab]").forEach(b=>b.onclick=()=>{ S.finTab=b.dataset.ftab; render(); });
   document.querySelectorAll("[data-onb]").forEach(b=>b.onclick=()=>{ const [v,t] = b.dataset.onb.split(":"); if (t) S.learnTab = t; go(v); });
   const ox = $("onbHide"); if (ox) ox.onclick = () => { try { localStorage.setItem("dq.onb", "1"); } catch {} S.onbHidden = true; render(); };

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
+<title>طلب متابعة القضايا — مكتب المحاماة</title>
+<style>
+  :root{color-scheme:light dark;--bg:#f4f3ef;--ink:#151547;--sub:#555;--line:#d9d8e2;--card:#fff;--ok:#2f7d4f;--bad:#b3261e}
+  @media (prefers-color-scheme: dark){:root{--bg:#0e0e24;--ink:#eee;--sub:#aaa;--line:#33335a;--card:#17173a}}
+  body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--ink);font:16px/1.8 'IBM Plex Sans Arabic','Segoe UI',Tahoma,sans-serif;padding:16px;box-sizing:border-box}
+  main{width:100%;max-width:460px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px 20px;box-sizing:border-box}
+  h1{font-size:1.25rem;margin:0 0 4px} p{margin:0 0 14px;color:var(--sub);font-size:.92rem}
+  label{display:block;font-size:.9rem;font-weight:600;margin-top:12px}
+  input{width:100%;box-sizing:border-box;margin-top:4px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:inherit;background:transparent;color:inherit}
+  button{margin-top:18px;width:100%;border:0;border-radius:10px;padding:12px;font:inherit;font-weight:700;background:#151547;color:#fff;cursor:pointer}
+  button[disabled]{opacity:.6;cursor:default} #out{margin-top:14px;font-weight:600} .hp{position:absolute;left:-9999px;opacity:0}
+</style>
+<script src="supabase.js"></script><script src="config.js"></script>
+</head>
+<body>
+<main>
+  <h1>طلب متابعة القضايا</h1>
+  <p>لموكلي المكتب: أرسل طلبك، وبعد موافقة المكتب يصلك على بريدك ما تدخل به لتطّلع على آخر مستجدات قضاياك.</p>
+  <form id="f" novalidate>
+    <label>الاسم الكامل<input name="name" required maxlength="80" autocomplete="name"></label>
+    <label>من تمثّل (اسم الشركة أو الموكل؛ اكتب «نفسي» إن كنت أنت الموكل)<input name="represents" required maxlength="120"></label>
+    <label>البريد الإلكتروني<input name="email" type="email" required maxlength="120" autocomplete="email" dir="ltr"></label>
+    <label>رقم الجوال (اختياري)<input name="phone" type="tel" maxlength="20" autocomplete="tel" dir="ltr"></label>
+    <input class="hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+    <button type="submit" id="go">إرسال الطلب</button>
+  </form>
+  <div id="out" role="status" aria-live="polite"></div>
+</main>
+<script>
+/* The public door (22/11): the request goes to the office through access_request() and nothing comes back but «received».
+   The office's owner accepts or refuses it inside the Diwan; this page never shows any of the office's data. */
+(() => {
+  const C = window.__DIWAN_CLOUD || {}; const sb = window.supabase.createClient(C.url, C.key, {auth: {persistSession: false, autoRefreshToken: false}});
+  const f = document.getElementById("f"), out = document.getElementById("out"), go = document.getElementById("go"); const t0 = Date.now();
+  const say = (t, ok) => { out.textContent = t; out.style.color = ok ? "var(--ok)" : "var(--bad)"; };
+  f.addEventListener("submit", async (e) => { e.preventDefault(); const v = Object.fromEntries(new FormData(f).entries());
+    const name = v.name.trim(), rep = v.represents.trim(), email = v.email.trim();
+    if (name.length < 3) return say("اكتب اسمك الكامل."); if (rep.length < 2) return say("اكتب من تمثّل."); if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return say("اكتب بريداً إلكترونياً صحيحاً.");
+    if (v.website || Date.now() - t0 < 2500) { f.hidden = true; return say("وصل طلبك. سيتواصل معك المكتب بعد مراجعته.", true); }   // a robot: told the same, nothing sent
+    go.disabled = true; say("يُرسل…", true);
+    const {error} = await sb.rpc("access_request", {p_name: name, p_represents: rep, p_email: email, p_phone: v.phone || null});
+    if (error) { go.disabled = false; return say(/busy|53400/.test(error.message + error.code) ? "الطلبات كثيرة الآن؛ حاول بعد ساعة." : /invalid|22023/.test(error.message + error.code) ? "تحقق من البيانات ثم أعد الإرسال." : "تعذّر الإرسال الآن؛ حاول مرة أخرى بعد قليل."); }
+    f.hidden = true; say("وصل طلبك. سيتواصل معك المكتب على بريدك بعد مراجعته.", true); });
+})();
+</script>
+</body>
+</html>
