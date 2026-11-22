@@ -2270,7 +2270,7 @@ function openCaseNew(pre){
       <div style="display:flex;gap:8px"><button class="btn primary" type="submit">إضافة القضية</button></div></form>`);
   bindFeeEditors();
   const tf = dr.querySelector("#toFiling"); if (tf) tf.onclick = () => { closeDrawer(); openFilingNew(); };
-  cfBindNewCase(dr.querySelector("#caseNewForm"));
+  cfBindNewCase(dr.querySelector("#caseNewForm")); vipInNewCase(dr);
   dr.querySelector("#caseNewForm").onsubmit = async (e) => { e.preventDefault(); if (!S.db) { toast("قاعدة البيانات غير متاحة"); return; }
     const cf = cfNewCaseResult(e.target); if (cf.blocked) { toast(cf.msg); return; }
     const v = readCaseForm(e.target); const id = /^\d{6,}$/.test(v.caseNo||"") ? v.caseNo : "M"+Date.now();
@@ -10006,7 +10006,7 @@ function openVip(v){
     const sessions = [...f.querySelectorAll('[data-viprow="s"]')].map(r => ({date: r.querySelector('[name="sdate"]').value || "", time: r.querySelector('[name="stime"]').value || "", note: r.querySelector('[name="snote"]').value.trim()})).filter(s => s.date);
     const id = v.id || newId("V"); const now = new Date().toISOString();
     const doc = {clients, title: f.elements.title.value.trim(), sessions: sessions.sort((a, b) => a.date.localeCompare(b.date)), note: f.elements.note.value.trim(), deleted: false, createdAt: v.createdAt || now, updatedAt: now, by: S.uid || null};
-    try { await S.db.doc("vip/" + id).set(doc); await vipLoad(true); closeDrawer(); toast("حُفظت"); render(); } catch { toast("تعذّر الحفظ — تحقق من الاتصال ثم أعد المحاولة"); } };
+    try { await S.db.doc("vip/" + id).set(doc); await vipLoad(true); closeDrawer(); toast("حُفظت في القضايا الكبيرة"); render(); } catch { toast("تعذّر الحفظ — تحقق من الاتصال ثم أعد المحاولة"); } };
 }
 function bindVip(){
   if (S.view !== "vip") return;
@@ -10043,6 +10043,16 @@ function vipChip(){
   if (!vipOwner()) return "";
   const n = S.vipUI.list ? S.vipUI.list.filter(v => !v.deleted).length : null; if (n === null) vipLoad().then(() => { if (S.view === "cases") render(); });
   return `<button class="chip" type="button" data-nav="vip" aria-pressed="${S.view === "vip"}">القضايا الكبيرة <span class="num muted">${n ?? "…"}</span></button>`;
+}
+// (22/11, عبدالله: «ابي اضيف القضايا الكبيرة من خانة إضافة القضايا»): in «إضافة قضية» the track list carries «قضية كبيرة (سرية)» for the
+// owner; choosing it leaves the ordinary form — nothing of it is saved — and opens the large case's own short form (clients, hearings,
+// a note), which is saved in the confidential register as before. The client name already typed is carried over.
+function vipInNewCase(dr){
+  if (!vipOwner()) return; const sel = dr.querySelector('#caseNewForm select[name="track"]'); if (!sel) return;
+  sel.insertAdjacentHTML("beforeend", `<option value="vip">قضية كبيرة (سرية)</option>`);
+  sel.addEventListener("change", (e) => { if (sel.value !== "vip") return; e.stopImmediatePropagation();   // the ordinary form's own track handler must not run for it
+    const name = (dr.querySelector('#caseNewForm [name="client"]')?.value || "").trim();
+    closeDrawer(); openVip({clients: [name], sessions: [{date: "", time: ""}], note: "", title: ""}); }, true);
 }
 
 // ---------- events
